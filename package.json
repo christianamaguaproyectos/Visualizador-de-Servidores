@@ -1,0 +1,28 @@
+{
+  "name": "diagrama-servers",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Visualizador interactivo de racks y servidores enlazado a Excel",
+  "main": "backend/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node backend/server.js",
+    "dev": "nodemon backend/server.js"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "chokidar": "^3.6.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^4.19.2",
+    "express-session": "^1.18.2",
+    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^6.9.8",
+    "pg": "^8.11.3",
+    "undici": "^6.18.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}

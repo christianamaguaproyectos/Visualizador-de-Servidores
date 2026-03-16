@@ -1,0 +1,285 @@
+:root {
+  --primary: #1e293b;
+  --secondary: #3b82f6;
+  --accent: #60a5fa;
+  --background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
+  --card: #ffffff;
+  --text: #1e293b;
+  --text-muted: #64748b;
+  --shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: var(--background);
+  min-height: 100vh;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.home-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+}
+
+.home-header {
+  text-align: center;
+  margin-bottom: 60px;
+}
+
+.home-header h1 {
+  font-size: 3.5rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 10px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.home-header p {
+  font-size: 1.3rem;
+  color: var(--text-muted);
+  font-weight: 300;
+}
+
+.home-content {
+  width: 100%;
+  max-width: 900px;
+}
+
+.server-types {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 40px;
+  justify-content: center;
+}
+
+.server-type-card {
+  background: var(--card);
+  padding: 40px 30px;
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+  position: relative;
+  overflow: hidden;
+}
+
+.server-type-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  transition: left 0.5s ease;
+}
+
+.server-type-card:hover::before {
+  left: 100%;
+}
+
+.server-type-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  border-color: var(--secondary);
+}
+
+.server-type-card:first-child:hover {
+  border-color: #10b981;
+}
+
+.server-type-card:first-child .card-icon {
+  color: #10b981;
+}
+
+.server-type-card:last-child .card-icon {
+  color: var(--secondary);
+}
+
+.card-icon {
+  margin-bottom: 25px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.card-icon svg {
+  width: 80px;
+  height: 80px;
+}
+
+.server-type-card h2 {
+  font-size: 2rem;
+  font-weight: 600;
+  margin-bottom: 15px;
+  color: var(--primary);
+}
+
+.server-type-card p {
+  font-size: 1.1rem;
+  color: var(--text-muted);
+  margin-bottom: 30px;
+  line-height: 1.6;
+}
+
+.card-button {
+  display: inline-block;
+  padding: 12px 30px;
+  background: var(--secondary);
+  color: white;
+  font-weight: 600;
+  border-radius: 25px;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.server-type-card:first-child .card-button {
+  background: #10b981;
+}
+
+.server-type-card:first-child .card-button:hover {
+  background: #059669;
+  transform: scale(1.05);
+}
+
+.card-button:hover {
+  background: #2563eb;
+  transform: scale(1.05);
+}
+
+.home-footer {
+  margin-top: 60px;
+  text-align: center;
+}
+
+.home-footer p {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {
+  .home-header h1 {
+    font-size: 2.5rem;
+  }
+
+  .home-header p {
+    font-size: 1.1rem;
+  }
+
+  .server-types {
+    grid-template-columns: 1fr;
+    gap: 30px;
+  }
+
+  .server-type-card {
+    padding: 30px 20px;
+  }
+
+  .server-type-card h2 {
+    font-size: 1.7rem;
+  }
+
+  .card-icon svg {
+    width: 60px;
+    height: 60px;
+  }
+}
+
+/* Usuario y Logout */
+.user-info {
+  margin-top: 20px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  justify-content: center;
+}
+
+.user-name {
+  font-size: 1rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.btn-users {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3);
+}
+
+.btn-users:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(59, 130, 246, 0.5);
+}
+
+.btn-users:active {
+  transform: translateY(0);
+}
+
+.btn-logout {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 10px rgba(239, 68, 68, 0.3);
+}
+
+.btn-logout:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(239, 68, 68, 0.5);
+}
+
+.btn-logout:active {
+  transform: translateY(0);
+}
+
+/* Tarjeta de Monitoreo */
+.monitoring-card .card-icon {
+  color: #f59e0b;
+}
+
+.monitoring-card:hover {
+  border-color: #f59e0b;
+}
+
+.card-button-monitoring {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+.card-button-monitoring:hover {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+}
+
+.server-type-card.monitoring-card .card-button {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+.server-type-card.monitoring-card .card-button:hover {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  transform: scale(1.05);
+}

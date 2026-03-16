@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="es">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Centro de Datos - Diagrama de Servidores</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/home-styles.css" />
+  <link rel="stylesheet" href="/nav-styles.css" />
+  <link rel="icon" type="image/jpeg" href="/favicon.jpg" />
+</head>
+
+<body>
+  <div class="home-container">
+    <header class="home-header">
+      <h1>Centro de Datos</h1>
+      <p>Sistema de Visualización de Racks</p>
+
+
+    </header>
+
+    <main class="home-content">
+      <div class="server-types">
+        <div class="server-type-card" data-nav-target="/fisicos" role="button" tabindex="0">
+          <div class="card-icon">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="2" y="3" width="20" height="4" rx="1" stroke="currentColor" stroke-width="2" />
+              <rect x="2" y="10" width="20" height="4" rx="1" stroke="currentColor" stroke-width="2" />
+              <rect x="2" y="17" width="20" height="4" rx="1" stroke="currentColor" stroke-width="2" />
+              <circle cx="5" cy="5" r="1" fill="currentColor" />
+              <circle cx="5" cy="12" r="1" fill="currentColor" />
+              <circle cx="5" cy="19" r="1" fill="currentColor" />
+            </svg>
+          </div>
+          <h2>Servidores Físicos</h2>
+          <p>Visualización de racks físicos y hardware real del centro de datos</p>
+          <div class="card-button">Acceder</div>
+        </div>
+
+        <div class="server-type-card" data-nav-target="/virtuales" role="button" tabindex="0">
+          <div class="card-icon">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="3" y="4" width="18" height="12" rx="2" stroke="currentColor" stroke-width="2" />
+              <rect x="5" y="6" width="6" height="3" rx="1" stroke="currentColor" stroke-width="1.5" />
+              <rect x="13" y="6" width="6" height="3" rx="1" stroke="currentColor" stroke-width="1.5" />
+              <rect x="5" y="11" width="6" height="3" rx="1" stroke="currentColor" stroke-width="1.5" />
+              <rect x="13" y="11" width="6" height="3" rx="1" stroke="currentColor" stroke-width="1.5" />
+              <path d="M8 18l4 2 4-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+          </div>
+          <h2>Servidores Virtuales</h2>
+          <p>Gestión y monitoreo de máquinas virtuales y contenedores</p>
+          <div class="card-button">Acceder</div>
+        </div>
+
+        <div class="server-type-card monitoring-card" data-nav-target="/monitoring.html" role="button" tabindex="0">
+          <div class="card-icon">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 12h4l3-9 4 18 3-9h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round" />
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" opacity="0.3" />
+            </svg>
+          </div>
+          <h2>🖥️ Monitoreo</h2>
+          <p>Dashboard de monitoreo en tiempo real: estados, alertas e incidentes</p>
+          <div class="card-button card-button-monitoring">Acceder</div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="home-footer">
+      <p>&copy; 2026 Centro de Datos - Sistema de Diagramas</p>
+    </footer>
+  </div>
+  <script src="/toast.js"></script>
+  <script src="/nav.js"></script>
+  <script src="/auth.js"></script>
+  <script>
+    // Mostrar botón de gestión de usuarios solo para administradores
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.server-type-card[data-nav-target]').forEach((card) => {
+        const navigate = () => {
+          const target = card.getAttribute('data-nav-target');
+          if (target) {
+            location.href = target;
+          }
+        };
+
+        card.addEventListener('click', navigate);
+        card.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            navigate();
+          }
+        });
+      });
+
+      const btnUsers = document.getElementById('btnUsers');
+
+      // Reutilizamos la info que carga auth.js en window.currentUser
+      const enableUsersButton = () => {
+        if (!btnUsers || !window.currentUser) return;
+        if (window.currentUser.role === 'admin') {
+          btnUsers.style.display = 'inline-block';
+          if (!btnUsers._wired) {
+            btnUsers.addEventListener('click', () => { location.href = '/users'; });
+            btnUsers._wired = true;
+          }
+        }
+      };
+
+      // Intento inmediato (por si loadUserInfo ya terminó)
+      enableUsersButton();
+
+      // Fallback: pequeño polling corto mientras se carga el usuario
+      let attempts = 0;
+      const intervalId = setInterval(() => {
+        attempts++;
+        enableUsersButton();
+        if (window.currentUser || attempts > 20) {
+          clearInterval(intervalId);
+        }
+      }, 100);
+    });
+  </script>
+</body>
+
+</html>

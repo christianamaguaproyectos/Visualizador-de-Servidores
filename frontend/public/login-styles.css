@@ -1,0 +1,316 @@
+/**
+ * Estilos para la página de Login
+ * Diseño moderno y corporativo para Grupo Danec
+ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+}
+
+.login-container {
+  display: flex;
+  gap: 30px;
+  max-width: 1000px;
+  width: 100%;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.login-box {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  padding: 40px;
+  width: 100%;
+  max-width: 450px;
+  animation: slideIn 0.5s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.logo {
+  color: #667eea;
+  margin-bottom: 15px;
+  display: flex;
+  justify-content: center;
+}
+
+.logo svg {
+  filter: drop-shadow(0 4px 6px rgba(102, 126, 234, 0.3));
+}
+
+.login-header h1 {
+  font-size: 28px;
+  color: #2c3e50;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: #7f8c8d;
+  font-weight: 400;
+}
+
+/* Formulario */
+.login-form {
+  margin-bottom: 25px;
+}
+
+.error-message {
+  background: #fee;
+  border: 1px solid #fcc;
+  color: #c33;
+  padding: 12px 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  text-align: center;
+}
+
+@keyframes shake {
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  25% {
+    transform: translateX(-10px);
+  }
+
+  75% {
+    transform: translateX(10px);
+  }
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c3e50;
+  margin-bottom: 8px;
+}
+
+.form-group label svg {
+  color: #667eea;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 2px solid #e1e8ed;
+  border-radius: 10px;
+  font-size: 15px;
+  transition: all 0.3s ease;
+  background: #f8f9fa;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #667eea;
+  background: white;
+  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+}
+
+.form-group input::placeholder {
+  color: #95a5a6;
+}
+
+.btn-login {
+  width: 100%;
+  padding: 15px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  position: relative;
+}
+
+.btn-login:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+}
+
+.btn-login:active {
+  transform: translateY(0);
+}
+
+.btn-login:disabled {
+  background: #95a5a6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.loader {
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top: 3px solid white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Footer */
+.login-footer {
+  text-align: center;
+  padding-top: 20px;
+  border-top: 1px solid #e1e8ed;
+}
+
+.login-footer p {
+  font-size: 13px;
+  color: #7f8c8d;
+  margin-bottom: 5px;
+}
+
+.help-text {
+  font-size: 12px;
+  color: #95a5a6;
+}
+
+/* Info Box */
+.info-box {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 20px;
+  padding: 30px;
+  width: 100%;
+  max-width: 300px;
+  color: white;
+  animation: slideIn 0.5s ease-out 0.2s both;
+}
+
+.info-box h3 {
+  font-size: 20px;
+  margin-bottom: 15px;
+  font-weight: 600;
+}
+
+.info-box ul {
+  list-style: none;
+  margin-bottom: 20px;
+}
+
+.info-box li {
+  padding: 8px 0;
+  font-size: 15px;
+  opacity: 0.9;
+}
+
+.network-status {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 12px;
+  border-radius: 10px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.status-online {
+  color: #2ecc71;
+}
+
+.status-warning {
+  color: #f39c12;
+}
+
+.status-offline {
+  color: #e74c3c;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .login-container {
+    flex-direction: column;
+  }
+
+  .info-box {
+    max-width: 450px;
+  }
+
+  .login-box {
+    padding: 30px 25px;
+  }
+
+  .login-header h1 {
+    font-size: 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  body {
+    padding: 15px;
+  }
+
+  .login-box {
+    padding: 25px 20px;
+  }
+
+  .login-header h1 {
+    font-size: 22px;
+  }
+
+  .form-group input {
+    padding: 12px 14px;
+    font-size: 14px;
+  }
+
+  .btn-login {
+    padding: 13px;
+    font-size: 15px;
+  }
+}

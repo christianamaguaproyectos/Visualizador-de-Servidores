@@ -1,0 +1,16 @@
+{
+  "users": [
+    {
+      "username": "admin",
+      "password": "$2b$10$EXAMPLE_HASH_REPLACE_THIS",
+      "role": "admin",
+      "name": "Administrador"
+    },
+    {
+      "username": "viewer",
+      "password": "$2b$10$EXAMPLE_HASH_REPLACE_THIS",
+      "role": "viewer",
+      "name": "Usuario Lectura"
+    }
+  ]
+}

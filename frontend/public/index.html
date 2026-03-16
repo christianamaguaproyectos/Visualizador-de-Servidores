@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="es">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Diagrama de Servidores</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/nav-styles.css" />
+  <link rel="icon" type="image/jpeg" href="/favicon.jpg" />
+
+<body>
+  <header>
+    <h1>Racks Físicos</h1>
+    <div class="meta">
+      <span id="updatedAt"></span>
+      <input id="searchServers" type="search" placeholder="🔍 Buscar servidor..."
+        style="padding:6px 10px;border:1px solid #e2e8f0;border-radius:8px;outline:none" />
+      <select id="filterStatus" style="padding:6px 10px;border:1px solid #e2e8f0;border-radius:8px">
+        <option value="all">Todos</option>
+        <option value="critico">Solo Críticos 🔴</option>
+        <option value="activo">Solo Activos 🟢</option>
+        <option value="normal">Solo Normal ⚪</option>
+      </select>
+      <button id="btnAddServer" class="home-btn" title="Agregar nuevo servidor">➕ Agregar Servidor</button>
+      <button id="btnAddRack" class="home-btn" title="Agregar nuevo rack">🗄️ Agregar Rack</button>
+      <button id="btnExportExcel" class="home-btn" title="Exportar servidores físicos a Excel">📊 Exportar
+        Excel</button>
+      <button id="btnToggleLabels" class="home-btn" title="Mostrar/Ocultar etiquetas de IP y hostname">👁️ Mostrar
+        etiquetas</button>
+      <button id="btnUsers" class="home-btn" style="display:none" title="Gestión de usuarios">👥 Usuarios</button>
+
+      <button id="btnInicio">🔄 Actualizar datos</button>
+    </div>
+  </header>
+  <div class="overview" id="overview" style="display:none"></div>
+  <main id="app">
+    <!-- content injected by app.js -->
+  </main>
+  <div class="modal-overlay" id="rackModal">
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="rackModalTitle">
+      <div class="modal-header">
+        <h3 id="rackModalTitle">Detalle del Rack</h3>
+        <button class="modal-close" id="rackModalClose">Cerrar</button>
+      </div>
+      <div class="modal-body" id="rackModalBody"></div>
+    </div>
+  </div>
+
+  <!-- Modal para agregar/editar servidor -->
+  <div class="modal-overlay" id="serverModal" style="display:none">
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="serverModalTitle">
+      <div class="modal-header">
+        <h3 id="serverModalTitle">🖥️ Agregar Servidor Físico</h3>
+        <button class="modal-close" id="serverModalClose">✕ Cerrar</button>
+      </div>
+      <div class="modal-body">
+        <form id="serverForm">
+          <input type="hidden" id="serverId" />
+
+          <fieldset>
+            <legend>📋 Información Básica</legend>
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverNombre">Nombre del Servidor *</label>
+                <input type="text" id="serverNombre" required placeholder="ej: WEB-SERVER-01" />
+              </div>
+              <div class="form-field">
+                <label for="serverLabel">Etiqueta</label>
+                <input type="text" id="serverLabel" placeholder="PROD-001" />
+              </div>
+            </div>
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverIP">Dirección IP</label>
+                <input type="text" id="serverIP" placeholder="192.168.1.100" />
+              </div>
+              <div class="form-field">
+                <label for="serverHostname">Hostname</label>
+                <input type="text" id="serverHostname" placeholder="srv-web-01" />
+              </div>
+            </div>
+            <div class="form-field">
+              <label for="serverUsuario">Usuario/Responsable</label>
+              <input type="text" id="serverUsuario" placeholder="Administrador TI" />
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>🗄️ Ubicación en Rack</legend>
+            <div class="form-field">
+              <label for="serverRack">Rack *</label>
+              <select id="serverRack" required></select>
+            </div>
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverUnits">Unidades (U)</label>
+                <select id="serverUnits">
+                  <option value="1">1U</option>
+                  <option value="2" selected>2U</option>
+                  <option value="3">3U</option>
+                  <option value="4">4U</option>
+                  <option value="5">5U</option>
+                  <option value="6">6U</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="serverPosition">Posición en Rack (1-42)</label>
+                <input type="number" id="serverPosition" min="1" max="42" placeholder="Auto" />
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>⚙️ Hardware</legend>
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverMarca">Marca</label>
+                <input type="text" id="serverMarca" placeholder="DELL, HP, Lenovo..." />
+              </div>
+              <div class="form-field">
+                <label for="serverModelo">Modelo</label>
+                <input type="text" id="serverModelo" placeholder="PowerEdge R740" />
+              </div>
+            </div>
+            <div class="form-grid-3">
+              <div class="form-field">
+                <label for="serverTipo">Tipo</label>
+                <input type="text" id="serverTipo" placeholder="Tower, Rack..." />
+              </div>
+              <div class="form-field">
+                <label for="serverSerie">Serie</label>
+                <input type="text" id="serverSerie" placeholder="Número de serie" />
+              </div>
+              <div class="form-field">
+                <label for="serverRAM">RAM (GB)</label>
+                <input type="text" id="serverRAM" placeholder="64" />
+              </div>
+            </div>
+            <div class="form-grid-3">
+              <div class="form-field">
+                <label for="serverSocket">Socket</label>
+                <input type="text" id="serverSocket" placeholder="LGA1151" />
+              </div>
+              <div class="form-field">
+                <label for="serverNoPorSocket">Núcleos por Socket</label>
+                <input type="text" id="serverNoPorSocket" placeholder="8" />
+              </div>
+              <div class="form-field">
+                <label for="serverProcLogicos">Proc. Lógicos</label>
+                <input type="text" id="serverProcLogicos" placeholder="16" />
+              </div>
+            </div>
+            <div class="form-field">
+              <label>💿 Discos</label>
+              <div id="discosContainer"></div>
+              <button type="button" id="btnAddDisco" class="btn-add-disco">➕ Agregar Disco</button>
+              <input type="hidden" id="serverDiscos" />
+            </div>
+            <div class="form-field">
+              <label for="serverDatastore">Datastore</label>
+              <input type="text" id="serverDatastore" placeholder="Datastore1" />
+            </div>
+            <div class="form-field">
+              <label for="serverConexion">Conexión</label>
+              <input type="text" id="serverConexion" placeholder="10Gb Ethernet" />
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>💾 Storage</legend>
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverStorage">Referencia Storage</label>
+                <input type="text" id="serverStorage" placeholder="STORAGE174" />
+              </div>
+              <div class="form-field">
+                <label for="serverOcsInventario">OCS Inventario</label>
+                <select id="serverOcsInventario">
+                  <option value="">-- Seleccionar --</option>
+                  <option value="SI">SI</option>
+                  <option value="NO">NO</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-field">
+              <label for="serverDatastoreVirtuales">Datastore Virtuales</label>
+              <textarea id="serverDatastoreVirtuales" rows="3"
+                placeholder="Datastore1 x 319GB&#10;VL01_Pool01_STOV5000138 x 13TB"></textarea>
+            </div>
+            <div class="form-field">
+              <label for="serverConexionStorage">Conexión Storage (IP, HBA)</label>
+              <textarea id="serverConexionStorage" rows="2"
+                placeholder="SI, 192.168.0.138 (VL01_Pool01)&#10;HBA3 = STORAGE"></textarea>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>💿 Software</legend>
+            <div class="form-field">
+              <label for="serverSO">Sistema Operativo</label>
+              <input type="text" id="serverSO" placeholder="Windows Server 2022, Ubuntu 20.04..." />
+            </div>
+            <div class="form-field">
+              <label for="serverSoftware">Software Instalado</label>
+              <textarea id="serverSoftware" rows="2" placeholder="SQL Server, IIS, .NET..."></textarea>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>🔧 Estado y Mantenimiento</legend>
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverEstado">Estado (Prioridad)</label>
+                <select id="serverEstado">
+                  <option value="CRITICO">🔴 CRÍTICO (Servidor importante)</option>
+                  <option value="NORMAL" selected>⚪ NORMAL</option>
+                  <option value="ACTIVO">🟢 ACTIVO</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="serverActivo">¿Activo?</label>
+                <select id="serverActivo">
+                  <option value="SI" selected>SÍ - Operativo</option>
+                  <option value="NO">NO - Fuera de servicio</option>
+                  <option value="MANTENIMIENTO">EN MANTENIMIENTO</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverFechaInstalacion">Fecha Instalación</label>
+                <input type="date" id="serverFechaInstalacion" />
+              </div>
+              <div class="form-field">
+                <label for="serverFechaMantenimiento">Fecha Mantenimiento</label>
+                <input type="date" id="serverFechaMantenimiento" />
+              </div>
+            </div>
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverBackup">Backup</label>
+                <input type="text" id="serverBackup" placeholder="Diario, Semanal..." />
+              </div>
+              <div class="form-field">
+                <label for="serverFechaBackup">Última Fecha Backup</label>
+                <input type="date" id="serverFechaBackup" />
+              </div>
+            </div>
+          </fieldset>
+
+          <div>
+            <button type="button" id="serverFormCancel">Cancelar</button>
+            <button type="submit">💾 Guardar Servidor</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para agregar rack -->
+  <div class="modal-overlay" id="rackAddModal" style="display:none">
+    <div class="modal-content" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3>🗄️ Agregar Rack</h3>
+        <button class="modal-close" id="rackAddModalClose">✕ Cerrar</button>
+      </div>
+      <div class="modal-body">
+        <form id="rackForm">
+          <div class="form-field">
+            <label for="rackName">Nombre del Rack *</label>
+            <input type="text" id="rackName" required placeholder="ej: Rack 10" />
+          </div>
+          <div>
+            <button type="button" id="rackFormCancel">Cancelar</button>
+            <button type="submit">✅ Crear Rack</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="slot-tooltip" id="slotTooltip" role="tooltip"></div>
+  <script src="/toast.js"></script>
+  <script src="/nav.js"></script>
+  <script src="/app.js" type="module"></script>
+  <script src="/js/modules/serverManager.js" type="module"></script>
+  <script src="/js/modules/rackDragDrop.js" type="module"></script>
+  <script>
+    // Mostrar botón de usuarios solo para admins
+    document.addEventListener('DOMContentLoaded', () => {
+      try {
+        const userStr = sessionStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          if (user.role === 'admin') {
+            const btnUsers = document.getElementById('btnUsers');
+            if (btnUsers) {
+              btnUsers.style.display = 'inline-block';
+              btnUsers.addEventListener('click', () => location.href = '/users');
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error checking user role:', e);
+      }
+    });
+  </script>
+</body>
+
+</html>

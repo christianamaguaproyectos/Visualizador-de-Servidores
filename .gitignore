@@ -1,0 +1,46 @@
+# Logs
+logs/
+*.log
+*.pid
+
+# Node modules
+node_modules/
+
+# Archivos subidos
+backend/uploads/*.xlsx
+backend/uploads/*.xls
+
+# Configuración local
+config.json
+.env
+.env.*
+!.env.docker.example
+
+# Usuarios y autenticación (SENSIBLE - NO SUBIR)
+backend/config/users.json
+
+# PM2
+.pm2/
+
+# Backups y dumps locales
+*.dump
+backup*.sql
+backup*.dump
+
+# Artefactos locales pesados
+*.tar
+*.zip
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Python cache (scripts auxiliares)
+__pycache__/
+*.pyc
+
+# Inventario/local data
+Servidores Danec.xlsx
+clusters_dump.csv

@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard de Monitoreo - Servidores</title>
+  <link rel="stylesheet" href="monitoring-styles.css">
+  <link rel="stylesheet" href="/nav-styles.css">
+  <link rel="icon" type="image/jpeg" href="/favicon.jpg">
+</head>
+
+<body>
+  <header class="monitoring-header">
+    <div class="header-left">
+      <h1>🖥️ Monitoreo de Servidores</h1>
+      <span class="last-update" id="lastUpdate">Actualizando...</span>
+    </div>
+    <div class="header-right">
+      <button class="btn btn-icon" id="btnRefresh" title="Actualizar">🔄</button>
+
+    </div>
+  </header>
+
+  <main class="monitoring-main">
+    <!-- KPIs Summary -->
+    <section class="kpi-section">
+      <div class="kpi-card kpi-up">
+        <div class="kpi-icon">🟢</div>
+        <div class="kpi-content">
+          <div class="kpi-value" id="kpiUp">-</div>
+          <div class="kpi-label">Activos</div>
+        </div>
+      </div>
+      <div class="kpi-card kpi-down">
+        <div class="kpi-icon">🔴</div>
+        <div class="kpi-content">
+          <div class="kpi-value" id="kpiDown">-</div>
+          <div class="kpi-label">Caídos</div>
+        </div>
+      </div>
+      <div class="kpi-card kpi-degraded">
+        <div class="kpi-icon">🟡</div>
+        <div class="kpi-content">
+          <div class="kpi-value" id="kpiDegraded">-</div>
+          <div class="kpi-label">Degradados</div>
+        </div>
+      </div>
+      <div class="kpi-card kpi-maintenance">
+        <div class="kpi-icon">🔧</div>
+        <div class="kpi-content">
+          <div class="kpi-value" id="kpiMaintenance">-</div>
+          <div class="kpi-label">Mantenimiento</div>
+        </div>
+      </div>
+      <div class="kpi-card kpi-incidents">
+        <div class="kpi-icon">⚠️</div>
+        <div class="kpi-content">
+          <div class="kpi-value" id="kpiIncidents">-</div>
+          <div class="kpi-label">Incidentes</div>
+        </div>
+      </div>
+      <div class="kpi-card kpi-latency">
+        <div class="kpi-icon">⏱️</div>
+        <div class="kpi-content">
+          <div class="kpi-value" id="kpiLatency">-</div>
+          <div class="kpi-label">Latencia Prom.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tabs -->
+    <nav class="monitoring-tabs">
+      <button class="tab-btn active" data-tab="overview">📊 Vista General</button>
+      <button class="tab-btn" data-tab="hosts">🖥️ Hosts</button>
+      <button class="tab-btn" data-tab="incidents">🚨 Incidentes</button>
+      <button class="tab-btn" data-tab="checks">✅ Checks</button>
+      <button class="tab-btn" data-tab="maintenance">🧹 Mantenimiento</button>
+      <button class="tab-btn" data-tab="alerts-config">📧 Alertas</button>
+    </nav>
+
+    <!-- Tab Content: Overview -->
+    <section class="tab-content active" id="tab-overview">
+      <div class="overview-grid">
+        <!-- Incidentes Activos -->
+        <div class="card">
+          <div class="card-header">
+            <h2>🚨 Incidentes Activos</h2>
+            <a href="#" class="btn btn-sm" data-tab-link="incidents">Ver todos →</a>
+          </div>
+          <div class="card-body" id="activeIncidentsList">
+            <div class="loading-spinner"></div>
+          </div>
+        </div>
+
+        <!-- Hosts Críticos Caídos -->
+        <div class="card">
+          <div class="card-header">
+            <h2>🔴 Hosts Críticos Caídos</h2>
+          </div>
+          <div class="card-body" id="criticalDownList">
+            <div class="loading-spinner"></div>
+          </div>
+        </div>
+
+        <!-- Gráfica de Tendencia -->
+        <div class="card card-wide">
+          <div class="card-header">
+            <h2>📈 Tendencia de Checks (24h)</h2>
+          </div>
+          <div class="card-body">
+            <div class="chart-container" id="trendChart">
+              <div class="loading-spinner"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Métricas Recientes -->
+        <div class="card">
+          <div class="card-header">
+            <h2>📊 Métricas (Últimas 2h)</h2>
+          </div>
+          <div class="card-body" id="recentMetrics">
+            <div class="loading-spinner"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab Content: Hosts -->
+    <section class="tab-content" id="tab-hosts">
+      <div class="toolbar">
+        <input type="text" class="search-input" id="searchHosts" placeholder="🔍 Buscar por nombre o IP...">
+        <select id="filterEstado" class="filter-select">
+          <option value="">Todos los estados</option>
+          <option value="UP">🟢 UP</option>
+          <option value="DOWN">🔴 DOWN</option>
+          <option value="DEGRADED">🟡 DEGRADED</option>
+          <option value="MAINTENANCE">🔧 MAINTENANCE</option>
+          <option value="UNKNOWN">❓ UNKNOWN</option>
+        </select>
+        <select id="filterType" class="filter-select">
+          <option value="">Todos los tipos</option>
+          <option value="fisico">Físico</option>
+          <option value="virtual">Virtual</option>
+        </select>
+        <label class="checkbox-label">
+          <input type="checkbox" id="filterCritical"> Solo críticos
+        </label>
+        <button class="btn btn-primary" id="btnImportHosts">📥 Importar Hosts</button>
+      </div>
+      <div class="hosts-grid" id="hostsGrid">
+        <div class="loading-spinner"></div>
+      </div>
+    </section>
+
+    <!-- Tab Content: Incidents -->
+    <section class="tab-content" id="tab-incidents">
+      <div class="toolbar">
+        <input type="text" id="searchIncidents" class="search-input" placeholder="🔍 Buscar por nombre, IP o resumen..."
+          style="flex:1;max-width:300px">
+        <select id="filterIncidentState" class="filter-select">
+          <option value="">Todos los estados</option>
+          <option value="open">🔴 Abierto</option>
+          <option value="ack">🟡 Reconocido</option>
+          <option value="resolved">🟢 Resuelto</option>
+          <option value="closed">⚫ Cerrado</option>
+        </select>
+        <select id="filterIncidentSeverity" class="filter-select">
+          <option value="">Todas las severidades</option>
+          <option value="critical">🔴 Crítico</option>
+          <option value="warning">🟡 Warning</option>
+          <option value="info">🔵 Info</option>
+        </select>
+      </div>
+      <div class="incidents-list" id="incidentsList">
+        <div class="loading-spinner"></div>
+      </div>
+    </section>
+
+    <!-- Tab Content: Checks -->
+    <section class="tab-content" id="tab-checks">
+      <div class="toolbar">
+        <input type="text" id="searchChecks" class="search-input" placeholder="🔍 Buscar por nombre o IP del host..."
+          style="flex:1;max-width:300px">
+        <button class="btn btn-primary" id="btnAddCheck">➕ Nuevo Check</button>
+        <button class="btn btn-secondary" id="btnBulkCheck">📦 Check Masivo</button>
+      </div>
+      <div class="checks-list" id="checksList">
+        <div class="loading-spinner"></div>
+      </div>
+    </section>
+
+    <!-- Tab Content: Mantenimiento -->
+    <section class="tab-content" id="tab-maintenance">
+      <div class="maintenance-container">
+        <div class="card">
+          <div class="card-header">
+            <h2>📊 Estadísticas de Almacenamiento</h2>
+            <button class="btn btn-sm" id="btnRefreshStats">🔄 Actualizar</button>
+          </div>
+          <div class="card-body" id="storageStats">
+            <div class="loading-spinner"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>🧹 Depuración de Logs de Checks</h2>
+          </div>
+          <div class="card-body">
+            <p class="muted" style="margin-bottom:16px">Elimina registros de check_runs más antiguos que los días
+              especificados. Esto libera espacio en la base de datos.</p>
+            <div class="form-inline">
+              <label>Eliminar registros más antiguos de:</label>
+              <select id="purgeCheckRunsDays" class="filter-select">
+                <option value="7">7 días</option>
+                <option value="14">14 días</option>
+                <option value="30" selected>30 días</option>
+                <option value="60">60 días</option>
+                <option value="90">90 días</option>
+              </select>
+              <button class="btn btn-danger" id="btnPurgeCheckRuns">🗑️ Eliminar Logs Antiguos</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>🗂️ Depuración de Incidentes</h2>
+          </div>
+          <div class="card-body">
+            <p class="muted" style="margin-bottom:16px">Elimina incidentes cerrados/resueltos más antiguos que los días
+              especificados.</p>
+            <div class="form-inline">
+              <label>Eliminar incidentes cerrados más antiguos de:</label>
+              <select id="purgeIncidentsDays" class="filter-select">
+                <option value="30">30 días</option>
+                <option value="60">60 días</option>
+                <option value="90" selected>90 días</option>
+                <option value="180">180 días</option>
+                <option value="365">1 año</option>
+              </select>
+              <button class="btn btn-warning" id="btnPurgeIncidents">🗑️ Eliminar Incidentes Cerrados</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>⚡ Optimización de Base de Datos</h2>
+          </div>
+          <div class="card-body">
+            <p class="muted" style="margin-bottom:16px">Ejecuta VACUUM ANALYZE para liberar espacio y actualizar
+              estadísticas de las tablas.</p>
+            <button class="btn btn-primary" id="btnVacuum">🔧 Ejecutar VACUUM</button>
+            <p class="muted" style="margin-top:12px;font-size:0.8rem">⚠️ Esta operación puede tardar unos segundos en
+              bases de datos grandes.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab Content: Configuración de Alertas -->
+    <section class="tab-content" id="tab-alerts-config">
+      <div class="alerts-config-container" style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <!-- Lista de Destinatarios -->
+        <div class="card">
+          <div class="card-header">
+            <h2>📧 Destinatarios de Alertas</h2>
+            <button class="btn btn-sm btn-success" id="btnAddRecipient">➕ Agregar</button>
+          </div>
+          <div class="card-body">
+            <p class="muted" style="margin-bottom:16px">Las alertas se enviarán a los siguientes correos cuando un host
+              cambie de estado.</p>
+            <div id="recipientsList">
+              <div class="loading-spinner"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Configuración y Prueba -->
+        <div class="card">
+          <div class="card-header">
+            <h2>⚙️ Configuración de Notificaciones</h2>
+          </div>
+          <div class="card-body">
+            <div class="config-section">
+              <h3>📤 Estado del SMTP</h3>
+              <div id="smtpStatus" style="margin-bottom:20px">
+                <div class="loading-spinner"></div>
+              </div>
+            </div>
+
+            <div class="config-section" style="margin-top:20px">
+              <h3>🧪 Enviar Email de Prueba</h3>
+              <p class="muted" style="margin-bottom:12px">Envía un email de prueba a todos los destinatarios activos.
+              </p>
+              <button class="btn btn-primary" id="btnTestEmail">📧 Enviar Email de Prueba</button>
+              <div id="testEmailResult" style="margin-top:10px"></div>
+            </div>
+
+            <div class="config-section" style="margin-top:20px">
+              <h3>⏰ Configuración de Cooldown</h3>
+              <p class="muted" style="margin-bottom:12px">Período de espera entre alertas del mismo host: <strong>10
+                  minutos</strong></p>
+              <p class="muted">Esto evita spam de notificaciones cuando un host está inestable.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sección de Simulación de Alertas -->
+      <div class="card" style="margin-top:20px">
+        <div class="card-header">
+          <h2>🧪 Simulador de Alertas</h2>
+        </div>
+        <div class="card-body">
+          <p class="muted" style="margin-bottom:16px">Simula la caída o recuperación de un servidor para probar que las
+            alertas lleguen correctamente.</p>
+
+          <div style="display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:end">
+            <div class="form-group" style="margin:0">
+              <label for="simulateHostSelect">Seleccionar Host</label>
+              <select id="simulateHostSelect" class="form-control">
+                <option value="">Cargando hosts...</option>
+              </select>
+            </div>
+            <button class="btn btn-danger" id="btnSimulateDown" title="Simular caída">
+              🔴 Simular Caída
+            </button>
+            <button class="btn btn-success" id="btnSimulateUp" title="Simular recuperación">
+              🟢 Simular Recuperación
+            </button>
+          </div>
+
+          <div id="simulateResult" style="margin-top:15px"></div>
+
+          <div style="background:var(--bg-hover);padding:12px;border-radius:8px;margin-top:15px">
+            <p style="font-size:0.9em;color:var(--text-secondary);margin:0">
+              <strong>💡 Nota:</strong> Esta simulación cambia el estado del host en la base de datos y envía una
+              notificación real a todos los destinatarios activos.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal: Agregar/Editar Destinatario -->
+  <div class="modal" id="recipientModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="recipientModalTitle">📧 Agregar Destinatario</h2>
+        <button class="modal-close" id="recipientModalClose">✕ Cerrar</button>
+      </div>
+      <div class="modal-body">
+        <form id="recipientForm">
+          <input type="hidden" id="recipientId" />
+
+          <fieldset
+            style="border:1px solid var(--border-color);padding:20px 24px;border-radius:12px;background:rgba(255,255,255,.02);margin-bottom:20px">
+            <legend style="font-weight:700;color:var(--text-primary);padding:0 12px;font-size:15px">📝 Datos del
+              Destinatario</legend>
+
+            <div class="form-group">
+              <label for="recipientEmail">📧 Email *</label>
+              <input type="email" id="recipientEmail" required placeholder="correo@ejemplo.com" />
+            </div>
+            <div class="form-group">
+              <label for="recipientName">👤 Nombre</label>
+              <input type="text" id="recipientName" placeholder="Nombre del destinatario" />
+            </div>
+          </fieldset>
+
+          <fieldset
+            style="border:1px solid var(--border-color);padding:20px 24px;border-radius:12px;background:rgba(255,255,255,.02)">
+            <legend style="font-weight:700;color:var(--text-primary);padding:0 12px;font-size:15px">🔔 Tipos de Alertas
+            </legend>
+
+            <div class="form-group" style="margin:0">
+              <div style="display:flex;gap:24px;flex-wrap:wrap;margin-top:10px">
+                <label class="checkbox-label"
+                  style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 16px;background:rgba(255,255,255,.05);border-radius:8px;border:1px solid var(--border-color);transition:all 0.2s">
+                  <input type="checkbox" id="recipientNotifyDown" checked
+                    style="width:18px;height:18px;cursor:pointer" />
+                  <span style="font-weight:600;color:var(--text-primary)">🔴 Servidor Caído</span>
+                </label>
+                <label class="checkbox-label"
+                  style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 16px;background:rgba(255,255,255,.05);border-radius:8px;border:1px solid var(--border-color);transition:all 0.2s">
+                  <input type="checkbox" id="recipientNotifyDegraded" checked
+                    style="width:18px;height:18px;cursor:pointer" />
+                  <span style="font-weight:600;color:var(--text-primary)">🟡 Servidor Degradado</span>
+                </label>
+                <label class="checkbox-label"
+                  style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 16px;background:rgba(255,255,255,.05);border-radius:8px;border:1px solid var(--border-color);transition:all 0.2s">
+                  <input type="checkbox" id="recipientNotifyRecovery" checked
+                    style="width:18px;height:18px;cursor:pointer" />
+                  <span style="font-weight:600;color:var(--text-primary)">🟢 Recuperaciones</span>
+                </label>
+              </div>
+            </div>
+          </fieldset>
+
+          <div class="form-actions">
+            <button type="button" class="btn" id="recipientFormCancel">Cancelar</button>
+            <button type="submit" class="btn btn-primary">💾 Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Detalle de Host -->
+  <div class="modal" id="hostModal">
+    <div class="modal-content modal-lg">
+      <div class="modal-header">
+        <h2 id="hostModalTitle">🔍 Detalle del Host</h2>
+        <button class="modal-close" id="hostModalClose">✕ Cerrar</button>
+      </div>
+      <div class="modal-body" id="hostModalBody">
+        <div class="loading-spinner"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Detalle de Incidente -->
+  <div class="modal" id="incidentModal">
+    <div class="modal-content modal-lg">
+      <div class="modal-header">
+        <h2 id="incidentModalTitle">⚠️ Detalle del Incidente</h2>
+        <button class="modal-close" id="incidentModalClose">✕ Cerrar</button>
+      </div>
+      <div class="modal-body" id="incidentModalBody">
+        <div class="loading-spinner"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Crear Check -->
+  <div class="modal" id="checkModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Crear Check</h2>
+        <button class="modal-close" id="checkModalClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="checkForm">
+          <div class="form-group">
+            <label for="checkHostId">Host</label>
+            <select id="checkHostId" required>
+              <option value="">Seleccione un host...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="checkKind">Tipo de Check</label>
+            <select id="checkKind" required>
+              <option value="icmp">ICMP (Ping)</option>
+              <option value="tcp">TCP (Puerto)</option>
+              <option value="http">HTTP/HTTPS</option>
+            </select>
+          </div>
+          <div class="form-group" id="tcpConfigGroup" style="display:none">
+            <label for="checkPort">Puerto TCP</label>
+            <input type="number" id="checkPort" placeholder="80, 443, 22, etc.">
+          </div>
+          <div class="form-group" id="httpConfigGroup" style="display:none">
+            <label for="checkUrl">URL</label>
+            <input type="text" id="checkUrl" placeholder="https://ejemplo.com">
+            <label for="checkExpectCode">Código esperado</label>
+            <input type="number" id="checkExpectCode" value="200">
+          </div>
+          <div class="form-group">
+            <label for="checkFrequency">Frecuencia (segundos)</label>
+            <select id="checkFrequency">
+              <option value="30">30 segundos</option>
+              <option value="60" selected>1 minuto</option>
+              <option value="300">5 minutos</option>
+              <option value="600">10 minutos</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="checkTimeout">Timeout (ms)</label>
+            <input type="number" id="checkTimeout" value="2000">
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" id="checkFormCancel">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Crear Check</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script src="/toast.js"></script>
+  <script src="/nav.js"></script>
+  <script src="/monitoring.js" type="module"></script>
+</body>
+
+</html>

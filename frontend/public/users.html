@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestión de Usuarios - Diagrama Servidores</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/nav-styles.css">
+  <link rel="icon" type="image/jpeg" href="/favicon.jpg">
+  <style>
+    .users-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .users-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+    }
+
+    .users-table {
+      width: 100%;
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .users-table table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .users-table th {
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      color: white;
+      padding: 16px;
+      text-align: left;
+      font-weight: 600;
+    }
+
+    .users-table td {
+      padding: 16px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .users-table tr:hover {
+      background: #f8fafc;
+    }
+
+    .user-role {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .user-role.admin {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .user-role.viewer {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+
+    .user-status {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+
+    .user-status.active {
+      background: #10b981;
+    }
+
+    .user-status.inactive {
+      background: #ef4444;
+    }
+
+    .user-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .user-actions button {
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+
+    .btn-edit {
+      background: #3b82f6;
+    }
+
+    .btn-edit:hover {
+      background: #2563eb;
+    }
+
+    .btn-delete {
+      background: #ef4444;
+    }
+
+    .btn-delete:hover {
+      background: #dc2626;
+    }
+
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.show {
+      display: flex;
+    }
+
+    .modal-content {
+      background: white;
+      padding: 30px;
+      border-radius: 16px;
+      max-width: 500px;
+      width: 90%;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .modal-content h2 {
+      margin: 0 0 20px 0;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 500;
+      color: #374151;
+    }
+
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      margin-top: 24px;
+    }
+
+    .btn-cancel {
+      background: #6b7280;
+    }
+
+    .btn-cancel:hover {
+      background: #4b5563;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #6b7280;
+    }
+
+    .empty-state h3 {
+      margin: 0 0 10px 0;
+      color: #374151;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>👥 Gestión de Usuarios</h1>
+    <div class="meta">
+    </div>
+  </header>
+
+  <main class="users-container">
+    <div class="users-header">
+      <div>
+        <h2 style="margin: 0;">Usuarios del Sistema</h2>
+        <p style="color: #6b7280; margin: 5px 0 0 0;">Gestiona los usuarios y sus permisos</p>
+      </div>
+      <button id="btnAddUser">➕ Agregar Usuario</button>
+    </div>
+
+    <div class="users-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Usuario</th>
+            <th>Nombre</th>
+            <th>Email</th>
+            <th>Rol</th>
+            <th>Estado</th>
+            <th>Último Login</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="usersTableBody">
+          <tr>
+            <td colspan="7" style="text-align: center; padding: 40px;">
+              Cargando usuarios...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- Modal Agregar/Editar Usuario -->
+  <div class="modal-overlay" id="userModal">
+    <div class="modal-content">
+      <h2 id="modalTitle">Agregar Usuario</h2>
+      <form id="userForm">
+        <input type="hidden" id="userId">
+
+        <div class="form-group">
+          <label for="username">Usuario *</label>
+          <input type="text" id="username" required>
+        </div>
+
+        <div class="form-group">
+          <label for="name">Nombre Completo *</label>
+          <input type="text" id="name" required>
+        </div>
+
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email">
+        </div>
+
+        <div class="form-group">
+          <label for="role">Rol *</label>
+          <select id="role" required>
+            <option value="viewer">Viewer (Solo lectura)</option>
+            <option value="admin">Admin (Lectura y escritura)</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="passwordGroup">
+          <label for="password">Contraseña *</label>
+          <input type="password" id="password" minlength="6">
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" id="btnCancelModal">Cancelar</button>
+          <button type="submit">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Cambiar Contraseña -->
+  <div class="modal-overlay" id="passwordModal">
+    <div class="modal-content">
+      <h2>Cambiar Contraseña</h2>
+      <form id="passwordForm">
+        <input type="hidden" id="passwordUserId">
+
+        <div class="form-group">
+          <label for="newPassword">Nueva Contraseña *</label>
+          <input type="password" id="newPassword" required minlength="6">
+        </div>
+
+        <div class="form-group">
+          <label for="confirmPassword">Confirmar Contraseña *</label>
+          <input type="password" id="confirmPassword" required minlength="6">
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" id="btnCancelPassword">Cancelar</button>
+          <button type="submit">Cambiar Contraseña</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/toast.js"></script>
+  <script src="/nav.js"></script>
+  <script src="auth.js"></script>
+  <script src="/users.js" type="module"></script>
+</body>
+
+</html>

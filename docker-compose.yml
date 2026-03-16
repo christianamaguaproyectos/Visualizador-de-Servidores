@@ -1,0 +1,104 @@
+# Docker Compose para DiagramaServers
+# Incluye: App Node.js + PostgreSQL
+# Uso: docker-compose up -d
+
+services:
+  # ================================
+  # Base de datos PostgreSQL
+  # ================================
+  postgres:
+    image: postgres:17
+    container_name: diagrama-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-diagrama}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-DiagramaServers2025}
+      POSTGRES_DB: ${POSTGRES_DB:-diagrama_servers}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Script de inicialización (schemas)
+      - ./scripts/sql:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-diagrama} -d ${POSTGRES_DB:-diagrama_servers}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - diagrama-network
+
+  # ================================
+  # Aplicación Node.js
+  # ================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: diagrama-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Conexión a PostgreSQL
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-diagrama}:${POSTGRES_PASSWORD:-DiagramaServers2025}@postgres:5432/${POSTGRES_DB:-diagrama_servers}
+      
+      # Configuración de la app
+      PORT: 3000
+      NODE_ENV: production
+      SESSION_SECRET: ${SESSION_SECRET:-GrupoDanec-DiagramaServidores-2025-DockerSecret}
+      
+      # Forzar binding a todas las interfaces (necesario para Docker)
+      BIND_ALL_INTERFACES: "true"
+      
+      # Monitoreo
+      MONITORING_ENABLED: ${MONITORING_ENABLED:-1}
+      
+      # Notificaciones (opcional)
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
+      TEAMS_WEBHOOK_URL: ${TEAMS_WEBHOOK_URL:-}
+      
+      # URL pública de la aplicación (para links en correos)
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      
+      # Timeouts de checks
+      DEFAULT_PING_TIMEOUT_MS: ${DEFAULT_PING_TIMEOUT_MS:-2000}
+      DEFAULT_TCP_TIMEOUT_MS: ${DEFAULT_TCP_TIMEOUT_MS:-2000}
+      DEFAULT_HTTP_TIMEOUT_MS: ${DEFAULT_HTTP_TIMEOUT_MS:-3000}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      # Persistir uploads y logs
+      - app_uploads:/app/backend/uploads
+      - app_logs:/app/logs
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/api/auth/session"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - diagrama-network
+
+# ================================
+# Redes
+# ================================
+networks:
+  diagrama-network:
+    driver: bridge
+
+# ================================
+# Volúmenes persistentes
+# ================================
+volumes:
+  postgres_data:
+    driver: local
+  app_uploads:
+    driver: local
+  app_logs:
+    driver: local

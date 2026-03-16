@@ -1,0 +1,229 @@
+/* ============================================= */
+/* GLOBAL NAVIGATION — Sidebar                   */
+/* ============================================= */
+
+.global-nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 240px;
+    height: 100vh;
+    background: #0f172a;
+    color: #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    z-index: 11000;
+    box-shadow: 4px 0 24px rgba(15, 23, 42, 0.2);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Brand / Logo */
+.global-nav__brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 20px 20px 16px 20px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    color: #fff;
+}
+
+.global-nav__brand svg {
+    flex-shrink: 0;
+    color: #60a5fa;
+}
+
+.global-nav__brand-text {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+}
+
+/* Nav Links */
+.global-nav__links {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 12px 10px;
+    overflow-y: auto;
+}
+
+.global-nav__link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    color: #94a3b8;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.global-nav__link:hover {
+    background: rgba(148, 163, 184, 0.1);
+    color: #e2e8f0;
+}
+
+.global-nav__link.active {
+    background: rgba(37, 99, 235, 0.2);
+    color: #60a5fa;
+    font-weight: 600;
+}
+
+.global-nav__link.active .global-nav__icon svg {
+    color: #60a5fa;
+}
+
+.global-nav__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+}
+
+.global-nav__icon svg {
+    color: inherit;
+}
+
+.global-nav__label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* User section */
+.global-nav__user {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 14px 16px;
+    border-top: 1px solid rgba(148, 163, 184, 0.12);
+    background: rgba(15, 23, 42, 0.5);
+}
+
+.global-nav__user-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.global-nav__user-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(37, 99, 235, 0.25);
+    color: #60a5fa;
+    flex-shrink: 0;
+}
+
+.global-nav__user-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: #cbd5e1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.global-nav__logout {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: transparent;
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+.global-nav__logout:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+/* Mobile hamburger toggle */
+.global-nav__toggle {
+    display: none;
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 11001;
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    background: #0f172a;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    color: #e2e8f0;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.3);
+    transition: all 0.2s ease;
+}
+
+.global-nav__toggle.open {
+    background: #1e293b;
+}
+
+/* Body offset when nav is present */
+body.has-global-nav {
+    padding-left: 240px;
+}
+
+/* Adjust fixed headers for pages that use them */
+body.has-global-nav .app-header,
+body.has-global-nav .virtual-page .app-header {
+    left: 240px;
+}
+
+body.has-global-nav header {
+    margin-left: 0;
+}
+
+body.has-global-nav .monitoring-header {
+    left: 240px;
+}
+
+/* ---- Responsive: Tablet & Mobile ---- */
+@media (max-width: 1024px) {
+    .global-nav {
+        transform: translateX(-100%);
+    }
+
+    .global-nav.open {
+        transform: translateX(0);
+        box-shadow: 4px 0 40px rgba(15, 23, 42, 0.5);
+    }
+
+    .global-nav__toggle {
+        display: flex;
+    }
+
+    body.has-global-nav {
+        padding-left: 0;
+    }
+
+    body.has-global-nav .app-header,
+    body.has-global-nav .virtual-page .app-header,
+    body.has-global-nav .monitoring-header {
+        left: 0;
+    }
+}

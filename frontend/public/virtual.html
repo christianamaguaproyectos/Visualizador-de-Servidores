@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard de Servidores Virtuales</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="/nav-styles.css" />
+  <link rel="icon" type="image/jpeg" href="/favicon.jpg" />
+</head>
+
+<body class="virtual-page">
+  <header class="app-header">
+    <div class="header-primary">
+      <h1>Servidores Virtuales</h1>
+      <span id="updatedAt" class="header-updated"></span>
+    </div>
+    <div class="header-search">
+      <input id="searchVMs" type="search" placeholder="🔍 Buscar VM o host..." />
+      <select id="filterVMStatus"
+        style="padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;background:white;font-size:14px">
+        <option value="all">Todos los estados</option>
+        <option value="critico">Solo Críticos 🔴</option>
+        <option value="activo">Solo Activos 🟢</option>
+        <option value="normal">Solo Normal ⚪</option>
+      </select>
+    </div>
+    <div class="header-actions">
+      <button id="btnAddServer" class="header-action action-add" title="Agregar nuevo servidor virtual">
+        <span class="action-label">➕ Agregar VM</span>
+      </button>
+      <button id="btnAddRack" class="header-action action-add" title="Agregar nuevo host">
+        <span class="action-label">🗄️ Agregar Host</span>
+      </button>
+      <button id="btnExportExcel" class="header-action" title="Exportar máquinas virtuales a Excel">
+        <span class="action-label">📊 Exportar Excel</span>
+      </button>
+      <button id="btnUsers" class="header-action" style="display:none" title="Gestión de usuarios">
+        <span class="action-label">👥 Usuarios</span>
+      </button>
+
+      <button id="btnInicio" class="header-action action-reload" title="Actualizar datos">
+        <span class="action-label">Actualizar datos</span>
+      </button>
+    </div>
+  </header>
+
+  <div id="loading">
+    <h2>Cargando hosts y VMs...</h2>
+  </div>
+
+  <div id="content" style="display: none">
+    <main>
+      <div id="app" class="container"></div>
+    </main>
+  </div>
+
+  <!-- Modal para agregar/editar servidor virtual -->
+  <div class="modal-overlay" id="serverModal" style="display:none">
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="serverModalTitle">
+      <div class="modal-header">
+        <h3 id="serverModalTitle">💻 Agregar Máquina Virtual</h3>
+        <button class="modal-close" id="serverModalClose">✕ Cerrar</button>
+      </div>
+      <div class="modal-body">
+        <form id="serverForm">
+          <input type="hidden" id="serverId" />
+
+          <fieldset>
+            <legend>📋 Información Básica</legend>
+
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverNombre">Nombre de la VM *</label>
+                <input type="text" id="serverNombre" required placeholder="ej: VM-WEB-01" />
+              </div>
+              <div class="form-field">
+                <label for="serverLabel">Etiqueta</label>
+                <input type="text" id="serverLabel" placeholder="PROD-VM-01" />
+              </div>
+            </div>
+
+            <div class="form-field">
+              <label for="serverRack">Host/Rack *</label>
+              <select id="serverRack" required></select>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverUnits">Unidades (U)</label>
+                <select id="serverUnits">
+                  <option value="1">1U</option>
+                  <option value="2" selected>2U</option>
+                  <option value="3">3U</option>
+                  <option value="4">4U</option>
+                  <option value="5">5U</option>
+                  <option value="6">6U</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="serverPosition">Posición en Rack (opcional)</label>
+                <input type="number" id="serverPosition" min="1" max="42" placeholder="Auto" />
+              </div>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverIP">IP</label>
+                <input type="text" id="serverIP" placeholder="192.168.1.100" />
+              </div>
+              <div class="form-field">
+                <label for="serverHostname">Hostname</label>
+                <input type="text" id="serverHostname" placeholder="vm-web-01" />
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>🛠️ Recursos y Software</legend>
+
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverRAM">RAM (GB)</label>
+                <input type="text" id="serverRAM" placeholder="16" />
+              </div>
+              <div class="form-field">
+                <label for="serverSO">Sistema Operativo</label>
+                <input type="text" id="serverSO" placeholder="Ubuntu 22.04" />
+              </div>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverUsuario">Usuario / Responsable</label>
+                <input type="text" id="serverUsuario" placeholder="Área o responsable" />
+              </div>
+              <div class="form-field">
+                <label for="serverSoftware">Software principal</label>
+                <input type="text" id="serverSoftware" placeholder="Aplicaciones principales" />
+              </div>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverDiscos">Discos</label>
+                <div id="discosContainer"></div>
+                <button type="button" id="btnAddDisco"
+                  style="margin-top:8px;padding:8px 16px;background:#3b82f6;color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px">
+                  ➕ Agregar Disco
+                </button>
+                <input type="hidden" id="serverDiscos" />
+              </div>
+              <div class="form-field">
+                <label for="serverDatastore">Datastore</label>
+                <textarea id="serverDatastore" rows="2" placeholder="Datastores utilizados"></textarea>
+              </div>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverConexion">Conexión / Red</label>
+                <textarea id="serverConexion" rows="2" placeholder="Detalles de red"></textarea>
+              </div>
+              <div class="form-field">
+                <label for="serverBackup">Backup</label>
+                <input type="text" id="serverBackup" placeholder="Política de backup" />
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>⚙️ Hardware</legend>
+
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverMarca">Marca</label>
+                <input type="text" id="serverMarca" placeholder="N/A (Virtual)" />
+              </div>
+              <div class="form-field">
+                <label for="serverModelo">Modelo</label>
+                <input type="text" id="serverModelo" placeholder="N/A (Virtual)" />
+              </div>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverTipo">Tipo</label>
+                <input type="text" id="serverTipo" placeholder="VIRTUAL" />
+              </div>
+              <div class="form-field">
+                <label for="serverMtm">MTM</label>
+                <input type="text" id="serverMtm" placeholder="N/A" />
+              </div>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverSerie">No. Serie</label>
+                <input type="text" id="serverSerie" placeholder="N/A" />
+              </div>
+              <div class="form-field">
+                <label for="serverSocket">Socket</label>
+                <input type="text" id="serverSocket" placeholder="1" />
+              </div>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverNoPorSocket">No. por Socket</label>
+                <input type="text" id="serverNoPorSocket" placeholder="4" />
+              </div>
+              <div class="form-field">
+                <label for="serverProcLogicos">Procesadores Lógicos</label>
+                <input type="text" id="serverProcLogicos" placeholder="4" />
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>🛡️ Seguridad y Monitoreo</legend>
+
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverSophosEp">SOPHOS EP</label>
+                <select id="serverSophosEp">
+                  <option value="">-- Seleccionar --</option>
+                  <option value="SI">SI</option>
+                  <option value="NO">NO</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="serverVicarius">VICARIUS</label>
+                <select id="serverVicarius">
+                  <option value="">-- Seleccionar --</option>
+                  <option value="SI">SI</option>
+                  <option value="NO">NO</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverAcronis">ACRONIS</label>
+                <select id="serverAcronis">
+                  <option value="">-- Seleccionar --</option>
+                  <option value="SI">SI</option>
+                  <option value="NO">NO</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="serverVeeam">VEEAM</label>
+                <select id="serverVeeam">
+                  <option value="">-- Seleccionar --</option>
+                  <option value="SI">SI</option>
+                  <option value="NO">NO</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverManual">BACKUP MANUAL</label>
+                <select id="serverManual">
+                  <option value="">-- Seleccionar --</option>
+                  <option value="SI">SI</option>
+                  <option value="NO">NO</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="serverZabbix">ZABBIX</label>
+                <select id="serverZabbix">
+                  <option value="">-- Seleccionar --</option>
+                  <option value="SI">SI</option>
+                  <option value="NO">NO</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverWazuh">WAZUH</label>
+                <select id="serverWazuh">
+                  <option value="">-- Seleccionar --</option>
+                  <option value="SI">SI</option>
+                  <option value="NO">NO</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="serverBluelevel">BlueLevel</label>
+                <select id="serverBluelevel">
+                  <option value="">-- Seleccionar --</option>
+                  <option value="SI">SI</option>
+                  <option value="NO">NO</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverPam">PAM</label>
+                <select id="serverPam">
+                  <option value="">-- Seleccionar --</option>
+                  <option value="SI">SI</option>
+                  <option value="NO">NO</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="serverUsuarioPam">Usuario PAM</label>
+                <input type="text" id="serverUsuarioPam" placeholder="Usuario PAM asignado" />
+              </div>
+            </div>
+
+            <div class="form-field">
+              <label for="serverConfigBackup">Configuración Backup</label>
+              <input type="text" id="serverConfigBackup" placeholder="MANUAL, AUTO, etc." />
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>🔧 Estado y Fechas</legend>
+
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverFechaInstalacion">Fecha de instalación</label>
+                <input type="date" id="serverFechaInstalacion" />
+              </div>
+              <div class="form-field">
+                <label for="serverFechaMantenimiento">Fecha de último mantenimiento</label>
+                <input type="date" id="serverFechaMantenimiento" />
+              </div>
+            </div>
+
+            <div class="form-field">
+              <label for="serverFechaBackup">Fecha de último backup</label>
+              <input type="date" id="serverFechaBackup" />
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="serverEstado">Estado (Prioridad)</label>
+                <select id="serverEstado">
+                  <option value="CRITICO">🔴 CRÍTICO (VM importante)</option>
+                  <option value="NORMAL" selected>⚪ NORMAL</option>
+                  <option value="ACTIVO">🟢 ACTIVO</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="serverOperativo">¿Operativo?</label>
+                <select id="serverOperativo">
+                  <option value="SI" selected>SÍ - Funcionando</option>
+                  <option value="NO">NO - Apagado</option>
+                  <option value="MANTENIMIENTO">EN MANTENIMIENTO</option>
+                </select>
+              </div>
+            </div>
+          </fieldset>
+
+          <div>
+            <button type="button" id="serverFormCancel">Cancelar</button>
+            <button type="submit">💾 Guardar VM</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para agregar host -->
+  <div class="modal-overlay" id="rackAddModal" style="display:none">
+    <div class="modal-content" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 id="rackModalTitle">🖥️ Agregar Host</h3>
+        <button class="modal-close" id="rackAddModalClose">✕ Cerrar</button>
+      </div>
+      <div class="modal-body">
+        <form id="rackForm">
+          <input type="hidden" id="rackId" />
+          <fieldset>
+            <legend>📋 Información del Host</legend>
+
+            <div class="form-field">
+              <label for="rackName">Nombre del Host *</label>
+              <input type="text" id="rackName" required placeholder="ej: ESXI-HOST-01" />
+            </div>
+          </fieldset>
+
+          <div>
+            <button type="button" id="rackFormCancel">Cancelar</button>
+            <button type="submit" id="rackFormSubmit">✅ Crear Host</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="/toast.js"></script>
+  <script src="/nav.js"></script>
+  <script src="/app.js" type="module"></script>
+  <script src="/js/modules/serverManager.js" type="module"></script>
+  <script src="/js/modules/rackDragDrop.js" type="module"></script>
+  <script>
+    // Mostrar botón de usuarios solo para admins
+    document.addEventListener('DOMContentLoaded', () => {
+      try {
+        const userStr = sessionStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          if (user.role === 'admin') {
+            const btnUsers = document.getElementById('btnUsers');
+            if (btnUsers) {
+              btnUsers.style.display = 'inline-block';
+              btnUsers.addEventListener('click', () => location.href = '/users');
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error checking user role:', e);
+      }
+    });
+  </script>
+</body>
+
+</html>
