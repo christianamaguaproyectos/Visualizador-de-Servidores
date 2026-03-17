@@ -1765,16 +1765,10 @@ main {
   background: rgba(255, 255, 255, 0.78);
   color: #334155;
   font-size: 12px;
-  max-height: 0;
-  opacity: 0;
-  overflow: hidden;
-  transition: max-height .25s ease, opacity .25s ease, margin-top .25s ease;
-}
-
-.rack:hover .rack-tech-hint,
-.rack:focus-within .rack-tech-hint {
-  max-height: 90px;
+  max-height: 120px;
   opacity: 1;
+  overflow: visible;
+  transition: none;
 }
 
 .rack-tech-hint__row {
@@ -1981,12 +1975,12 @@ main {
   left: 20px;
   right: 20px;
   bottom: 120px;
-  overflow: visible;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 0;
   padding: 16px 12px;
-  padding-right: var(--labels-w, 200px);
+  padding-right: var(--labels-w, 180px);
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(148, 163, 184, 0.28);
   border-radius: 16px;
@@ -1996,8 +1990,34 @@ main {
 .rack-units-inner {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  height: 100%
+  gap: 3px;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
+  scrollbar-width: none;
+  scrollbar-color: transparent transparent;
+  -ms-overflow-style: none
+}
+
+.rack-units-inner::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.rack-units-inner::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.rack-units-inner::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.42) 0%, rgba(100, 116, 139, 0.38) 100%);
+  border-radius: 999px;
+  border: 0;
+}
+
+.rack-units-inner::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.58) 0%, rgba(51, 65, 85, 0.5) 100%);
 }
 
 .rack .rack-content .muted {
@@ -2061,9 +2081,9 @@ main {
 }
 
 .rack-units .rack-unit {
-  flex: 1 1 0;
-  height: auto;
-  min-height: 0;
+  flex: 0 0 16px;
+  height: 16px;
+  min-height: 16px;
 }
 
 .rack-unit.active {
@@ -2143,11 +2163,12 @@ main {
 /* Estilos especiales para servidores de 2U */
 .rack-unit.server-top {
   border-bottom: none;
-  border-radius: 8px 8px 0 0
+  border-radius: 8px 8px 0 0;
+  box-shadow: inset 0 0 0 2px rgba(15, 23, 42, 0.14), 0 8px 16px rgba(15, 23, 42, 0.12)
 }
 
 /* Segunda unidad del MISMO servidor: sin borde superior */
-.rack-unit.server-top+.rack-unit.active {
+.rack-unit.server-top+.rack-unit.active:not(.server-top) {
   border-top: none;
   border-radius: 0 0 8px 8px
 }
@@ -2160,15 +2181,25 @@ main {
 }
 
 /* Color de la segunda mitad del servidor par (azul) */
-.rack-unit.server-top.server-even+.rack-unit.active {
+.rack-unit.server-top.server-even+.rack-unit.active:not(.server-top) {
   background: linear-gradient(90deg, #bfdbfe 0%, #93c5fd 100%);
   border-color: rgba(59, 130, 246, 0.55)
 }
 
 /* Color de la segunda mitad del servidor impar (verde) */
-.rack-unit.server-top.server-odd+.rack-unit.active {
+.rack-unit.server-top.server-odd+.rack-unit.active:not(.server-top) {
   background: linear-gradient(90deg, #a7f3d0 0%, #6ee7b7 100%);
   border-color: rgba(16, 185, 129, 0.55)
+}
+
+.rack-unit.server-top.server-even::before,
+.rack-unit.server-top.server-even::after {
+  background: #2563eb;
+}
+
+.rack-unit.server-top.server-odd::before,
+.rack-unit.server-top.server-odd::after {
+  background: #059669;
 }
 
 /* Distribution helpers based on count */
@@ -2234,7 +2265,7 @@ main {
 }
 
 .unit-label {
-  font-size: clamp(8px, 1vh, 11px);
+  font-size: 10px;
   color: #475569;
   font-weight: 700;
   font-family: Consolas, 'JetBrains Mono', 'Fira Code', ui-monospace, monospace
