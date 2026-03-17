@@ -1,11 +1,11 @@
-# Acta de Cierre Tecnico
+# Acta de Cierre Tecnico y UX
 
-Fecha: 2026-03-16
+Fecha: 2026-03-17
 Proyecto: Visualizador Interactivo de Racks de Servidores
 Entorno validado: Docker local (app en 8082, postgres en 5432)
 
 ## 1. Objetivo del cierre
-Consolidar la remediacion de seguridad, mejoras de mantenibilidad y validacion operativa del sistema para dejar una base estable de despliegue y evolucion.
+Consolidar seguridad, UX/UI, mantenibilidad y performance para cerrar el plan priorizado con una base estable de operacion y evolucion.
 
 ## 2. Estado antes
 - Superficie XSS en frontend por uso de atributos dinamicos y render HTML sin estandar de codificacion/decodificacion.
@@ -34,6 +34,28 @@ Consolidar la remediacion de seguridad, mejoras de mantenibilidad y validacion o
   - `scripts/monitoring/smokeAuthFlows.mjs`
 - Checklist QA consolidado y actualizado con evidencia:
   - `docs/QA-SMOKE-CHECKLIST.md`
+
+### UX/UI por sprints (cerrado)
+- Sprint 1 (P0):
+  - Sistema UI base (tokens + botones unificados).
+  - Confirmaciones destructivas migradas a modal reusable.
+  - Clusters/hosts con flujo estable y consistente.
+- Sprint 2 (P1):
+  - Rediseño de racks fisicos con tarjetas y mejor legibilidad.
+  - KPI cards con iconos y detalle tecnico contextual por rack.
+  - Etiqueta operacional unificada: "Mostrar/Ocultar detalles tecnicos".
+- Sprint 3 (P1/P2):
+  - Filtros avanzados en monitoreo con chips activos y limpiar filtros.
+  - Base de accesibilidad (tabs ARIA, teclado, focus-visible).
+- Sprint 4 (P2):
+  - Paginacion configurable para racks fisicos (4/6/8/10/12 por pagina).
+  - Navegacion de pagina (primera/anterior/siguiente/ultima).
+  - Medicion visible de tiempo de render por pagina (`Render X ms`).
+
+### Decision de estrategia performance
+- Se adopta paginacion como estrategia por defecto para racks fisicos.
+- Virtualizacion queda como mejora opcional futura para escenarios de densidad extrema.
+- Criterio recomendado: evaluar virtualizacion cuando la pagina operativa supere ~60 racks o cuando el tiempo de render observado exceda 120 ms de forma recurrente.
 
 ## 4. Evidencia de validacion
 ### Servicios
@@ -68,9 +90,18 @@ Impacto:
 ## 6. Riesgos residuales
 - El archivo frontend `app.js` sigue siendo grande; aunque ya se extrajo una parte, conviene continuar modularizacion por dominio.
 - Falta de pruebas E2E formales en pipeline CI para prevenir regresiones de UI.
+- Telemetria UX extendida (P3) sigue opcional y aun no implementada.
 
 ## 7. Recomendaciones inmediatas
 1. Integrar `scripts/monitoring/smokeAuthFlows.mjs` en CI como gate de despliegue.
 2. Continuar extraccion de bloques de `app.js` en modulos de dominio.
 3. Mantener politicas de codificacion/decodificacion para cualquier nuevo atributo dinamico.
 4. Revisar periodicamente secretos/config local con `.gitignore` y escaneo de credenciales.
+
+## 8. Estado de cierre del plan
+- P0: COMPLETADO
+- P1: COMPLETADO
+- P2: COMPLETADO
+- P3: PENDIENTE (opcional)
+
+Conclusion: el plan priorizado queda cerrado en su alcance comprometido (P0-P2) y listo para evolucion incremental.
