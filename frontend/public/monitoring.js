@@ -297,7 +297,7 @@ function renderActiveIncidents(incidents) {
   }
 
   container.innerHTML = incidents.map(inc => `
-    <div class="incident-item" data-incident-id="${encodeURIComponent(String(inc.id ?? ''))}">
+    <div class="incident-item" role="button" tabindex="0" aria-label="Ver incidente de ${fmt(inc.host_name)}" data-incident-id="${encodeURIComponent(String(inc.id ?? ''))}">
       <div class="incident-header">
         ${severityBadge(inc.severity)}
         <span class="incident-time">${timeAgo(inc.opened_at)}</span>
@@ -320,7 +320,7 @@ function renderCriticalDown(hosts) {
   }
 
   container.innerHTML = hosts.map(h => `
-    <div class="host-item critical" data-host-id="${encodeURIComponent(String(h.id ?? ''))}">
+    <div class="host-item critical" role="button" tabindex="0" aria-label="Ver host ${fmt(h.name)}" data-host-id="${encodeURIComponent(String(h.id ?? ''))}">
       <div class="host-status">${statusBadge(h.estado_actual)}</div>
       <div class="host-info">
         <div class="host-name">${fmt(h.name)}</div>
@@ -416,7 +416,7 @@ function renderHosts(hosts) {
   }
 
   container.innerHTML = hosts.map(h => `
-    <div class="host-card" data-host-id="${encodeURIComponent(String(h.id ?? ''))}">
+    <div class="host-card" role="button" tabindex="0" aria-label="Abrir detalle de host ${fmt(h.name)}" data-host-id="${encodeURIComponent(String(h.id ?? ''))}">
       <div class="host-card-header">
         ${statusBadge(h.estado_actual)}
         ${h.critical ? '<span class="badge badge-critical-small">CRÍTICO</span>' : ''}
@@ -1247,10 +1247,15 @@ async function runVacuum() {
 // Tab Switching
 function switchTab(tabName) {
   document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.tab === tabName);
+    const isActive = btn.dataset.tab === tabName;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    btn.setAttribute('tabindex', isActive ? '0' : '-1');
   });
   document.querySelectorAll('.tab-content').forEach(content => {
-    content.classList.toggle('active', content.id === `tab-${tabName}`);
+    const isActive = content.id === `tab-${tabName}`;
+    content.classList.toggle('active', isActive);
+    content.hidden = !isActive;
   });
 
   state.currentTab = tabName;
@@ -1353,17 +1358,38 @@ document.addEventListener('DOMContentLoaded', () => {
     const card = e.target.closest('.host-card');
     if (card) showHostModal(decodeURIComponent(card.dataset.hostId || ''));
   });
+  document.getElementById('hostsGrid')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const card = e.target.closest('.host-card');
+    if (!card) return;
+    e.preventDefault();
+    showHostModal(decodeURIComponent(card.dataset.hostId || ''));
+  });
 
   // Active incidents click
   document.getElementById('activeIncidentsList')?.addEventListener('click', (e) => {
     const item = e.target.closest('.incident-item');
     if (item) showIncidentModal(decodeURIComponent(item.dataset.incidentId || ''));
   });
+  document.getElementById('activeIncidentsList')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const item = e.target.closest('.incident-item');
+    if (!item) return;
+    e.preventDefault();
+    showIncidentModal(decodeURIComponent(item.dataset.incidentId || ''));
+  });
 
   // Critical down click
   document.getElementById('criticalDownList')?.addEventListener('click', (e) => {
     const item = e.target.closest('.host-item');
     if (item) showHostModal(decodeURIComponent(item.dataset.hostId || ''));
+  });
+  document.getElementById('criticalDownList')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const item = e.target.closest('.host-item');
+    if (!item) return;
+    e.preventDefault();
+    showHostModal(decodeURIComponent(item.dataset.hostId || ''));
   });
 
   // Incidents table actions

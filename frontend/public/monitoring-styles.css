@@ -87,6 +87,19 @@ body {
   background: #dbe7ff;
 }
 
+.btn:focus-visible,
+.tab-btn:focus-visible,
+.search-input:focus-visible,
+.filter-select:focus-visible,
+.checkbox-label input[type="checkbox"]:focus-visible,
+.host-card:focus-visible,
+.host-item:focus-visible,
+.incident-item:focus-visible,
+.filter-chip:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
 .btn-primary {
   background: var(--accent-blue);
   color: white;

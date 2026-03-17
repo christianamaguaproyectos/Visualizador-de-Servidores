@@ -108,6 +108,16 @@ button:hover {
   background: #2563eb
 }
 
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
 main {
   padding: 0;
   height: 100%;

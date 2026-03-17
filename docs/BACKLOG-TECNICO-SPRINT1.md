@@ -64,3 +64,8 @@ Objetivo sprint: foundation UI system + confirmaciones destructivas + flujo clus
 - Archivo: frontend/public/monitoring.html + monitoring.js + monitoring-styles.css
 - Criterio: filtros combinables con chips activos removibles y boton limpiar
 - Estado: DONE
+
+11. Accesibilidad base (foco visible + teclado + tabs ARIA)
+- Archivo: frontend/public/monitoring.html + monitoring.js + monitoring-styles.css + styles.css
+- Criterio: tablist/tabpanels con aria, elementos clicables navegables por teclado y focus-visible consistente
+- Estado: DONE
