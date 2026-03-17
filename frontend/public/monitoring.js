@@ -449,7 +449,7 @@ function renderHosts(hosts) {
 
       const confirmed = await confirmAction({
         title: 'Eliminar host',
-        message: `¿Estas seguro de eliminar el host "${hostName}"? Se borraran tambien sus checks e historial.`,
+        message: `¿Seguro que deseas eliminar el host "${hostName}"? Tambien se eliminaran sus checks e historial. Esta accion no se puede deshacer.`,
         confirmText: 'Eliminar host',
         tone: 'danger'
       });
@@ -935,7 +935,14 @@ async function handleIncidentAction(action, id) {
       throw new Error(data.error || 'Error');
     }
 
-    showToast(`Acción "${action}" ejecutada correctamente`, 'success');
+    const actionLabelMap = {
+      ack: 'reconocer',
+      resolve: 'resolver',
+      close: 'cerrar',
+      'add-note': 'agregar nota'
+    };
+    const actionLabel = actionLabelMap[action] || action;
+    showToast(`Accion "${actionLabel}" completada correctamente`, 'success');
     loadIncidents();
     loadDashboard();
     closeModals();
@@ -967,14 +974,14 @@ async function handleCheckAction(action, id) {
     } else if (action === 'delete-check') {
       const confirmed = await confirmAction({
         title: 'Eliminar check',
-        message: '¿Eliminar este check?',
+        message: '¿Seguro que deseas eliminar este check? Esta accion no se puede deshacer.',
         confirmText: 'Eliminar check',
         tone: 'danger'
       });
       if (!confirmed) return;
       const res = await fetch(`/api/monitoring/checks/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Error eliminando check');
-      showToast('Check eliminado', 'success');
+      showToast('Check eliminado correctamente', 'success');
       loadChecks();
     }
   } catch (err) {
@@ -1192,7 +1199,7 @@ async function purgeCheckRuns() {
 
   const confirmed = await confirmAction({
     title: 'Eliminar logs antiguos',
-    message: `¿Estas seguro de eliminar todos los registros de check_runs mas antiguos de ${days} dias? Esta accion no se puede deshacer.`,
+    message: `¿Seguro que deseas eliminar los registros de check_runs con mas de ${days} dias? Esta accion no se puede deshacer.`,
     confirmText: 'Eliminar logs',
     tone: 'danger'
   });
@@ -1222,7 +1229,7 @@ async function purgeIncidents() {
 
   const confirmed = await confirmAction({
     title: 'Eliminar incidentes cerrados',
-    message: `¿Estas seguro de eliminar todos los incidentes cerrados mas antiguos de ${days} dias? Esta accion no se puede deshacer.`,
+    message: `¿Seguro que deseas eliminar los incidentes cerrados con mas de ${days} dias? Esta accion no se puede deshacer.`,
     confirmText: 'Eliminar incidentes',
     tone: 'danger'
   });
@@ -1250,7 +1257,7 @@ async function purgeIncidents() {
 async function runVacuum() {
   const confirmed = await confirmAction({
     title: 'Ejecutar VACUUM ANALYZE',
-    message: 'Esto optimizara las tablas de la base de datos y puede tardar unos segundos. ¿Deseas continuar?',
+    message: 'Se optimizaran las tablas de la base de datos y el proceso puede tardar unos segundos. ¿Deseas continuar?',
     confirmText: 'Ejecutar VACUUM',
     tone: 'danger'
   });
@@ -1733,7 +1740,7 @@ async function saveRecipient(e) {
       return;
     }
 
-    showToast(id ? 'Destinatario actualizado' : 'Destinatario agregado', 'success');
+    showToast(id ? 'Destinatario actualizado correctamente' : 'Destinatario agregado correctamente', 'success');
     closeRecipientModal();
     loadAlertRecipients();
   } catch (err) {
@@ -1747,7 +1754,7 @@ async function toggleRecipient(id) {
     const res = await fetch(`/api/monitoring/alert-recipients/${id}/toggle`, { method: 'POST' });
     if (!res.ok) throw new Error('Error');
 
-    showToast('Estado actualizado', 'success');
+    showToast('Estado actualizado correctamente', 'success');
     loadAlertRecipients();
   } catch (err) {
     showToast('Error actualizando estado', 'error');
@@ -1757,7 +1764,7 @@ async function toggleRecipient(id) {
 async function deleteRecipient(id, email) {
   const confirmed = await confirmAction({
     title: 'Eliminar destinatario',
-    message: `¿Eliminar el destinatario "${email}"?`,
+    message: `¿Seguro que deseas eliminar el destinatario "${email}"? Esta accion no se puede deshacer.`,
     confirmText: 'Eliminar destinatario',
     tone: 'danger'
   });
@@ -1767,7 +1774,7 @@ async function deleteRecipient(id, email) {
     const res = await fetch(`/api/monitoring/alert-recipients/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Error');
 
-    showToast('Destinatario eliminado', 'success');
+    showToast('Destinatario eliminado correctamente', 'success');
     loadAlertRecipients();
   } catch (err) {
     showToast('Error eliminando destinatario', 'error');
@@ -1850,7 +1857,7 @@ async function simulateAlert(action) {
 
   const confirmed = await confirmAction({
     title: 'Simular alerta real',
-    message: `¿Simular ${actionText} de ${hostName}? Esto enviara una alerta real a todos los destinatarios activos.`,
+    message: `¿Seguro que deseas simular ${actionText} de ${hostName}? Se enviara una alerta real a todos los destinatarios activos.`,
     confirmText: 'Simular alerta',
     tone: 'danger'
   });
