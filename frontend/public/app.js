@@ -1,6 +1,7 @@
 import { inicializarGestorDiscos } from '/js/dominios/hosts/gestorDiscos.js';
 import { construirResumenRacksHtml } from '/js/dominios/hosts/resumenRacks.js';
 import { confirmAction } from '/js/dominios/ui-system/modalConfirm.js';
+import { trackUIEvent } from '/js/dominios/ui-system/uxTelemetry.js';
 
 // Esperar a que el DOM esté listo y verificar que estamos en una página correcta
 
@@ -211,6 +212,10 @@ document.addEventListener('DOMContentLoaded', function () {
       SHOW_SERVER_LABELS = !SHOW_SERVER_LABELS;
 
       localStorage.setItem('showServerLabels', SHOW_SERVER_LABELS ? '1' : '0');
+      trackUIEvent('physical.labels.toggle', {
+        enabled: SHOW_SERVER_LABELS,
+        view: serverType
+      });
 
       setBtnText();
 
@@ -1456,6 +1461,12 @@ document.addEventListener('DOMContentLoaded', function () {
         if (action === 'prev') physicalPager.page = Math.max(1, pagerNow.page - 1);
         if (action === 'next') physicalPager.page = Math.min(pagerNow.totalPages, pagerNow.page + 1);
         if (action === 'last') physicalPager.page = pagerNow.totalPages;
+        trackUIEvent('physical.pagination.navigate', {
+          action,
+          page: physicalPager.page,
+          totalPages: pagerNow.totalPages,
+          pageSize: physicalPager.size
+        });
         renderHome();
       });
 
@@ -1465,6 +1476,9 @@ document.addEventListener('DOMContentLoaded', function () {
         physicalPager.size = selected;
         physicalPager.page = 1;
         localStorage.setItem('physicalRackPageSize', String(selected));
+        trackUIEvent('physical.pagination.page_size_change', {
+          pageSize: selected
+        });
         renderHome();
       });
 
@@ -1473,6 +1487,13 @@ document.addEventListener('DOMContentLoaded', function () {
       if (summaryEl) {
         summaryEl.textContent = `${summaryEl.textContent} · Render ${renderMs.toFixed(1)} ms`;
       }
+      trackUIEvent('physical.racks.render', {
+        renderMs: Number(renderMs.toFixed(2)),
+        page: pager.page,
+        pageSize: physicalPager.size,
+        visibleRacks: visibleRacks.length,
+        totalRacks: racks.length
+      });
 
       // Ajustar el ancho de cada rack para que quepan todos sin scroll horizontal
 

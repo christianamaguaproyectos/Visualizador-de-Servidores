@@ -9,6 +9,7 @@ import {
   formatearTextoSeguro
 } from '/js/dominios/monitoreo/presentacionEstado.js';
 import { confirmAction } from '/js/dominios/ui-system/modalConfirm.js';
+import { trackUIEvent } from '/js/dominios/ui-system/uxTelemetry.js';
 
 // Inyectar estilos para el botón de eliminar dinámicamente
 (function injectStyles() {
@@ -90,6 +91,16 @@ function showToast(message, type = 'info') {
   toast.textContent = message;
   toast.className = `toast show toast-${type}`;
   setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+async function confirmActionTracked(eventName, options, data = {}) {
+  const confirmed = await confirmAction(options);
+  trackUIEvent('monitoring.confirm', {
+    eventName,
+    confirmed,
+    ...data
+  });
+  return confirmed;
 }
 
 // API Calls
@@ -204,6 +215,7 @@ function clearHostFilters() {
   if (rack) rack.value = '';
   if (critical) critical.checked = false;
 
+  trackUIEvent('monitoring.host_filters.clear');
   loadHosts();
 }
 
@@ -447,12 +459,12 @@ function renderHosts(hosts) {
       const hostId = decodeURIComponent(btn.dataset.hostId || '');
       const hostName = hosts.find(h => h.id == hostId)?.name || 'este host';
 
-      const confirmed = await confirmAction({
+      const confirmed = await confirmActionTracked('delete_host', {
         title: 'Eliminar host',
         message: `¿Seguro que deseas eliminar el host "${hostName}"? Tambien se eliminaran sus checks e historial. Esta accion no se puede deshacer.`,
         confirmText: 'Eliminar host',
         tone: 'danger'
-      });
+      }, { hostId });
       if (!confirmed) return;
 
       try {
@@ -972,12 +984,12 @@ async function handleCheckAction(action, id) {
       loadChecks();
       loadDashboard();
     } else if (action === 'delete-check') {
-      const confirmed = await confirmAction({
+      const confirmed = await confirmActionTracked('delete_check', {
         title: 'Eliminar check',
         message: '¿Seguro que deseas eliminar este check? Esta accion no se puede deshacer.',
         confirmText: 'Eliminar check',
         tone: 'danger'
-      });
+      }, { checkId: id });
       if (!confirmed) return;
       const res = await fetch(`/api/monitoring/checks/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Error eliminando check');
@@ -1197,12 +1209,12 @@ async function loadMaintenanceStats() {
 async function purgeCheckRuns() {
   const days = document.getElementById('purgeCheckRunsDays')?.value || 30;
 
-  const confirmed = await confirmAction({
+  const confirmed = await confirmActionTracked('purge_check_runs', {
     title: 'Eliminar logs antiguos',
     message: `¿Seguro que deseas eliminar los registros de check_runs con mas de ${days} dias? Esta accion no se puede deshacer.`,
     confirmText: 'Eliminar logs',
     tone: 'danger'
-  });
+  }, { days: Number(days) || 0 });
   if (!confirmed) {
     return;
   }
@@ -1227,12 +1239,12 @@ async function purgeCheckRuns() {
 async function purgeIncidents() {
   const days = document.getElementById('purgeIncidentsDays')?.value || 90;
 
-  const confirmed = await confirmAction({
+  const confirmed = await confirmActionTracked('purge_incidents', {
     title: 'Eliminar incidentes cerrados',
     message: `¿Seguro que deseas eliminar los incidentes cerrados con mas de ${days} dias? Esta accion no se puede deshacer.`,
     confirmText: 'Eliminar incidentes',
     tone: 'danger'
-  });
+  }, { days: Number(days) || 0 });
   if (!confirmed) {
     return;
   }
@@ -1255,7 +1267,7 @@ async function purgeIncidents() {
 }
 
 async function runVacuum() {
-  const confirmed = await confirmAction({
+  const confirmed = await confirmActionTracked('run_vacuum', {
     title: 'Ejecutar VACUUM ANALYZE',
     message: 'Se optimizaran las tablas de la base de datos y el proceso puede tardar unos segundos. ¿Deseas continuar?',
     confirmText: 'Ejecutar VACUUM',
@@ -1297,6 +1309,7 @@ function switchTab(tabName) {
   });
 
   state.currentTab = tabName;
+  trackUIEvent('monitoring.tab.switch', { tabName });
 
   // Load data for the tab
   switch (tabName) {
@@ -1341,13 +1354,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Refresh button
   document.getElementById('btnRefresh')?.addEventListener('click', () => {
+    trackUIEvent('monitoring.dashboard.refresh');
     loadDashboard();
     showToast('Datos actualizados', 'info');
   });
 
   // Host filters
   ['filterEstado', 'filterType', 'filterRack', 'filterCritical'].forEach(id => {
-    document.getElementById(id)?.addEventListener('change', loadHosts);
+    document.getElementById(id)?.addEventListener('change', (event) => {
+      const value = event.target?.type === 'checkbox'
+        ? String(event.target.checked)
+        : String(event.target?.value || '');
+      trackUIEvent('monitoring.host_filters.change', { id, value });
+      loadHosts();
+    });
   });
   document.getElementById('searchHosts')?.addEventListener('input',
     debounce(loadHosts, 300)
@@ -1380,7 +1400,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Incident filters
   ['filterIncidentState', 'filterIncidentSeverity'].forEach(id => {
-    document.getElementById(id)?.addEventListener('change', loadIncidents);
+    document.getElementById(id)?.addEventListener('change', (event) => {
+      trackUIEvent('monitoring.incident_filters.change', {
+        id,
+        value: String(event.target?.value || '')
+      });
+      loadIncidents();
+    });
   });
   document.getElementById('searchIncidents')?.addEventListener('input',
     debounce(filterAndRenderIncidents, 300)
@@ -1762,12 +1788,12 @@ async function toggleRecipient(id) {
 }
 
 async function deleteRecipient(id, email) {
-  const confirmed = await confirmAction({
+  const confirmed = await confirmActionTracked('delete_recipient', {
     title: 'Eliminar destinatario',
     message: `¿Seguro que deseas eliminar el destinatario "${email}"? Esta accion no se puede deshacer.`,
     confirmText: 'Eliminar destinatario',
     tone: 'danger'
-  });
+  }, { recipientId: id });
   if (!confirmed) return;
 
   try {
@@ -1855,12 +1881,12 @@ async function simulateAlert(action) {
   const hostName = select.options[select.selectedIndex].text;
   const actionText = action === 'down' ? 'caída' : 'recuperación';
 
-  const confirmed = await confirmAction({
+  const confirmed = await confirmActionTracked('simulate_alert', {
     title: 'Simular alerta real',
     message: `¿Seguro que deseas simular ${actionText} de ${hostName}? Se enviara una alerta real a todos los destinatarios activos.`,
     confirmText: 'Simular alerta',
     tone: 'danger'
-  });
+  }, { action, hostId: Number(hostId) || 0 });
   if (!confirmed) {
     return;
   }
