@@ -153,6 +153,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
   };
 
+  const PHYSICAL_PAGE_SIZES = [4, 6, 8, 10, 12];
+  const storedRackPageSize = Number(localStorage.getItem('physicalRackPageSize') || 6);
+  const physicalPager = {
+    page: 1,
+    size: PHYSICAL_PAGE_SIZES.includes(storedRackPageSize) ? storedRackPageSize : 6
+  };
+
   // Estado y definición para vistas especializadas de servidores virtuales
 
   const virtualState = {
@@ -1243,6 +1250,48 @@ document.addEventListener('DOMContentLoaded', function () {
       .join(' · ');
   }
 
+  function getPhysicalRackPagination(totalRacks) {
+    const total = Math.max(0, Number(totalRacks) || 0);
+    const totalPages = Math.max(1, Math.ceil(total / physicalPager.size));
+    if (physicalPager.page > totalPages) physicalPager.page = totalPages;
+    if (physicalPager.page < 1) physicalPager.page = 1;
+
+    const start = total === 0 ? 0 : (physicalPager.page - 1) * physicalPager.size;
+    const end = Math.min(total, start + physicalPager.size);
+    return {
+      total,
+      totalPages,
+      page: physicalPager.page,
+      start,
+      end
+    };
+  }
+
+  function renderPhysicalPaginationControls(pager) {
+    const from = pager.total === 0 ? 0 : pager.start + 1;
+    const to = pager.end;
+    const options = PHYSICAL_PAGE_SIZES
+      .map((size) => `<option value="${size}" ${size === physicalPager.size ? 'selected' : ''}>${size}</option>`)
+      .join('');
+
+    return `
+      <div class="rack-pagination" id="rackPagination">
+        <div class="rack-pagination__left">
+          <label for="rackPageSize" class="rack-pagination__label">Racks por pagina</label>
+          <select id="rackPageSize" class="rack-pagination__select">${options}</select>
+          <span class="rack-pagination__summary">Mostrando ${from}-${to} de ${pager.total}</span>
+        </div>
+        <div class="rack-pagination__right">
+          <button type="button" class="btn btn-secondary btn-sm" data-rack-page-action="first" ${pager.page <= 1 ? 'disabled' : ''}>Primera</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-rack-page-action="prev" ${pager.page <= 1 ? 'disabled' : ''}>Anterior</button>
+          <span class="rack-pagination__page">Pagina ${pager.page} de ${pager.totalPages}</span>
+          <button type="button" class="btn btn-secondary btn-sm" data-rack-page-action="next" ${pager.page >= pager.totalPages ? 'disabled' : ''}>Siguiente</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-rack-page-action="last" ${pager.page >= pager.totalPages ? 'disabled' : ''}>Ultima</button>
+        </div>
+      </div>
+    `;
+  }
+
 
 
   function renderHome() {
@@ -1320,13 +1369,21 @@ document.addEventListener('DOMContentLoaded', function () {
 
       try { document.getElementById('content').style.display = 'block'; } catch (_) { }
 
+      const pager = getPhysicalRackPagination(racks.length);
+      const visibleRacks = racks.slice(pager.start, pager.end).map((rack, idx) => ({
+        rack,
+        globalIndex: pager.start + idx
+      }));
+
       app.innerHTML = `
 
       ${renderErrorBlock(DATA.meta?.error)}
 
+      ${renderPhysicalPaginationControls(pager)}
+
       <div class="rack-grid">
 
-        ${racks.map((r, i) => {
+        ${visibleRacks.map(({ rack: r, globalIndex: i }) => {
           const summary = getRackStatusSummary(r.servers || []);
           const modelPreview = getRackModelPreview(r.servers || []);
           return `
@@ -1386,6 +1443,29 @@ document.addEventListener('DOMContentLoaded', function () {
       </div>
 
     `;
+
+      const paginationEl = document.getElementById('rackPagination');
+      paginationEl?.addEventListener('click', (event) => {
+        const btn = event.target.closest('[data-rack-page-action]');
+        if (!btn) return;
+
+        const action = btn.getAttribute('data-rack-page-action');
+        const pagerNow = getPhysicalRackPagination(racks.length);
+        if (action === 'first') physicalPager.page = 1;
+        if (action === 'prev') physicalPager.page = Math.max(1, pagerNow.page - 1);
+        if (action === 'next') physicalPager.page = Math.min(pagerNow.totalPages, pagerNow.page + 1);
+        if (action === 'last') physicalPager.page = pagerNow.totalPages;
+        renderHome();
+      });
+
+      document.getElementById('rackPageSize')?.addEventListener('change', (event) => {
+        const selected = Number(event.target.value || physicalPager.size);
+        if (!PHYSICAL_PAGE_SIZES.includes(selected)) return;
+        physicalPager.size = selected;
+        physicalPager.page = 1;
+        localStorage.setItem('physicalRackPageSize', String(selected));
+        renderHome();
+      });
 
       // Ajustar el ancho de cada rack para que quepan todos sin scroll horizontal
 
