@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mockup Racks Fisicos v2</title>
+  <style>
+    body{font-family:Inter,Segoe UI,Arial,sans-serif;background:#f4f7fb;margin:0;padding:20px;color:#1d2939}
+    .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+    .kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+    .card{background:#fff;border:1px solid #e4e7ec;border-radius:12px;padding:12px;box-shadow:0 1px 3px rgba(16,24,40,.1)}
+    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+    .rack{background:#fff;border:1px solid #d0d5dd;border-radius:12px;padding:10px}
+    .srv{background:#fff;border:1px solid #e4e7ec;border-left:4px solid #12b76a;border-radius:10px;padding:8px;margin:8px 0;box-shadow:0 1px 2px rgba(16,24,40,.08)}
+    .name{font-weight:700}
+    .meta{font-size:12px;color:#667085}
+  </style>
+</head>
+<body>
+  <div class="top">
+    <h1>Racks Fisicos v2</h1>
+    <div>[Buscar] [Filtros] [Agregar] [Actualizar]</div>
+  </div>
+  <div class="kpi">
+    <div class="card">🗄️ Total racks: 5</div>
+    <div class="card">🖥️ Servidores: 40</div>
+    <div class="card">✅ Activos: 34</div>
+    <div class="card">⛔ Inactivos: 6</div>
+  </div>
+  <div class="grid">
+    <div class="rack"><h3>Rack 1</h3><div class="srv"><div class="name">SRVWEB01</div><div class="meta">192.168.1.20 · Ubuntu</div></div><div class="srv" style="border-left-color:#f04438"><div class="name">SRVDB02</div><div class="meta">192.168.1.21 · Linux</div></div></div>
+    <div class="rack"><h3>Rack 2</h3><div class="srv"><div class="name">SRVAPP03</div><div class="meta">192.168.1.30 · AIX</div></div></div>
+    <div class="rack"><h3>Rack 3</h3><div class="srv"><div class="name">SRVFS04</div><div class="meta">192.168.1.40 · Windows</div></div></div>
+    <div class="rack"><h3>Rack 4</h3><div class="srv"><div class="name">SRVMON05</div><div class="meta">192.168.1.50 · Linux</div></div></div>
+  </div>
+</body>
+</html>

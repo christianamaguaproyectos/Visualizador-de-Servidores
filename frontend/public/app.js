@@ -1,5 +1,6 @@
 import { inicializarGestorDiscos } from '/js/dominios/hosts/gestorDiscos.js';
 import { construirResumenRacksHtml } from '/js/dominios/hosts/resumenRacks.js';
+import { confirmAction } from '/js/dominios/ui-system/modalConfirm.js';
 
 // Esperar a que el DOM esté listo y verificar que estamos en una página correcta
 
@@ -640,7 +641,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
     deleteServer: async (serverId, serverName) => {
 
-      if (!confirm(`¿Eliminar el servidor "${serverName}"?`)) return;
+      const accepted = await confirmAction({
+        title: 'Eliminar servidor',
+        message: `¿Eliminar el servidor "${serverName}"? Esta accion no se puede deshacer.`,
+        confirmText: 'Eliminar servidor',
+        tone: 'danger'
+      });
+      if (!accepted) return;
 
       try {
 
@@ -2053,7 +2060,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 const viewName = decodeURIComponent(deleteBtn.getAttribute('data-view-name') || '');
 
-                if (!confirm(`¿Eliminar la vista "${viewName}"?`)) return;
+                const accepted = await confirmAction({
+                  title: 'Eliminar vista',
+                  message: `¿Eliminar la vista "${viewName}"?`,
+                  confirmText: 'Eliminar vista',
+                  tone: 'danger'
+                });
+                if (!accepted) return;
 
 
 
@@ -2175,7 +2188,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
         btnDeleteCluster.addEventListener('click', async () => {
 
-          if (!confirm(`¿Estás seguro de eliminar el cluster "${cluster.name}"? Esta acción no se puede deshacer.`)) return;
+          const accepted = await confirmAction({
+            title: 'Eliminar cluster',
+            message: `¿Estas seguro de eliminar el cluster "${cluster.name}"? Esta accion no se puede deshacer.`,
+            confirmText: 'Eliminar cluster',
+            tone: 'danger'
+          });
+          if (!accepted) return;
 
 
 
@@ -2285,7 +2304,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-            if (!confirm('¿Quitar este host del clúster?')) return;
+            const accepted = await confirmAction({
+              title: 'Quitar host del cluster',
+              message: '¿Quitar este host del cluster?',
+              confirmText: 'Quitar host',
+              tone: 'danger'
+            });
+            if (!accepted) return;
 
 
 
@@ -2644,14 +2669,6 @@ document.addEventListener('DOMContentLoaded', function () {
           <h3>Gestión de hosts del clúster</h3>
 
           <div class="cluster-host-admin__row">
-
-            <label for="clusterHostSelect">Agregar host existente</label>
-
-            <select id="clusterHostSelect">
-
-              <option value="">Seleccione un host...</option>
-
-              ${(DATA.racks || []).filter(r => !hosts.some(h => h.id === r.id) && r.type === 'virtuales').map(r => `<option value="${r.id || ''}">${fmt(r.name)}</option>`).join('')}
 
             <label for="clusterHostSelect">Agregar host existente</label>
 
@@ -3571,7 +3588,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-        if (!confirm(confirmMsg)) {
+        const accepted = await confirmAction({
+          title: 'Eliminar rack',
+          message: confirmMsg,
+          confirmText: 'Eliminar rack',
+          tone: 'danger'
+        });
+        if (!accepted) {
 
           return;
 
@@ -3788,7 +3811,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('btnDeleteServer')?.addEventListener('click', async () => {
 
-      if (!confirm(`¿Eliminar el servidor "${s.nombre || s.hostname}"?`)) return;
+      const accepted = await confirmAction({
+        title: 'Eliminar servidor',
+        message: `¿Eliminar el servidor "${s.nombre || s.hostname}"?`,
+        confirmText: 'Eliminar servidor',
+        tone: 'danger'
+      });
+      if (!accepted) return;
 
       try {
 
@@ -4331,64 +4360,37 @@ document.addEventListener('DOMContentLoaded', function () {
       ${construirResumenRacksHtml(racks)}
     `;
 
+    }
 
+    function applySearchFilter() {
+      const q = (search?.value || '').toLowerCase().trim();
+      const f = filter?.value || 'all';
+
+      document.querySelectorAll('.rack-unit').forEach((u) => {
         const num = u.querySelector('.unit-label')?.textContent?.trim() || '';
-
         const name = (u.getAttribute('title') || '').toLowerCase();
-
         const isServer = u.classList.contains('active');
-
-        const estado = u.getAttribute('data-estado') || 'activo';  // critico, activo, normal
-
-
+        const estado = u.getAttribute('data-estado') || 'activo';
 
         let match = true;
-
-        // Filtro de búsqueda por texto
-
         if (q) match = name.includes(q) || num.includes(q);
-
-
-
-        // Filtro por estado (solo aplica a servidores)
-
-        if (isServer && f !== 'all') {
-
-          match = match && estado === f;
-
-        }
-
-
-
-        // Aplicar clases visuales
+        if (isServer && f !== 'all') match = match && estado === f;
 
         if (f !== 'all' && isServer) {
-
-          // Si hay filtro activo, atenuar los que no coinciden
-
           u.classList.toggle('dim', !match);
-
           u.classList.toggle('match', match);
-
         } else if (q) {
-
-          // Solo búsqueda de texto
-
           u.classList.toggle('match', match);
-
           u.classList.toggle('dim', !match);
-
         } else {
-
-          // Sin filtros
-
           u.classList.remove('match', 'dim');
-
         }
-
       });
 
     }
+
+    renderOverview();
+    applySearchFilter();
 
     search?.addEventListener('input', applySearchFilter);
 
