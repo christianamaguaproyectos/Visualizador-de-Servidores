@@ -1687,7 +1687,7 @@ main {
 }
 
 .rack:hover {
-  transform: translateY(-8px);
+  transform: translateY(-2px);
   box-shadow: 0 32px 60px rgba(15, 23, 42, 0.16)
 }
 
