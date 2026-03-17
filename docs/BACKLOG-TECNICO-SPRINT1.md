@@ -37,12 +37,12 @@ Objetivo sprint: foundation UI system + confirmaciones destructivas + flujo clus
 6. Ajustar tarjetas clicables y boton ver detalle
 - Archivo: frontend/public/app.js
 - Criterio: click en tarjeta y boton llevan a detalle de cluster
-- Estado: TODO
+- Estado: DONE
 
 7. Estandarizar lista de hosts asignados
 - Archivo: frontend/public/app.js + styles.css
 - Criterio: items no parecen botones, solo accion Quitar destructiva
-- Estado: TODO
+- Estado: DONE
 
 ## EPIC 4 - QA y artefactos
 
