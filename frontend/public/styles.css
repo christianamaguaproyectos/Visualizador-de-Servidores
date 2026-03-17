@@ -1687,7 +1687,7 @@ main {
 }
 
 .rack:hover {
-  transform: translateY(-8px);
+  transform: translateY(-2px);
   box-shadow: 0 32px 60px rgba(15, 23, 42, 0.16)
 }
 
@@ -1974,7 +1974,7 @@ main {
   top: 110px;
   left: 20px;
   right: 20px;
-  bottom: 120px;
+  bottom: 184px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -1998,7 +1998,9 @@ main {
   padding-right: 2px;
   scrollbar-width: none;
   scrollbar-color: transparent transparent;
-  -ms-overflow-style: none
+  -ms-overflow-style: none;
+  overscroll-behavior: contain;
+  touch-action: pan-y
 }
 
 .rack-units-inner::-webkit-scrollbar {
@@ -2401,8 +2403,8 @@ main {
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   box-shadow: 0 8px 16px rgba(15, 23, 42, 0.12);
-  pointer-events: auto;
-  cursor: pointer;
+  pointer-events: none;
+  cursor: default;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

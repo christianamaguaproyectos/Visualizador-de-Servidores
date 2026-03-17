@@ -1565,15 +1565,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
               }, { passive: true });
 
-              const forwardWheelToUnits = (event) => {
-                if (!unitsInner) return;
-                const canScroll = unitsInner.scrollHeight > unitsInner.clientHeight;
-                if (!canScroll) return;
-                unitsInner.scrollTop += event.deltaY;
-                event.preventDefault();
-              };
-
-              labelsEl.addEventListener('wheel', forwardWheelToUnits, { passive: false });
+              const unitsContainer = rackEl.querySelector('.rack-units');
+              if (unitsContainer && !unitsContainer.dataset.wheelBound) {
+                unitsContainer.addEventListener('wheel', (event) => {
+                  const canScroll = unitsInner.scrollHeight > unitsInner.clientHeight;
+                  if (!canScroll) return;
+                  unitsInner.scrollTop += event.deltaY;
+                  event.preventDefault();
+                }, { passive: false });
+                unitsContainer.dataset.wheelBound = '1';
+              }
               unitsInner.dataset.labelsScrollBound = '1';
             }
 
