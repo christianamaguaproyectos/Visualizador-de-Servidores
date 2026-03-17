@@ -1358,6 +1358,7 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
 
     } else {
+      const physicalRenderStart = performance.now();
 
       // FÍSICOS: rack view con hooks para interactividad
 
@@ -1466,6 +1467,12 @@ document.addEventListener('DOMContentLoaded', function () {
         localStorage.setItem('physicalRackPageSize', String(selected));
         renderHome();
       });
+
+      const renderMs = Math.max(0, performance.now() - physicalRenderStart);
+      const summaryEl = document.querySelector('.rack-pagination__summary');
+      if (summaryEl) {
+        summaryEl.textContent = `${summaryEl.textContent} · Render ${renderMs.toFixed(1)} ms`;
+      }
 
       // Ajustar el ancho de cada rack para que quepan todos sin scroll horizontal
 

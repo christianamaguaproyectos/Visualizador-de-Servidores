@@ -3,6 +3,12 @@
 Fecha: 2026-03-17
 Base: auditoria tecnica + especificacion UX/UI + hardening ya implementado
 
+Estado actual (2026-03-17):
+- P0 completado
+- P1 completado
+- P2 completado
+- P3 pendiente (opcional)
+
 ## 1. Resumen ejecutivo
 Objetivo: implementar mejoras UX/UI sin perder el progreso de seguridad y confiabilidad.
 Estrategia: fases cortas, bajo riesgo, con validacion continua en contenedores.
