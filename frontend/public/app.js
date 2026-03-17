@@ -2296,9 +2296,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
         hostList.addEventListener('click', async (e) => {
 
-          if (e.target.tagName === 'BUTTON' && e.target.closest('.link-button')) {
+          const removeBtn = e.target.closest('[data-remove-rack-id]');
+          if (removeBtn) {
 
-            const rackId = decodeURIComponent(e.target.getAttribute('data-remove-rack-id') || '');
+            const rackId = decodeURIComponent(removeBtn.getAttribute('data-remove-rack-id') || '');
 
             if (!rackId) return;
 
@@ -2488,9 +2489,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
       return `
 
-      <section class="cluster-section" data-cluster="${encodeURIComponent(group.key || '')}" data-idx="${idx}">
+      <section class="cluster-section" role="button" tabindex="0" data-cluster-key="${encodeURIComponent(group.key || '')}" data-cluster="${encodeURIComponent(group.key || '')}" data-idx="${idx}">
 
-        <header class="cluster-section__header" data-cluster-key="${encodeURIComponent(group.key || '')}">
+        <header class="cluster-section__header">
 
           <div style="flex:1">
 
@@ -2574,9 +2575,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     <div class="cluster-container">
 
-      <section class="cluster-section" data-cluster="${encodeURIComponent(vsphereCluster.key || '')}">
+      <section class="cluster-section" role="button" tabindex="0" data-cluster-key="${encodeURIComponent(vsphereCluster.key || '')}" data-cluster="${encodeURIComponent(vsphereCluster.key || '')}">
 
-        <header class="cluster-section__header" data-cluster-key="${encodeURIComponent(vsphereCluster.key || '')}">
+        <header class="cluster-section__header">
 
           <div>
 
@@ -2694,7 +2695,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             </select>
 
-            <button id="btnAddHostToCluster" class="home-btn">Agregar al clúster</button>
+            <button id="btnAddHostToCluster" class="home-btn btn btn-primary">Agregar al clúster</button>
 
           </div>
 
@@ -2702,9 +2703,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
             <h4>Hosts asignados</h4>
 
-            <ul>
+            <ul class="cluster-assigned-hosts">
 
-              ${hosts.map(h => `<li data-rack-id="${encodeURIComponent(h.id || '')}">${fmt(h.name)} <button class="link-button" data-remove-rack-id="${encodeURIComponent(h.id || '')}">Quitar</button></li>`).join('') || '<li class="muted">No hay hosts asignados</li>'}
+              ${hosts.map(h => `<li class="cluster-assigned-host" data-rack-id="${encodeURIComponent(h.id || '')}"><span class="cluster-assigned-host__name">${fmt(h.name)}</span><button class="btn btn-danger btn-sm" data-remove-rack-id="${encodeURIComponent(h.id || '')}">Quitar</button></li>`).join('') || '<li class="muted">No hay hosts asignados</li>'}
 
             </ul>
 
@@ -3891,6 +3892,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (isVirtuales) {
 
+      if (e.target.closest('.view-edit-btn, .view-delete-btn')) {
+        return;
+      }
+
       const clusterTrigger = e.target.closest('[data-cluster-key]');
 
       if (clusterTrigger) {
@@ -3947,6 +3952,22 @@ document.addEventListener('DOMContentLoaded', function () {
 
     }
 
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (!isVirtuales) return;
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+
+    const tag = (e.target?.tagName || '').toLowerCase();
+    if (['button', 'input', 'select', 'textarea', 'a'].includes(tag)) return;
+
+    const clusterSection = e.target.closest('.cluster-section[role="button"][data-cluster-key]');
+    if (!clusterSection) return;
+
+    e.preventDefault();
+    const key = decodeURIComponent(clusterSection.getAttribute('data-cluster-key') || '');
+    if (!key) return;
+    showClusterDetail(key);
   });
 
 
