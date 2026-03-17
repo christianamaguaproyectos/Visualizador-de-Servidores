@@ -1564,16 +1564,6 @@ document.addEventListener('DOMContentLoaded', function () {
                   try { alignServerLabels(); } catch (_) { }
                 });
               }, { passive: true });
-
-              const forwardWheelToUnits = (event) => {
-                if (!unitsInner) return;
-                const canScroll = unitsInner.scrollHeight > unitsInner.clientHeight;
-                if (!canScroll) return;
-                unitsInner.scrollTop += event.deltaY;
-                event.preventDefault();
-              };
-
-              labelsEl.addEventListener('wheel', forwardWheelToUnits, { passive: false });
               unitsInner.dataset.labelsScrollBound = '1';
             }
 
