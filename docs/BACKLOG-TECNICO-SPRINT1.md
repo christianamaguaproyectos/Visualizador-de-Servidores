@@ -58,4 +58,9 @@ Objetivo sprint: foundation UI system + confirmaciones destructivas + flujo clus
 - Comando: node --check frontend/public/app.js
 - Comando: docker compose ps
 - Criterio: sin errores de parseo y contenedores healthy
-- Estado: IN-PROGRESS
+- Estado: DONE
+
+10. Filtros avanzados en monitoreo (estado/rack/tipo + chips + limpiar)
+- Archivo: frontend/public/monitoring.html + monitoring.js + monitoring-styles.css
+- Criterio: filtros combinables con chips activos removibles y boton limpiar
+- Estado: DONE

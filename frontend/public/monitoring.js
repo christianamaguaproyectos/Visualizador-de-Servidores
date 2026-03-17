@@ -108,6 +108,7 @@ async function fetchHosts(filters = {}) {
     const params = new URLSearchParams();
     if (filters.estado) params.append('estado', filters.estado);
     if (filters.type) params.append('type', filters.type);
+    if (filters.rack) params.append('rack', filters.rack);
     if (filters.critical) params.append('critical', 'true');
     if (filters.search) params.append('search', filters.search);
 
@@ -118,6 +119,91 @@ async function fetchHosts(filters = {}) {
     console.error('Error fetchHosts:', err);
     return { hosts: [] };
   }
+}
+
+function getHostFiltersFromUI() {
+  return {
+    estado: document.getElementById('filterEstado')?.value || '',
+    type: document.getElementById('filterType')?.value || '',
+    rack: document.getElementById('filterRack')?.value || '',
+    critical: document.getElementById('filterCritical')?.checked || false,
+    search: document.getElementById('searchHosts')?.value || ''
+  };
+}
+
+function applyHostFiltersLocal(hosts, filters) {
+  const term = (filters.search || '').toLowerCase().trim();
+
+  return (hosts || []).filter((h) => {
+    if (filters.estado && h.estado_actual !== filters.estado) return false;
+    if (filters.type && (h.type || '').toLowerCase() !== filters.type.toLowerCase()) return false;
+    if (filters.rack && (h.rack || '') !== filters.rack) return false;
+    if (filters.critical && !h.critical) return false;
+
+    if (term) {
+      const fields = [h.name, h.ip, h.rack, h.type].map(v => (v || '').toLowerCase()).join(' ');
+      if (!fields.includes(term)) return false;
+    }
+
+    return true;
+  });
+}
+
+function updateRackFilterOptions(hosts) {
+  const select = document.getElementById('filterRack');
+  if (!select) return;
+
+  const current = select.value;
+  const rackValues = Array.from(new Set((hosts || []).map(h => (h.rack || '').trim()).filter(Boolean))).sort();
+
+  select.innerHTML = '<option value="">Todos los racks/hosts</option>' +
+    rackValues.map(r => `<option value="${fmt(r)}">${fmt(r)}</option>`).join('');
+
+  if (current && rackValues.includes(current)) {
+    select.value = current;
+  }
+}
+
+function renderHostFilterChips(filters, visibleCount, totalCount) {
+  const container = document.getElementById('hostFilterChips');
+  if (!container) return;
+
+  const chips = [];
+  if (filters.search) chips.push({ key: 'search', label: `Busqueda: ${filters.search}` });
+  if (filters.estado) chips.push({ key: 'estado', label: `Estado: ${filters.estado}` });
+  if (filters.type) chips.push({ key: 'type', label: `Tipo: ${filters.type}` });
+  if (filters.rack) chips.push({ key: 'rack', label: `Rack/Host: ${filters.rack}` });
+  if (filters.critical) chips.push({ key: 'critical', label: 'Solo criticos' });
+
+  if (chips.length === 0) {
+    container.innerHTML = '';
+    container.classList.remove('active');
+    return;
+  }
+
+  container.classList.add('active');
+  container.innerHTML = chips.map(chip => `
+    <button class="filter-chip" data-filter-key="${chip.key}" title="Quitar filtro">
+      ${fmt(chip.label)}
+      <span aria-hidden="true">✕</span>
+    </button>
+  `).join('') + `<span class="filter-chip filter-chip--count">${visibleCount}/${totalCount} hosts</span>`;
+}
+
+function clearHostFilters() {
+  const search = document.getElementById('searchHosts');
+  const estado = document.getElementById('filterEstado');
+  const type = document.getElementById('filterType');
+  const rack = document.getElementById('filterRack');
+  const critical = document.getElementById('filterCritical');
+
+  if (search) search.value = '';
+  if (estado) estado.value = '';
+  if (type) type.value = '';
+  if (rack) rack.value = '';
+  if (critical) critical.checked = false;
+
+  loadHosts();
 }
 
 async function fetchHostDetail(id) {
@@ -954,16 +1040,15 @@ async function loadDashboard() {
 }
 
 async function loadHosts() {
-  const filters = {
-    estado: document.getElementById('filterEstado')?.value || '',
-    type: document.getElementById('filterType')?.value || '',
-    critical: document.getElementById('filterCritical')?.checked || false,
-    search: document.getElementById('searchHosts')?.value || ''
-  };
+  const filters = getHostFiltersFromUI();
 
   const data = await fetchHosts(filters);
-  state.hosts = data.hosts;
-  renderHosts(data.hosts);
+  state.hosts = data.hosts || [];
+
+  updateRackFilterOptions(state.hosts);
+  const filteredHosts = applyHostFiltersLocal(state.hosts, filters);
+  renderHosts(filteredHosts);
+  renderHostFilterChips(filters, filteredHosts.length, state.hosts.length);
 }
 
 async function loadIncidents() {
@@ -1218,12 +1303,37 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Host filters
-  ['filterEstado', 'filterType', 'filterCritical'].forEach(id => {
+  ['filterEstado', 'filterType', 'filterRack', 'filterCritical'].forEach(id => {
     document.getElementById(id)?.addEventListener('change', loadHosts);
   });
   document.getElementById('searchHosts')?.addEventListener('input',
     debounce(loadHosts, 300)
   );
+  document.getElementById('btnClearHostFilters')?.addEventListener('click', clearHostFilters);
+  document.getElementById('hostFilterChips')?.addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-filter-key]');
+    if (!chip) return;
+
+    const key = chip.dataset.filterKey;
+    if (key === 'search') {
+      const el = document.getElementById('searchHosts');
+      if (el) el.value = '';
+    } else if (key === 'estado') {
+      const el = document.getElementById('filterEstado');
+      if (el) el.value = '';
+    } else if (key === 'type') {
+      const el = document.getElementById('filterType');
+      if (el) el.value = '';
+    } else if (key === 'rack') {
+      const el = document.getElementById('filterRack');
+      if (el) el.value = '';
+    } else if (key === 'critical') {
+      const el = document.getElementById('filterCritical');
+      if (el) el.checked = false;
+    }
+
+    loadHosts();
+  });
 
   // Incident filters
   ['filterIncidentState', 'filterIncidentSeverity'].forEach(id => {

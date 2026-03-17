@@ -144,11 +144,16 @@
           <option value="fisico">Físico</option>
           <option value="virtual">Virtual</option>
         </select>
+        <select id="filterRack" class="filter-select">
+          <option value="">Todos los racks/hosts</option>
+        </select>
         <label class="checkbox-label">
           <input type="checkbox" id="filterCritical"> Solo críticos
         </label>
+        <button class="btn btn-secondary" id="btnClearHostFilters">Limpiar filtros</button>
         <button class="btn btn-primary" id="btnImportHosts">📥 Importar Hosts</button>
       </div>
+      <div id="hostFilterChips" class="filter-chips" aria-live="polite"></div>
       <div class="hosts-grid" id="hostsGrid">
         <div class="loading-spinner"></div>
       </div>
