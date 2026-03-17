@@ -70,17 +70,17 @@
     </section>
 
     <!-- Tabs -->
-    <nav class="monitoring-tabs">
-      <button class="tab-btn active" data-tab="overview">📊 Vista General</button>
-      <button class="tab-btn" data-tab="hosts">🖥️ Hosts</button>
-      <button class="tab-btn" data-tab="incidents">🚨 Incidentes</button>
-      <button class="tab-btn" data-tab="checks">✅ Checks</button>
-      <button class="tab-btn" data-tab="maintenance">🧹 Mantenimiento</button>
-      <button class="tab-btn" data-tab="alerts-config">📧 Alertas</button>
+    <nav class="monitoring-tabs" role="tablist" aria-label="Secciones de monitoreo">
+      <button class="tab-btn active" id="tab-btn-overview" role="tab" aria-controls="tab-overview" aria-selected="true" data-tab="overview">📊 Vista General</button>
+      <button class="tab-btn" id="tab-btn-hosts" role="tab" aria-controls="tab-hosts" aria-selected="false" data-tab="hosts">🖥️ Hosts</button>
+      <button class="tab-btn" id="tab-btn-incidents" role="tab" aria-controls="tab-incidents" aria-selected="false" data-tab="incidents">🚨 Incidentes</button>
+      <button class="tab-btn" id="tab-btn-checks" role="tab" aria-controls="tab-checks" aria-selected="false" data-tab="checks">✅ Checks</button>
+      <button class="tab-btn" id="tab-btn-maintenance" role="tab" aria-controls="tab-maintenance" aria-selected="false" data-tab="maintenance">🧹 Mantenimiento</button>
+      <button class="tab-btn" id="tab-btn-alerts-config" role="tab" aria-controls="tab-alerts-config" aria-selected="false" data-tab="alerts-config">📧 Alertas</button>
     </nav>
 
     <!-- Tab Content: Overview -->
-    <section class="tab-content active" id="tab-overview">
+    <section class="tab-content active" id="tab-overview" role="tabpanel" aria-labelledby="tab-btn-overview">
       <div class="overview-grid">
         <!-- Incidentes Activos -->
         <div class="card">
@@ -128,7 +128,7 @@
     </section>
 
     <!-- Tab Content: Hosts -->
-    <section class="tab-content" id="tab-hosts">
+    <section class="tab-content" id="tab-hosts" role="tabpanel" aria-labelledby="tab-btn-hosts" hidden>
       <div class="toolbar">
         <input type="text" class="search-input" id="searchHosts" placeholder="🔍 Buscar por nombre o IP...">
         <select id="filterEstado" class="filter-select">
@@ -160,7 +160,7 @@
     </section>
 
     <!-- Tab Content: Incidents -->
-    <section class="tab-content" id="tab-incidents">
+    <section class="tab-content" id="tab-incidents" role="tabpanel" aria-labelledby="tab-btn-incidents" hidden>
       <div class="toolbar">
         <input type="text" id="searchIncidents" class="search-input" placeholder="🔍 Buscar por nombre, IP o resumen..."
           style="flex:1;max-width:300px">
@@ -184,7 +184,7 @@
     </section>
 
     <!-- Tab Content: Checks -->
-    <section class="tab-content" id="tab-checks">
+    <section class="tab-content" id="tab-checks" role="tabpanel" aria-labelledby="tab-btn-checks" hidden>
       <div class="toolbar">
         <input type="text" id="searchChecks" class="search-input" placeholder="🔍 Buscar por nombre o IP del host..."
           style="flex:1;max-width:300px">
@@ -197,7 +197,7 @@
     </section>
 
     <!-- Tab Content: Mantenimiento -->
-    <section class="tab-content" id="tab-maintenance">
+    <section class="tab-content" id="tab-maintenance" role="tabpanel" aria-labelledby="tab-btn-maintenance" hidden>
       <div class="maintenance-container">
         <div class="card">
           <div class="card-header">
@@ -267,7 +267,7 @@
     </section>
 
     <!-- Tab Content: Configuración de Alertas -->
-    <section class="tab-content" id="tab-alerts-config">
+    <section class="tab-content" id="tab-alerts-config" role="tabpanel" aria-labelledby="tab-btn-alerts-config" hidden>
       <div class="alerts-config-container" style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
         <!-- Lista de Destinatarios -->
         <div class="card">
