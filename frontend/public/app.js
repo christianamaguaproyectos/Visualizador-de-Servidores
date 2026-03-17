@@ -195,7 +195,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   if (toggleBtn && !isVirtuales) {
 
-    const setBtnText = () => toggleBtn.textContent = SHOW_SERVER_LABELS ? '🙈 Ocultar etiquetas' : '👁️ Mostrar etiquetas';
+    const setBtnText = () => toggleBtn.textContent = SHOW_SERVER_LABELS ? '🙈 Ocultar detalles tecnicos' : '👁️ Mostrar detalles tecnicos';
 
     setBtnText();
 
@@ -1201,6 +1201,48 @@ document.addEventListener('DOMContentLoaded', function () {
 
   }
 
+  function getRackStatusSummary(servers = []) {
+    const summary = {
+      totalServers: servers.length,
+      criticos: 0,
+      mantenimiento: 0,
+      inactivos: 0,
+      activos: 0,
+      occupiedUnits: 0
+    };
+
+    servers.forEach((server) => {
+      const estado = normalizeEstado(server?.estado || server?.activo || '');
+      if (estado === 'critico') summary.criticos += 1;
+      else if (estado === 'mantenimiento') summary.mantenimiento += 1;
+      else if (estado === 'inactivo') summary.inactivos += 1;
+      else summary.activos += 1;
+
+      const units = Number(server?.rackUnits || server?.rack_units || 2);
+      summary.occupiedUnits += Number.isFinite(units) && units > 0 ? units : 2;
+    });
+
+    summary.occupiedUnits = Math.min(summary.occupiedUnits, 42);
+    summary.occupancyPct = Math.min(100, Math.round((summary.occupiedUnits / 42) * 100));
+    return summary;
+  }
+
+  function getRackModelPreview(servers = []) {
+    const modelCounts = new Map();
+    servers.forEach((server) => {
+      const model = (server?.modelo || server?.marca || '').toString().trim();
+      if (!model) return;
+      modelCounts.set(model, (modelCounts.get(model) || 0) + 1);
+    });
+
+    if (modelCounts.size === 0) return 'Sin modelo registrado';
+    return Array.from(modelCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 2)
+      .map(([model, count]) => `${fmt(model)} (${count})`)
+      .join(' · ');
+  }
+
 
 
   function renderHome() {
@@ -1284,7 +1326,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
       <div class="rack-grid">
 
-        ${racks.map((r, i) => `
+        ${racks.map((r, i) => {
+          const summary = getRackStatusSummary(r.servers || []);
+          const modelPreview = getRackModelPreview(r.servers || []);
+          return `
 
           <div class="rack" data-view="rack" data-idx="${i}" data-name="${encodeURIComponent(r.name)}" data-rack-name="${encodeURIComponent(r.name)}" title="Ver detalle de ${fmt(r.name)}">
 
@@ -1314,17 +1359,29 @@ document.addEventListener('DOMContentLoaded', function () {
 
                   <div class="muted">${r.servers.length} servidores instalados</div>
 
+                  <div class="rack-content__stats">
+                    <span class="rack-kpi rack-kpi--critical">🔴 ${summary.criticos}</span>
+                    <span class="rack-kpi rack-kpi--active">🟢 ${summary.activos}</span>
+                    <span class="rack-kpi rack-kpi--maint">🛠️ ${summary.mantenimiento}</span>
+                  </div>
+
                 </div>
 
                 <span class="rack-content__count" title="Unidades ocupadas">${Math.min(r.servers.length * 2, 42)}U</span>
 
               </div>
 
+              <div class="rack-tech-hint" aria-label="Detalle tecnico del rack ${fmt(r.name)}">
+                <div class="rack-tech-hint__row"><strong>Ocupacion:</strong> ${summary.occupiedUnits}U de 42U (${summary.occupancyPct}%)</div>
+                <div class="rack-tech-hint__row"><strong>Modelos:</strong> ${modelPreview}</div>
+              </div>
+
             </div>
 
           </div>
 
-        `).join('')}
+        `;
+        }).join('')}
 
       </div>
 

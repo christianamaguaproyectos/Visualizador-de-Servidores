@@ -1722,6 +1722,68 @@ main {
   gap: 16px
 }
 
+.rack-content__stats {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rack-kpi {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.rack-kpi--critical {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #b91c1c;
+}
+
+.rack-kpi--active {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #166534;
+}
+
+.rack-kpi--maint {
+  background: rgba(245, 158, 11, 0.16);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: #92400e;
+}
+
+.rack-tech-hint {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px dashed rgba(30, 64, 175, 0.3);
+  background: rgba(255, 255, 255, 0.78);
+  color: #334155;
+  font-size: 12px;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height .25s ease, opacity .25s ease, margin-top .25s ease;
+}
+
+.rack:hover .rack-tech-hint,
+.rack:focus-within .rack-tech-hint {
+  max-height: 90px;
+  opacity: 1;
+}
+
+.rack-tech-hint__row {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.35;
+}
+
 .rack-content__icon {
   width: 40px;
   height: 40px;
@@ -3573,30 +3635,60 @@ main {
 .stat-card {
   flex: 1;
   min-width: 140px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 12px;
   padding: 10px 12px;
-  color: #e2e8f0;
+  color: #1e293b;
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
-  box-shadow: 0 6px 18px rgba(2, 6, 23, .2)
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.1)
+}
+
+.stat-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.stat-card__icon {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.12);
+  font-size: 13px;
 }
 
 .stat-card .label {
   font-size: 12px;
-  color: #94a3b8
+  color: #475569
 }
 
 .stat-card .value {
   font-size: 22px;
   font-weight: 800;
-  color: #f8fafc
+  color: #0f172a
 }
 
 .stat-card .sub {
   font-size: 12px;
-  color: #a5b4fc
+  color: #475569
+}
+
+.stat-card--critical .stat-card__icon {
+  background: rgba(239, 68, 68, 0.14);
+}
+
+.stat-card--active .stat-card__icon {
+  background: rgba(34, 197, 94, 0.14);
+}
+
+.stat-card--inactive .stat-card__icon {
+  background: rgba(245, 158, 11, 0.14);
 }
 
 /* Slot tooltip */

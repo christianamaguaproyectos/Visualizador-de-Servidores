@@ -3,7 +3,9 @@ export function calcularResumenRacks(racks = []) {
     totalRacks: racks.length,
     totalServidores: 0,
     activos: 0,
-    inactivos: 0
+    inactivos: 0,
+    criticos: 0,
+    mantenimiento: 0
   };
 
   racks.forEach((rack) => {
@@ -12,6 +14,12 @@ export function calcularResumenRacks(racks = []) {
 
     servidores.forEach((servidor) => {
       const estado = String(servidor?.estado || servidor?.activo || '').toLowerCase();
+      if (estado.includes('critico') || estado.includes('crit')) {
+        resumen.criticos += 1;
+      }
+      if (estado.includes('manten')) {
+        resumen.mantenimiento += 1;
+      }
       if (estado === 'inactivo' || estado === 'apagado' || estado === 'no') {
         resumen.inactivos += 1;
       } else {
@@ -26,9 +34,23 @@ export function calcularResumenRacks(racks = []) {
 export function construirResumenRacksHtml(racks = []) {
   const resumen = calcularResumenRacks(racks);
   return `
-    <div class="stat-card"><div class="label">Total Racks</div><div class="value" style="color:#1e293b">${resumen.totalRacks}</div></div>
-    <div class="stat-card"><div class="label">Servidores</div><div class="value" style="color:#1e293b">${resumen.totalServidores}</div></div>
-    <div class="stat-card"><div class="label">Activos</div><div class="value" style="color:#22c55e">${resumen.activos}</div></div>
-    <div class="stat-card"><div class="label">Inactivos</div><div class="value" style="color:#ef4444">${resumen.inactivos}</div></div>
+    <div class="stat-card stat-card--racks">
+      <div class="stat-card__head"><span class="stat-card__icon" aria-hidden="true">🗄️</span><div class="label">Total Racks</div></div>
+      <div class="value">${resumen.totalRacks}</div>
+    </div>
+    <div class="stat-card stat-card--servers">
+      <div class="stat-card__head"><span class="stat-card__icon" aria-hidden="true">🖥️</span><div class="label">Servidores</div></div>
+      <div class="value">${resumen.totalServidores}</div>
+    </div>
+    <div class="stat-card stat-card--active">
+      <div class="stat-card__head"><span class="stat-card__icon" aria-hidden="true">🟢</span><div class="label">Activos</div></div>
+      <div class="value" style="color:#16a34a">${resumen.activos}</div>
+      <div class="sub">Criticos: ${resumen.criticos}</div>
+    </div>
+    <div class="stat-card stat-card--inactive">
+      <div class="stat-card__head"><span class="stat-card__icon" aria-hidden="true">🔧</span><div class="label">No Disponibles</div></div>
+      <div class="value" style="color:#b45309">${resumen.inactivos + resumen.mantenimiento}</div>
+      <div class="sub">Mantenimiento: ${resumen.mantenimiento}</div>
+    </div>
   `;
 }
