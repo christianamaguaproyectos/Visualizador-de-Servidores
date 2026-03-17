@@ -8,6 +8,7 @@ import {
   badgeSeveridadIncidente,
   formatearTextoSeguro
 } from '/js/dominios/monitoreo/presentacionEstado.js';
+import { confirmAction } from '/js/dominios/ui-system/modalConfirm.js';
 
 // Inyectar estilos para el botón de eliminar dinámicamente
 (function injectStyles() {
@@ -446,7 +447,13 @@ function renderHosts(hosts) {
       const hostId = decodeURIComponent(btn.dataset.hostId || '');
       const hostName = hosts.find(h => h.id == hostId)?.name || 'este host';
 
-      if (!confirm(`¿Estás seguro de eliminar el host "${hostName}"? Se borrarán también sus checks e historial.`)) return;
+      const confirmed = await confirmAction({
+        title: 'Eliminar host',
+        message: `¿Estas seguro de eliminar el host "${hostName}"? Se borraran tambien sus checks e historial.`,
+        confirmText: 'Eliminar host',
+        tone: 'danger'
+      });
+      if (!confirmed) return;
 
       try {
         const res = await fetch(`/api/monitoring/hosts/${hostId}`, { method: 'DELETE' });
@@ -958,7 +965,13 @@ async function handleCheckAction(action, id) {
       loadChecks();
       loadDashboard();
     } else if (action === 'delete-check') {
-      if (!confirm('¿Eliminar este check?')) return;
+      const confirmed = await confirmAction({
+        title: 'Eliminar check',
+        message: '¿Eliminar este check?',
+        confirmText: 'Eliminar check',
+        tone: 'danger'
+      });
+      if (!confirmed) return;
       const res = await fetch(`/api/monitoring/checks/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Error eliminando check');
       showToast('Check eliminado', 'success');
@@ -1177,7 +1190,13 @@ async function loadMaintenanceStats() {
 async function purgeCheckRuns() {
   const days = document.getElementById('purgeCheckRunsDays')?.value || 30;
 
-  if (!confirm(`¿Estás seguro de eliminar todos los registros de check_runs más antiguos de ${days} días?\\n\\nEsta acción no se puede deshacer.`)) {
+  const confirmed = await confirmAction({
+    title: 'Eliminar logs antiguos',
+    message: `¿Estas seguro de eliminar todos los registros de check_runs mas antiguos de ${days} dias? Esta accion no se puede deshacer.`,
+    confirmText: 'Eliminar logs',
+    tone: 'danger'
+  });
+  if (!confirmed) {
     return;
   }
 
@@ -1201,7 +1220,13 @@ async function purgeCheckRuns() {
 async function purgeIncidents() {
   const days = document.getElementById('purgeIncidentsDays')?.value || 90;
 
-  if (!confirm(`¿Estás seguro de eliminar todos los incidentes CERRADOS más antiguos de ${days} días?\\n\\nEsta acción no se puede deshacer.`)) {
+  const confirmed = await confirmAction({
+    title: 'Eliminar incidentes cerrados',
+    message: `¿Estas seguro de eliminar todos los incidentes cerrados mas antiguos de ${days} dias? Esta accion no se puede deshacer.`,
+    confirmText: 'Eliminar incidentes',
+    tone: 'danger'
+  });
+  if (!confirmed) {
     return;
   }
 
@@ -1223,7 +1248,13 @@ async function purgeIncidents() {
 }
 
 async function runVacuum() {
-  if (!confirm('¿Ejecutar VACUUM ANALYZE?\\n\\nEsto optimizará las tablas de la base de datos. Puede tardar unos segundos.')) {
+  const confirmed = await confirmAction({
+    title: 'Ejecutar VACUUM ANALYZE',
+    message: 'Esto optimizara las tablas de la base de datos y puede tardar unos segundos. ¿Deseas continuar?',
+    confirmText: 'Ejecutar VACUUM',
+    tone: 'danger'
+  });
+  if (!confirmed) {
     return;
   }
 
@@ -1724,7 +1755,13 @@ async function toggleRecipient(id) {
 }
 
 async function deleteRecipient(id, email) {
-  if (!confirm(`¿Eliminar el destinatario "${email}"?`)) return;
+  const confirmed = await confirmAction({
+    title: 'Eliminar destinatario',
+    message: `¿Eliminar el destinatario "${email}"?`,
+    confirmText: 'Eliminar destinatario',
+    tone: 'danger'
+  });
+  if (!confirmed) return;
 
   try {
     const res = await fetch(`/api/monitoring/alert-recipients/${id}`, { method: 'DELETE' });
@@ -1811,7 +1848,13 @@ async function simulateAlert(action) {
   const hostName = select.options[select.selectedIndex].text;
   const actionText = action === 'down' ? 'caída' : 'recuperación';
 
-  if (!confirm(`¿Simular ${actionText} de ${hostName}?\n\nEsto enviará una alerta real a todos los destinatarios activos.`)) {
+  const confirmed = await confirmAction({
+    title: 'Simular alerta real',
+    message: `¿Simular ${actionText} de ${hostName}? Esto enviara una alerta real a todos los destinatarios activos.`,
+    confirmText: 'Simular alerta',
+    tone: 'danger'
+  });
+  if (!confirmed) {
     return;
   }
 
