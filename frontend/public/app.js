@@ -1521,7 +1521,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const rackWidth = (grid.clientWidth - (count - 1) * gap) / count;
 
-            const labelsW = Math.max(210, Math.min(320, Math.floor(rackWidth * 0.52)));
+            const labelsW = Math.max(180, Math.min(280, Math.floor(rackWidth * 0.46)));
 
             grid.style.setProperty('--labels-w', labelsW + 'px');
 
@@ -1557,26 +1557,57 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (rackUnits.length === 0) return;
 
+            // Mantener etiquetas alineadas cuando el usuario hace scroll interno.
+            if (!unitsInner.dataset.labelsScrollBound) {
+              unitsInner.addEventListener('scroll', () => {
+                requestAnimationFrame(() => {
+                  try { alignServerLabels(); } catch (_) { }
+                });
+              }, { passive: true });
+
+              const forwardWheelToUnits = (event) => {
+                if (!unitsInner) return;
+                const canScroll = unitsInner.scrollHeight > unitsInner.clientHeight;
+                if (!canScroll) return;
+                unitsInner.scrollTop += event.deltaY;
+                event.preventDefault();
+              };
+
+              labelsEl.addEventListener('wheel', forwardWheelToUnits, { passive: false });
+              unitsInner.dataset.labelsScrollBound = '1';
+            }
+
 
 
             // Fase 1: Calcular posiciones ideales (centro del servidor)
             const labelData = [];
             const labelsRect = labelsEl.getBoundingClientRect();
-            const innerRect = unitsInner.getBoundingClientRect();
+
+            labelsEl.classList.remove('labels-dense', 'labels-compact');
 
             labels.forEach(lbl => {
               const unitIndex = parseInt(lbl.getAttribute('data-unit-index') || '0', 10);
-              if (isNaN(unitIndex) || unitIndex >= rackUnits.length) return;
+              const span = Math.max(1, parseInt(lbl.getAttribute('data-unit-span') || '1', 10) || 1);
+              if (isNaN(unitIndex) || unitIndex < 0 || unitIndex >= rackUnits.length) {
+                lbl.style.display = 'none';
+                return;
+              }
 
               const firstUnit = rackUnits[unitIndex];
-              const secondUnit = (unitIndex + 1 < rackUnits.length) ? rackUnits[unitIndex + 1] : firstUnit;
-              if (!firstUnit) return;
+              const lastUnitIndex = Math.min(rackUnits.length - 1, unitIndex + span - 1);
+              const lastUnit = rackUnits[lastUnitIndex];
+              if (!firstUnit || !lastUnit) {
+                lbl.style.display = 'none';
+                return;
+              }
+
+              lbl.style.display = '';
 
               const firstRect = firstUnit.getBoundingClientRect();
-              const secondRect = secondUnit.getBoundingClientRect();
+              const lastRect = lastUnit.getBoundingClientRect();
 
               // Centro del servidor relativo al contenedor de etiquetas
-              const serverCenter = ((firstRect.top + secondRect.bottom) / 2) - labelsRect.top;
+              const serverCenter = ((firstRect.top + lastRect.bottom) / 2) - labelsRect.top;
 
               // Medir alto real de la etiqueta
               lbl.style.top = '0px';
@@ -1649,7 +1680,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (SHOW_SERVER_LABELS) {
 
-              const labelsW2 = Math.max(210, Math.min(320, Math.floor(rackWidth2 * 0.52)));
+              const labelsW2 = Math.max(180, Math.min(280, Math.floor(rackWidth2 * 0.46)));
 
               grid2.style.setProperty('--labels-w', labelsW2 + 'px');
 
@@ -3167,6 +3198,17 @@ document.addEventListener('DOMContentLoaded', function () {
     const serverIPs = new Array(totalUnits).fill('');
 
     const serverHNs = new Array(totalUnits).fill('');
+    const serverOrderByUnit = new Array(totalUnits).fill(-1);
+    const serverSpanByUnit = new Array(totalUnits).fill(0);
+
+    const normalizeRackUnits = (value, fallback = 2) => {
+      if (value == null || value === '') return fallback;
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed)) return fallback;
+      const normalized = Math.floor(parsed);
+      if (normalized <= 0) return 0;
+      return normalized;
+    };
 
 
 
@@ -3181,12 +3223,14 @@ document.addEventListener('DOMContentLoaded', function () {
       if (hasPositions) {
 
         // MODO POSICIONADO: Usar las posiciones exactas de la base de datos
+        let serverOrder = 0;
 
         servers.forEach((serverData, i) => {
 
           const position = serverData.rackPosition || null;
 
-          const units = serverData.rackUnits || 2;
+          const units = normalizeRackUnits(serverData.rackUnits ?? serverData.rack_units, 2);
+          if (units <= 0) return;
 
 
 
@@ -3273,6 +3317,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
             // Marcar las unidades ocupadas por este servidor
+            let placedUnits = 0;
 
             for (let u = 0; u < units; u++) {
 
@@ -3291,9 +3336,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 serverIPs[idx] = ipVal;
 
                 serverHNs[idx] = hnVal;
+                serverOrderByUnit[idx] = serverOrder;
+                serverSpanByUnit[idx] = units;
+                placedUnits++;
 
               }
+            }
 
+            if (placedUnits > 0) {
+              serverOrder++;
             }
 
           }
@@ -3319,6 +3370,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
         let currentPos = baseGapSize;
+    let serverOrder = 0;
 
 
 
@@ -3333,6 +3385,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
           const serverData = servers[i] || { id: `missing-${i + 1}`, ip: '', hostname: '', nombre: '' };
+          const units = normalizeRackUnits(serverData.rackUnits ?? serverData.rack_units, serverHeight);
+          if (units <= 0) {
+            continue;
+          }
 
 
 
@@ -3366,41 +3422,31 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-          if (currentPos < totalUnits - 1) {
-
-            occupiedUnits[currentPos] = true;
-
-            occupiedUnits[currentPos + 1] = true;
-
-            serverColors[currentPos] = serverColor;
-
-            serverColors[currentPos + 1] = serverColor;
-
-            serverInfo[currentPos] = tooltipInfo;
-
-            serverInfo[currentPos + 1] = tooltipInfo;
-
+          if (currentPos < totalUnits) {
             const sid = serverData ? serverData.id : null;
+            const ipVal = serverData?.ip || '';
+            const hnVal = serverData?.hostname || serverData?.nombre || '';
+            let placed = 0;
 
-            serverIds[currentPos] = sid;
-
-            serverIds[currentPos + 1] = sid;
-
-
-
-            if (serverData) {
-
-              const ipVal = serverData.ip || '';
-
-              const hnVal = serverData.hostname || serverData.nombre || '';
-
-              serverIPs[currentPos] = ipVal; serverIPs[currentPos + 1] = ipVal;
-
-              serverHNs[currentPos] = hnVal; serverHNs[currentPos + 1] = hnVal;
-
+            for (let u = 0; u < units; u++) {
+              const idx = currentPos + u;
+              if (idx >= totalUnits) break;
+              occupiedUnits[idx] = true;
+              serverColors[idx] = serverColor;
+              serverInfo[idx] = tooltipInfo;
+              serverIds[idx] = sid;
+              serverIPs[idx] = ipVal;
+              serverHNs[idx] = hnVal;
+              serverOrderByUnit[idx] = serverOrder;
+              serverSpanByUnit[idx] = units;
+              placed++;
             }
 
-            currentPos += serverHeight + baseGapSize;
+            if (placed > 0) {
+              serverOrder++;
+            }
+
+            currentPos += units + baseGapSize;
 
           }
 
@@ -3412,15 +3458,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-    // Asignar índice de servidor para alternar colores
-    const serverIndex = new Array(totalUnits).fill(-1);
-    let srvIdx = 0;
+    // Alternancia robusta basada en el orden visual final dentro del rack.
+    const visualServerOrderByUnit = new Array(totalUnits).fill(-1);
+    let visualServerOrder = 0;
     for (let i = 0; i < totalUnits; i++) {
-      if (occupiedUnits[i] && (i === 0 || serverIds[i] !== serverIds[i - 1])) {
-        serverIndex[i] = srvIdx;
-        srvIdx++;
-      } else if (occupiedUnits[i]) {
-        serverIndex[i] = serverIndex[i - 1];
+      if (!occupiedUnits[i]) continue;
+      const isServerStart = i === 0 || !occupiedUnits[i - 1] || serverIds[i] !== serverIds[i - 1];
+      if (isServerStart) {
+        visualServerOrderByUnit[i] = visualServerOrder;
+        visualServerOrder++;
+      } else {
+        visualServerOrderByUnit[i] = visualServerOrderByUnit[i - 1];
       }
     }
 
@@ -3453,7 +3501,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const serverDataForUnit = servers?.find(s => s.id === sid);
 
       const estadoAttr = serverDataForUnit ? normalizeEstado(serverDataForUnit.estado || serverDataForUnit.activo || '') : 'activo';
-      const srvParity = (isServer && serverIndex[i] >= 0) ? (serverIndex[i] % 2 === 0 ? 'server-even' : 'server-odd') : '';
+      const srvParity = (isServer && visualServerOrderByUnit[i] >= 0) ? (visualServerOrderByUnit[i] % 2 === 0 ? 'server-even' : 'server-odd') : '';
 
 
 
@@ -3508,10 +3556,11 @@ document.addEventListener('DOMContentLoaded', function () {
           const showIp = fmt(ip || '—');
 
           const showHn = fmt(hn || '—');
+          const span = Math.max(1, Number(serverSpanByUnit[uIndex] || 1));
 
           // Guardar el índice de inicio del servidor (se usará en JS para calcular posición dinámica)
 
-          labels += `<div class="server-label" data-unit-index="${uIndex}" data-view="server" data-id="${sid}"><span class="ip">${showIp}</span><span class="sep">·</span><span class="hn">${showHn}</span></div>`;
+          labels += `<div class="server-label" data-unit-index="${uIndex}" data-unit-span="${span}" data-view="server" data-id="${sid}"><span class="ip">${showIp}</span><span class="sep">·</span><span class="hn">${showHn}</span></div>`;
 
           uIndex++;
 
