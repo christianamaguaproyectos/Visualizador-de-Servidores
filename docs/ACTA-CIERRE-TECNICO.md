@@ -57,6 +57,15 @@ Consolidar seguridad, UX/UI, mantenibilidad y performance para cerrar el plan pr
 - Virtualizacion queda como mejora opcional futura para escenarios de densidad extrema.
 - Criterio recomendado: evaluar virtualizacion cuando la pagina operativa supere ~60 racks o cuando el tiempo de render observado exceda 120 ms de forma recurrente.
 
+### Telemetria UX extendida (P3)
+- Modulo reusable agregado para eventos de UX en frontend:
+  - `frontend/public/js/dominios/ui-system/uxTelemetry.js`
+- Instrumentacion aplicada en flujos clave:
+  - Fisicos (`app.js`): toggle de detalles tecnicos, paginacion, cambio de tamano de pagina y metrica de render por pagina.
+  - Monitoreo (`monitoring.js`): cambios de tab, refresh manual, cambios/limpieza de filtros y confirmaciones destructivas.
+- Persistencia local de eventos UX para analitica operativa y debugging:
+  - `localStorage['uxTelemetryEvents']` (ventana circular de eventos recientes).
+
 ## 4. Evidencia de validacion
 ### Servicios
 - `app`: healthy
@@ -90,7 +99,6 @@ Impacto:
 ## 6. Riesgos residuales
 - El archivo frontend `app.js` sigue siendo grande; aunque ya se extrajo una parte, conviene continuar modularizacion por dominio.
 - Falta de pruebas E2E formales en pipeline CI para prevenir regresiones de UI.
-- Telemetria UX extendida (P3) sigue opcional y aun no implementada.
 
 ## 7. Recomendaciones inmediatas
 1. Integrar `scripts/monitoring/smokeAuthFlows.mjs` en CI como gate de despliegue.
@@ -102,6 +110,6 @@ Impacto:
 - P0: COMPLETADO
 - P1: COMPLETADO
 - P2: COMPLETADO
-- P3: PENDIENTE (opcional)
+- P3: COMPLETADO
 
-Conclusion: el plan priorizado queda cerrado en su alcance comprometido (P0-P2) y listo para evolucion incremental.
+Conclusion: el plan priorizado queda cerrado en su alcance total (P0-P3) y listo para evolucion incremental.
