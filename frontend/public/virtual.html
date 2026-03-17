@@ -30,20 +30,20 @@
       </select>
     </div>
     <div class="header-actions">
-      <button id="btnAddServer" class="header-action action-add" title="Agregar nuevo servidor virtual">
+      <button id="btnAddServer" class="header-action action-add btn btn-primary" title="Agregar nuevo servidor virtual">
         <span class="action-label">➕ Agregar VM</span>
       </button>
-      <button id="btnAddRack" class="header-action action-add" title="Agregar nuevo host">
+      <button id="btnAddRack" class="header-action action-add btn btn-primary" title="Agregar nuevo host">
         <span class="action-label">🗄️ Agregar Host</span>
       </button>
-      <button id="btnExportExcel" class="header-action" title="Exportar máquinas virtuales a Excel">
+      <button id="btnExportExcel" class="header-action btn btn-secondary" title="Exportar máquinas virtuales a Excel">
         <span class="action-label">📊 Exportar Excel</span>
       </button>
-      <button id="btnUsers" class="header-action" style="display:none" title="Gestión de usuarios">
+      <button id="btnUsers" class="header-action btn btn-secondary" style="display:none" title="Gestión de usuarios">
         <span class="action-label">👥 Usuarios</span>
       </button>
 
-      <button id="btnInicio" class="header-action action-reload" title="Actualizar datos">
+      <button id="btnInicio" class="header-action action-reload btn btn-primary" title="Actualizar datos">
         <span class="action-label">Actualizar datos</span>
       </button>
     </div>
@@ -148,8 +148,7 @@
               <div class="form-field">
                 <label for="serverDiscos">Discos</label>
                 <div id="discosContainer"></div>
-                <button type="button" id="btnAddDisco"
-                  style="margin-top:8px;padding:8px 16px;background:#3b82f6;color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px">
+                <button type="button" id="btnAddDisco" class="btn btn-secondary" style="margin-top:8px">
                   ➕ Agregar Disco
                 </button>
                 <input type="hidden" id="serverDiscos" />
