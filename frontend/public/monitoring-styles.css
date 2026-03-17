@@ -539,6 +539,42 @@ body {
   font-size: 0.875rem;
 }
 
+.filter-chips {
+  display: none;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -8px 0 16px;
+}
+
+.filter-chips.active {
+  display: flex;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #d0ddff;
+  border-radius: 999px;
+  background: #e8f0ff;
+  color: #114bb5;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.filter-chip:hover {
+  background: #dbe7ff;
+}
+
+.filter-chip--count {
+  cursor: default;
+  background: #fff;
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+}
+
 /* Hosts Grid */
 .hosts-grid {
   display: grid;
