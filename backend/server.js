@@ -130,6 +130,7 @@ class Application {
 
     // API de autenticación
     this.app.post('/api/auth/login', this.authRateLimiter, (req, res) => authController.login(req, res));
+    this.app.post('/api/auth/login-guest', this.authRateLimiter, (req, res) => authController.loginGuest(req, res));
     this.app.post('/api/auth/logout', (req, res) => authController.logout(req, res));
     this.app.get('/api/auth/session', (req, res) => authController.checkSession(req, res));
 

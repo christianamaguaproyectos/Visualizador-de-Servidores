@@ -121,7 +121,6 @@
       </div>
     </section>
   </main>
-  <div class="corner-star" aria-hidden="true">✦</div>
 
   <script>
     // Password visibility toggle
@@ -137,15 +136,32 @@
       }
     });
 
-    // Acceso asistido para invitado (no inicia sesión automáticamente)
-    document.getElementById('guestLogin').addEventListener('click', () => {
-      const usernameInput = document.getElementById('username');
-      const passwordInput = document.getElementById('password');
-      const errorMessage = document.getElementById('errorMessage');
-
-      usernameInput.value = 'invitado';
-      passwordInput.focus();
+    // Login de invitado sin contraseña
+    document.getElementById('guestLogin').addEventListener('click', async () => {
+      const guestBtn = document.getElementById('guestLogin');
       errorMessage.style.display = 'none';
+      guestBtn.disabled = true;
+
+      try {
+        const response = await fetch('/api/auth/login-guest', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          window.location.href = '/';
+        } else {
+          showError(data.message || 'No fue posible iniciar sesión como invitado');
+        }
+      } catch (error) {
+        showError('Error de conexión. Verifica tu red e intenta nuevamente.');
+      } finally {
+        guestBtn.disabled = false;
+      }
     });
 
     // Manejo del formulario de login
