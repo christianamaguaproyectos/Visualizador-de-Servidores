@@ -4,6 +4,7 @@
  */
 
 import authService from '../services/authService.js';
+import passwordRecoveryService from '../services/passwordRecoveryService.js';
 import { Logger } from '../utils/logger.js';
 
 /**
@@ -69,7 +70,8 @@ class AuthController {
         user: {
           username: user.username,
           name: user.name,
-          role: user.role
+          role: user.role,
+          isSuperAdmin: authService.isSuperAdmin(user)
         }
       });
     } catch (error) {
@@ -107,7 +109,8 @@ class AuthController {
         user: {
           username: guestUser.username,
           name: guestUser.name,
-          role: guestUser.role
+          role: guestUser.role,
+          isSuperAdmin: false
         }
       });
     } catch (error) {
@@ -157,7 +160,8 @@ class AuthController {
         user: {
           username: req.session.user.username,
           name: req.session.user.name,
-          role: req.session.user.role
+          role: req.session.user.role,
+          isSuperAdmin: authService.isSuperAdmin(req.session.user)
         }
       });
     } else {
@@ -179,13 +183,105 @@ class AuthController {
         user: {
           username: req.session.user.username,
           name: req.session.user.name,
-          role: req.session.user.role
+          role: req.session.user.role,
+          email: req.session.user.email || null,
+          id: req.session.user.id || null,
+          isSuperAdmin: authService.isSuperAdmin(req.session.user)
         }
       });
     } else {
       res.status(401).json({
         success: false,
         message: 'No autenticado'
+      });
+    }
+  }
+
+  /**
+   * Inicia flujo de recuperación de contraseña
+   * @param {Object} req
+   * @param {Object} res
+   */
+  async forgotPassword(req, res) {
+    try {
+      const { identifier } = req.body || {};
+      const value = String(identifier || '').trim();
+
+      if (!value || value.length < 3) {
+        return res.status(200).json({
+          success: true,
+          message: 'Si la cuenta existe, enviaremos instrucciones al correo registrado.'
+        });
+      }
+
+      const result = await authService.createPasswordResetToken(value);
+      if (!result.found) {
+        return res.status(200).json({
+          success: true,
+          message: 'Si la cuenta existe, enviaremos instrucciones al correo registrado.'
+        });
+      }
+
+      const resetLink = `${req.protocol}://${req.get('host')}/login?resetToken=${encodeURIComponent(result.token)}`;
+      const mail = await passwordRecoveryService.sendResetEmail({
+        to: result.user.email,
+        name: result.user.name || result.user.username,
+        resetLink
+      });
+
+      const response = {
+        success: true,
+        message: 'Si la cuenta existe, enviaremos instrucciones al correo registrado.'
+      };
+
+      if (!mail.sent && process.env.NODE_ENV !== 'production') {
+        response.debugToken = result.token;
+      }
+
+      res.status(200).json(response);
+    } catch (error) {
+      Logger.error('❌ Error en forgotPassword:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor'
+      });
+    }
+  }
+
+  /**
+   * Restablece contraseña usando token
+   * @param {Object} req
+   * @param {Object} res
+   */
+  async resetPassword(req, res) {
+    try {
+      const { token, password } = req.body || {};
+      const newPassword = String(password || '');
+
+      if (!token || newPassword.length < 8 || newPassword.length > 256) {
+        return res.status(400).json({
+          success: false,
+          message: 'Token o contraseña inválidos'
+        });
+      }
+
+      const success = await authService.resetPasswordWithToken(token, newPassword);
+      if (!success) {
+        return res.status(400).json({
+          success: false,
+          message: 'El enlace de recuperación no es válido o expiró'
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Contraseña restablecida correctamente'
+      });
+    } catch (error) {
+      Logger.error('❌ Error en resetPassword:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor'
       });
     }
   }

@@ -45,6 +45,72 @@ document.addEventListener('DOMContentLoaded', function () {
 
   const isVirtuales = serverType === 'virtuales';
 
+  let currentUserRole = null;
+  let readOnlyUser = false;
+  let readOnlyNoticeShown = false;
+
+  function isReadOnlyUser() {
+    return readOnlyUser;
+  }
+
+  function showReadOnlyToast() {
+    if (readOnlyNoticeShown) return;
+    readOnlyNoticeShown = true;
+    showToast('Modo invitado: solo vista general. No puedes abrir ni modificar racks, servidores o VMs.', 'warning');
+    setTimeout(() => { readOnlyNoticeShown = false; }, 2200);
+  }
+
+  function disableReadOnlyActions() {
+    if (!isReadOnlyUser()) return;
+
+    const selectors = [
+      '#btnAddServer',
+      '#btnAddRack',
+      '#btnExportExcel',
+      '#btnToggleLabels',
+      '#btnCreateView',
+      '#btnAddHost',
+      '#btnEditCluster',
+      '#btnDeleteCluster',
+      '#btnAddVMToHost',
+      '#btnDeleteRack',
+      '#btnEditServer',
+      '#btnDeleteServer',
+      '.server-btn-edit',
+      '.server-btn-delete',
+      '.btn-edit-host',
+      '.view-edit-btn',
+      '.view-delete-btn'
+    ];
+
+    document.querySelectorAll(selectors.join(',')).forEach((el) => {
+      if (el.tagName === 'BUTTON') el.disabled = true;
+      el.classList.add('readonly-disabled');
+      el.setAttribute('aria-disabled', 'true');
+      el.style.pointerEvents = 'none';
+      el.style.opacity = '0.55';
+      el.style.cursor = 'not-allowed';
+    });
+  }
+
+  async function hydrateCurrentUserRole() {
+    try {
+      const response = await fetch('/api/auth/user');
+      const data = await response.json();
+      if (data?.success && data?.user) {
+        currentUserRole = data.user.role;
+        window.currentUser = data.user;
+        readOnlyUser = currentUserRole === 'viewer';
+      }
+    } catch (_) {
+      readOnlyUser = false;
+    } finally {
+      disableReadOnlyActions();
+    }
+  }
+
+  hydrateCurrentUserRole();
+
 
 
   // Actualizar título según el tipo
@@ -303,6 +369,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function openServerModal(initialRackName) {
 
+    if (isReadOnlyUser()) {
+      showReadOnlyToast();
+      return;
+    }
+
     if (!serverModal || !serverForm) return;
 
     const titleEl = document.getElementById('serverModalTitle');
@@ -395,6 +466,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function openRackModal() {
 
+    if (isReadOnlyUser()) {
+      showReadOnlyToast();
+      return;
+    }
+
     if (!isVirtuales || !rackAddModal || !rackForm) return;
 
     rackForm.reset();
@@ -430,6 +506,11 @@ document.addEventListener('DOMContentLoaded', function () {
   // Función para editar servidor
 
   function openServerModalForEdit(server) {
+
+    if (isReadOnlyUser()) {
+      showReadOnlyToast();
+      return;
+    }
 
     // Obtener elementos directamente para evitar problemas de timing
 
@@ -3719,6 +3800,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
         e.stopPropagation();
 
+        if (isReadOnlyUser()) {
+          showReadOnlyToast();
+          return;
+        }
+
         const serverId = decodeURIComponent(btn.getAttribute('data-server-id') || '');
 
         const server = rack.servers.find(s => String(s.id) === String(serverId));
@@ -3740,6 +3826,11 @@ document.addEventListener('DOMContentLoaded', function () {
       btn.addEventListener('click', (e) => {
 
         e.stopPropagation();
+
+        if (isReadOnlyUser()) {
+          showReadOnlyToast();
+          return;
+        }
 
         const serverId = decodeURIComponent(btn.getAttribute('data-server-id') || '');
 
@@ -3765,6 +3856,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
       btnAddVMToHost.addEventListener('click', () => {
 
+        if (isReadOnlyUser()) {
+          showReadOnlyToast();
+          return;
+        }
+
         openServerModal(rack.name); // Pasa el nombre del rack para preseleccionarlo
 
       });
@@ -3785,6 +3881,11 @@ document.addEventListener('DOMContentLoaded', function () {
     if (btnDeleteRack) {
 
       btnDeleteRack.addEventListener('click', async () => {
+
+        if (isReadOnlyUser()) {
+          showReadOnlyToast();
+          return;
+        }
 
         if (!rack.name) {
 
@@ -4009,6 +4110,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('btnEditServer')?.addEventListener('click', () => {
 
+      if (isReadOnlyUser()) {
+        showReadOnlyToast();
+        return;
+      }
+
       console.log('Edit button clicked, server:', s, 'serverManager:', window.serverManager);
 
       if (window.serverManager) {
@@ -4026,6 +4132,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
     document.getElementById('btnDeleteServer')?.addEventListener('click', async () => {
+
+      if (isReadOnlyUser()) {
+        showReadOnlyToast();
+        return;
+      }
 
       const accepted = await confirmAction({
         title: 'Eliminar servidor',
@@ -4105,6 +4216,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
   window.addEventListener('click', (e) => {
 
+    if (isReadOnlyUser()) {
+      const restricted = e.target.closest('[data-view], [data-cluster-key], [data-virtual-mode]');
+      if (restricted) {
+        e.preventDefault();
+        e.stopPropagation();
+        showReadOnlyToast();
+        return;
+      }
+    }
+
     if (isVirtuales) {
 
       if (e.target.closest('.view-edit-btn, .view-delete-btn')) {
@@ -4171,6 +4292,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
   window.addEventListener('keydown', (e) => {
     if (!isVirtuales) return;
+
+    if (isReadOnlyUser()) {
+      const clusterSection = e.target.closest('.cluster-section[role="button"][data-cluster-key]');
+      if (clusterSection && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault();
+        showReadOnlyToast();
+        return;
+      }
+    }
+
     if (e.key !== 'Enter' && e.key !== ' ') return;
 
     const tag = (e.target?.tagName || '').toLowerCase();
@@ -4529,6 +4660,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
       rackEl.addEventListener('click', () => {
 
+        if (isReadOnlyUser()) {
+          showReadOnlyToast();
+          return;
+        }
+
         const name = rackEl.getAttribute('data-name') || rackEl.querySelector('.rack-content h2')?.textContent || '';
 
         const idx = rackEl.getAttribute('data-idx');
@@ -4557,6 +4693,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
       if (!lbl) return;
 
+      if (isReadOnlyUser()) {
+        e.preventDefault();
+        e.stopPropagation();
+        showReadOnlyToast();
+        return;
+      }
+
       const id = lbl.getAttribute('data-id');
 
       if (id) {
@@ -4573,6 +4716,13 @@ document.addEventListener('DOMContentLoaded', function () {
     document.addEventListener('click', (e) => {
       const btn = e.target.closest('.btn-edit-host');
       if (!btn) return;
+
+      if (isReadOnlyUser()) {
+        e.preventDefault();
+        e.stopPropagation();
+        showReadOnlyToast();
+        return;
+      }
 
       e.stopPropagation();
       const id = Number(btn.getAttribute('data-host-id'));

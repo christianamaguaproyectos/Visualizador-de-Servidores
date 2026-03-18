@@ -108,12 +108,12 @@
         userSection.innerHTML = `
       <div class="global-nav__user-info">
         <span class="global-nav__user-avatar">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 12c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5z"/>
-            <path d="M2 22c0-4.42 3.58-8 8-8h4c4.42 0 8 3.58 8 8"/>
-          </svg>
+                    <span id="globalNavUserInitial">U</span>
         </span>
-        <span class="global-nav__user-name" id="globalNavUserName">Cargando...</span>
+                <div class="global-nav__user-meta">
+                    <span class="global-nav__user-name" id="globalNavUserName">Cargando...</span>
+                    <span class="global-nav__user-role" id="globalNavUserRole">Sesión activa</span>
+                </div>
       </div>
       <button class="global-nav__logout" id="globalNavLogout" title="Cerrar sesión">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -186,12 +186,34 @@
             const data = await response.json();
             if (data.success && data.user) {
                 const nameEl = document.getElementById('globalNavUserName');
+                const roleEl = document.getElementById('globalNavUserRole');
+                const initialEl = document.getElementById('globalNavUserInitial');
+
+                const displayName = data.user.name || data.user.username;
+                const initials = displayName
+                    .split(' ')
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map((part) => part[0])
+                    .join('')
+                    .toUpperCase();
+
                 if (nameEl) {
-                    nameEl.textContent = data.user.name || data.user.username;
+                    nameEl.textContent = displayName;
                 }
 
-                // Show admin-only links
-                if (data.user.role === 'admin') {
+                if (roleEl) {
+                    roleEl.textContent = data.user.isSuperAdmin ? 'Superadministrador' : 'Usuario autenticado';
+                }
+
+                if (initialEl) {
+                    initialEl.textContent = initials || 'U';
+                }
+
+                window.currentUser = data.user;
+
+                // Show admin-only links only for superadmin
+                if (data.user.isSuperAdmin) {
                     document.querySelectorAll('.global-nav__link.admin-only').forEach(el => {
                         el.style.display = '';
                     });
