@@ -9,6 +9,16 @@ class ServerManager {
     this.editingServerId = null;
   }
 
+  isReadOnlyUser() {
+    return window.currentUser?.role === 'viewer';
+  }
+
+  notifyReadOnly() {
+    if (typeof showToast === 'function') {
+      showToast('Modo invitado: solo lectura.', 'warning');
+    }
+  }
+
   /**
    * Inicializa los event listeners
    */
@@ -78,6 +88,11 @@ class ServerManager {
    * Abre el modal para agregar/editar servidor
    */
   async openServerModal(serverId = null) {
+    if (this.isReadOnlyUser()) {
+      this.notifyReadOnly();
+      return;
+    }
+
     this.editingServerId = serverId;
 
     const modal = document.getElementById('serverModal');
@@ -243,6 +258,12 @@ class ServerManager {
    * Maneja el envÃ­o del formulario de servidor
    */
   async handleServerSubmit(e) {
+    if (this.isReadOnlyUser()) {
+      if (e) e.preventDefault();
+      this.notifyReadOnly();
+      return;
+    }
+
     if (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -335,6 +356,11 @@ class ServerManager {
    * Abre el modal para agregar rack
    */
   openRackModal() {
+    if (this.isReadOnlyUser()) {
+      this.notifyReadOnly();
+      return;
+    }
+
     document.getElementById('rackName').value = '';
     document.getElementById('rackAddModal').style.display = 'flex';
   }
@@ -350,6 +376,12 @@ class ServerManager {
    * Maneja el envÃ­o del formulario de rack
    */
   async handleRackSubmit(e) {
+    if (this.isReadOnlyUser()) {
+      e.preventDefault();
+      this.notifyReadOnly();
+      return;
+    }
+
     e.preventDefault();
 
     const data = {
@@ -389,6 +421,11 @@ class ServerManager {
    * Elimina un servidor
    */
   async deleteServer(serverId, serverName) {
+    if (this.isReadOnlyUser()) {
+      this.notifyReadOnly();
+      return;
+    }
+
     if (!confirm(`Â¿EstÃ¡s seguro de eliminar el servidor "${serverName}"?`)) {
       return;
     }

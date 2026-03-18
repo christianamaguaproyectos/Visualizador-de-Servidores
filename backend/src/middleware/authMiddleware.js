@@ -3,6 +3,7 @@
 */
 
 import { Logger } from '../utils/logger.js';
+import authService from '../services/authService.js';
 
 /**
  * Middleware que verifica si el usuario está autenticado
@@ -51,7 +52,7 @@ export function requireAdmin(req, res, next) {
     }
   }
 
-  if (req.session.user.role !== 'admin') {
+  if (req.session.user.role !== 'admin' && !authService.isSuperAdmin(req.session.user)) {
     Logger.warn(`⚠️  Usuario '${req.session.user.username}' intentó acceso de admin`);
     
     if (req.path.startsWith('/api/')) {
@@ -124,6 +125,39 @@ export function requireAdmin(req, res, next) {
 }
 
 /**
+ * Middleware que verifica si el usuario es superadmin
+ * @param {Object} req
+ * @param {Object} res
+ * @param {Function} next
+ */
+export function requireSuperAdmin(req, res, next) {
+  if (!req.session || !req.session.user) {
+    if (req.path.startsWith('/api/')) {
+      return res.status(401).json({
+        error: 'No autorizado',
+        message: 'Debes iniciar sesión',
+        requestId: req.requestId || null
+      });
+    }
+    return res.redirect('/login');
+  }
+
+  if (!authService.isSuperAdmin(req.session.user)) {
+    Logger.warn(`⚠️  Usuario '${req.session.user.username}' intentó acceso de superadmin`);
+    if (req.path.startsWith('/api/')) {
+      return res.status(403).json({
+        error: 'Acceso denegado',
+        message: 'No tienes permisos de superadmin',
+        requestId: req.requestId || null
+      });
+    }
+    return res.status(403).send('Acceso denegado: requiere superadmin');
+  }
+
+  next();
+}
+
+/**
  * Middleware que inyecta información del usuario en todas las vistas
  * @param {Object} req - Request de Express
  * @param {Object} res - Response de Express
@@ -134,6 +168,7 @@ export function injectUser(req, res, next) {
   res.locals.user = req.session?.user || null;
   res.locals.isAuthenticated = !!req.session?.user;
   res.locals.isAdmin = req.session?.user?.role === 'admin';
+  res.locals.isSuperAdmin = authService.isSuperAdmin(req.session?.user);
   
   next();
 }

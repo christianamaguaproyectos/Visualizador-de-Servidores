@@ -12,10 +12,19 @@ class RackDragDrop {
     this.ghostEl = null;
   }
 
+  isReadOnlyUser() {
+    return window.currentUser?.role === 'viewer';
+  }
+
   /**
    * Inicializa el drag-and-drop en todos los servidores
    */
   init() {
+    if (this.isReadOnlyUser()) {
+      console.log('ℹ️ Drag-and-drop deshabilitado para usuario en modo solo lectura');
+      return;
+    }
+
     this.setupDragListeners();
     this.createDropIndicator();
     console.log('✅ Drag-and-drop inicializado');
@@ -92,6 +101,11 @@ class RackDragDrop {
    * Inicia el arrastre de un servidor
    */
   handleDragStart(e) {
+    if (this.isReadOnlyUser()) {
+      e.preventDefault();
+      return;
+    }
+
     // Buscar tanto .server-item (vista detalle) como .rack-unit.active (vista grid)
     const serverElement = e.target.closest('.server-item') || e.target.closest('.rack-unit.active[draggable="true"]');
     if (!serverElement) return;

@@ -401,23 +401,22 @@
   <script src="/js/modules/serverManager.js" type="module"></script>
   <script src="/js/modules/rackDragDrop.js" type="module"></script>
   <script>
-    // Mostrar botón de usuarios solo para admins
+    // Mostrar botón de usuarios solo para superadmin
     document.addEventListener('DOMContentLoaded', () => {
-      try {
-        const userStr = sessionStorage.getItem('user');
-        if (userStr) {
-          const user = JSON.parse(userStr);
-          if (user.role === 'admin') {
-            const btnUsers = document.getElementById('btnUsers');
-            if (btnUsers) {
-              btnUsers.style.display = 'inline-block';
-              btnUsers.addEventListener('click', () => location.href = '/users');
-            }
+      const btnUsers = document.getElementById('btnUsers');
+      if (!btnUsers) return;
+
+      fetch('/api/auth/user')
+        .then((response) => response.json())
+        .then((data) => {
+          if (data?.success && data?.user?.isSuperAdmin) {
+            btnUsers.style.display = 'inline-block';
+            btnUsers.addEventListener('click', () => location.href = '/users');
           }
-        }
-      } catch (e) {
-        console.error('Error checking user role:', e);
-      }
+        })
+        .catch((e) => {
+          console.error('Error checking superadmin role:', e);
+        });
     });
   </script>
 </body>

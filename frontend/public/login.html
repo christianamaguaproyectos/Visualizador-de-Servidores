@@ -52,7 +52,7 @@
 
             <div class="brand-copy">
               <h1>Diagrama de Servidores</h1>
-              <p class="subtitle">Grupo Dence - Sistema de Gestión</p>
+              <p class="subtitle">Grupo Danec - Sistema de Gestión</p>
             </div>
           </div>
         </div>
@@ -111,6 +111,8 @@
 
           <button type="button" id="guestLogin" class="btn-guest btn-guest-inline">Iniciar sesión de invitado</button>
 
+          <button type="button" id="forgotPasswordBtn" class="btn-forgot">¿Olvidaste tu contraseña?</button>
+
           <p id="networkStatus" class="network-inline-status" aria-live="polite"></p>
         </form>
 
@@ -163,6 +165,64 @@
         guestBtn.disabled = false;
       }
     });
+
+    document.getElementById('forgotPasswordBtn').addEventListener('click', async () => {
+      const identifier = window.prompt('Ingresa tu usuario o correo para recuperar la contraseña:');
+      if (!identifier || !identifier.trim()) return;
+
+      try {
+        const response = await fetch('/api/auth/forgot-password', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ identifier: identifier.trim() })
+        });
+
+        const data = await response.json();
+        if (response.ok && data.success) {
+          showError('Si la cuenta existe, te enviamos instrucciones de recuperación al correo registrado.');
+
+          if (data.debugToken) {
+            console.info('Token de recuperación (solo desarrollo):', data.debugToken);
+          }
+        } else {
+          showError(data.message || 'No fue posible iniciar el proceso de recuperación.');
+        }
+      } catch (_) {
+        showError('Error de conexión. Verifica tu red e intenta nuevamente.');
+      }
+    });
+
+    async function tryPasswordResetFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('resetToken');
+      if (!token) return;
+
+      const password = window.prompt('Ingresa tu nueva contraseña (mínimo 8 caracteres):');
+      if (!password) return;
+
+      try {
+        const response = await fetch('/api/auth/reset-password', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ token, password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          showError('Contraseña actualizada correctamente. Ya puedes iniciar sesión.');
+          window.history.replaceState({}, '', '/login');
+        } else {
+          showError(data.message || 'El enlace de recuperación no es válido o expiró.');
+        }
+      } catch (_) {
+        showError('Error de conexión. Verifica tu red e intenta nuevamente.');
+      }
+    }
 
     // Manejo del formulario de login
     const loginForm = document.getElementById('loginForm');
@@ -248,6 +308,7 @@
 
     // Verificar estado al cargar
     checkNetworkStatus();
+    tryPasswordResetFromUrl();
     setInterval(checkNetworkStatus, 30000); // Cada 30 segundos
   </script>
 </body>

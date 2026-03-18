@@ -25,7 +25,7 @@ import userController from './src/controllers/userController.js';
 import clusterRoutes from './src/routes/clusterRoutes.js';
 
 // Middleware
-import { requireAuth, requireAdmin, injectUser } from './src/middleware/authMiddleware.js';
+import { requireAuth, requireAdmin, requireSuperAdmin, injectUser } from './src/middleware/authMiddleware.js';
 import { createRateLimiter } from './src/middleware/rateLimitMiddleware.js';
 import { attachRequestContext, structuredApiRequestLogger } from './src/middleware/requestContextMiddleware.js';
 import { securityHeadersMiddleware } from './src/middleware/securityHeadersMiddleware.js';
@@ -131,6 +131,8 @@ class Application {
     // API de autenticación
     this.app.post('/api/auth/login', this.authRateLimiter, (req, res) => authController.login(req, res));
     this.app.post('/api/auth/login-guest', this.authRateLimiter, (req, res) => authController.loginGuest(req, res));
+    this.app.post('/api/auth/forgot-password', this.authRateLimiter, (req, res) => authController.forgotPassword(req, res));
+    this.app.post('/api/auth/reset-password', this.authRateLimiter, (req, res) => authController.resetPassword(req, res));
     this.app.post('/api/auth/logout', (req, res) => authController.logout(req, res));
     this.app.get('/api/auth/session', (req, res) => authController.checkSession(req, res));
 
@@ -161,7 +163,7 @@ class Application {
       res.sendFile(path.join(__dirname, '..', 'frontend', 'public', 'virtual.html'));
     });
 
-    this.app.get('/users', requireAdmin, (req, res) => {
+    this.app.get('/users', requireSuperAdmin, (req, res) => {
       res.sendFile(path.join(__dirname, '..', 'frontend', 'public', 'users.html'));
     });
 
@@ -214,11 +216,12 @@ class Application {
     this.app.delete('/api/racks/by-name/:name', requireAdmin, (req, res) => rackController.deleteRackByName(req, res));
 
     // CRUD de Usuarios (solo admin)
-    this.app.get('/api/users', requireAdmin, (req, res) => userController.getAllUsers(req, res));
-    this.app.post('/api/users', requireAdmin, (req, res) => userController.createUser(req, res));
-    this.app.put('/api/users/:id', requireAdmin, (req, res) => userController.updateUser(req, res));
-    this.app.post('/api/users/:id/change-password', requireAdmin, (req, res) => userController.changePassword(req, res));
-    this.app.delete('/api/users/:id', requireAdmin, (req, res) => userController.deleteUser(req, res));
+    this.app.get('/api/users', (req, res) => userController.getAllUsers(req, res));
+    this.app.get('/api/users/me', (req, res) => userController.getMyProfile(req, res));
+    this.app.post('/api/users', (req, res) => userController.createUser(req, res));
+    this.app.put('/api/users/:id', (req, res) => userController.updateUser(req, res));
+    this.app.post('/api/users/:id/change-password', (req, res) => userController.changePassword(req, res));
+    this.app.delete('/api/users/:id', (req, res) => userController.deleteUser(req, res));
 
     // SSE (Server-Sent Events) - todos los usuarios autenticados
     this.app.get('/events', (req, res) => sseService.addClient(req, res));
