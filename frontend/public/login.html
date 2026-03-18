@@ -21,30 +21,41 @@
   <main class="login-scene">
     <section class="glass-panel" aria-label="Panel principal de acceso">
       <div class="glass-reflection" aria-hidden="true"></div>
+      <div class="glass-divider" aria-hidden="true"></div>
 
       <div class="panel-left">
         <div class="login-header">
-          <div class="logo" aria-hidden="true">
-            <svg width="74" height="74" viewBox="0 0 74 74" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <linearGradient id="rackGradient" x1="7" y1="8" x2="67" y2="66" gradientUnits="userSpaceOnUse">
-                  <stop stop-color="#80B4FF" />
-                  <stop offset="1" stop-color="#695CFF" />
-                </linearGradient>
-              </defs>
-              <rect x="8" y="9" width="58" height="56" rx="17" fill="url(#rackGradient)" fill-opacity="0.18" />
-              <rect x="18" y="14" width="16" height="46" rx="6" stroke="url(#rackGradient)" stroke-width="2.6" />
-              <rect x="40" y="14" width="16" height="46" rx="6" stroke="url(#rackGradient)" stroke-width="2.6" />
-              <path d="M21 23h10M21 31h10M21 39h10M21 47h10" stroke="url(#rackGradient)" stroke-width="2.4"
-                stroke-linecap="round" />
-              <path d="M43 23h10M43 31h10M43 39h10M43 47h10" stroke="url(#rackGradient)" stroke-width="2.4"
-                stroke-linecap="round" />
-              <circle cx="26" cy="55" r="1.9" fill="#A7D4FF" />
-              <circle cx="48" cy="55" r="1.9" fill="#A7D4FF" />
-            </svg>
+          <div class="brand-row">
+            <div class="logo" aria-hidden="true">
+              <svg width="120" height="150" viewBox="0 0 120 150" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <linearGradient id="rackGradient" x1="7" y1="8" x2="67" y2="66" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="#7AB3FF" />
+                    <stop offset="1" stop-color="#6D5EFF" />
+                  </linearGradient>
+                  <linearGradient id="rackBg" x1="0" y1="0" x2="1" y2="1">
+                    <stop stop-color="#B6DDFF" stop-opacity="0.2" />
+                    <stop offset="1" stop-color="#8A7BFF" stop-opacity="0.06" />
+                  </linearGradient>
+                </defs>
+
+                <rect x="16" y="10" width="38" height="52" rx="8" fill="url(#rackBg)" stroke="url(#rackGradient)" stroke-width="2" />
+                <rect x="64" y="10" width="38" height="52" rx="8" fill="url(#rackBg)" stroke="url(#rackGradient)" stroke-width="2" />
+                <rect x="16" y="88" width="38" height="52" rx="8" fill="url(#rackBg)" stroke="url(#rackGradient)" stroke-width="2" />
+                <rect x="64" y="88" width="38" height="52" rx="8" fill="url(#rackBg)" stroke="url(#rackGradient)" stroke-width="2" />
+
+                <path d="M34 62V88M83 62V88M34 75H83" stroke="url(#rackGradient)" stroke-width="2.2" stroke-linecap="round" />
+
+                <path d="M25 24H45M25 32H45M25 40H39M73 24H93M73 32H93M73 40H87" stroke="url(#rackGradient)" stroke-width="2.5" stroke-linecap="round" />
+                <path d="M25 102H45M25 110H45M25 118H39M73 102H93M73 110H93M73 118H87" stroke="url(#rackGradient)" stroke-width="2.5" stroke-linecap="round" />
+              </svg>
+            </div>
+
+            <div class="brand-copy">
+              <h1>Diagrama de Servidores</h1>
+              <p class="subtitle">Grupo Dence - Sistema de Gestión</p>
+            </div>
           </div>
-          <h1>Diagrama de Servidores</h1>
-          <p class="subtitle">Grupo Danec - Sistema de Gestión</p>
         </div>
 
         <form id="loginForm" class="login-form">
@@ -101,7 +112,7 @@
         </form>
 
         <div class="login-footer">
-          <p>&copy; 2026 Grupo Danec. Todos los derechos reservados.</p>
+          <p>&copy; 2020 Grupo Danec. Todos los derechos reservados.</p>
           <p class="help-text">¿Problemas para iniciar sesión? Contacta al administrador del sistema.</p>
         </div>
       </div>
@@ -129,7 +140,7 @@
                     stroke-linejoin="round" />
                 </svg>
               </span>
-              Conexión cifrada de extremo a extremo
+              Concxión cifrada
             </li>
             <li>
               <span class="check-icon" aria-hidden="true">
@@ -138,7 +149,7 @@
                     stroke-linejoin="round" />
                 </svg>
               </span>
-              Autenticación obligatoria por credenciales
+              Autenticación requerida
             </li>
             <li>
               <span class="check-icon" aria-hidden="true">
@@ -147,7 +158,7 @@
                     stroke-linejoin="round" />
                 </svg>
               </span>
-              Control de sesión y cierre seguro automático
+              Sesión automática
             </li>
           </ul>
 
@@ -160,6 +171,7 @@
       </aside>
     </section>
   </main>
+  <div class="corner-star" aria-hidden="true">✦</div>
 
   <script>
     // Password visibility toggle
