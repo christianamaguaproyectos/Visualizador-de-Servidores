@@ -82,6 +82,44 @@ class AuthController {
   }
 
   /**
+   * Procesa el login de invitado sin contraseña
+   * @param {Object} req - Request de Express
+   * @param {Object} res - Response de Express
+   */
+  loginGuest(req, res) {
+    try {
+      const guestUser = {
+        id: 0,
+        username: 'invitado',
+        name: 'Invitado',
+        role: 'viewer',
+        email: null,
+        isGuest: true
+      };
+
+      req.session.user = guestUser;
+
+      Logger.info('ℹ️  Sesión de invitado creada');
+
+      res.json({
+        success: true,
+        message: 'Login de invitado exitoso',
+        user: {
+          username: guestUser.username,
+          name: guestUser.name,
+          role: guestUser.role
+        }
+      });
+    } catch (error) {
+      Logger.error('❌ Error en login de invitado:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor'
+      });
+    }
+  }
+
+  /**
    * Procesa el logout
    * @param {Object} req - Request de Express
    * @param {Object} res - Response de Express

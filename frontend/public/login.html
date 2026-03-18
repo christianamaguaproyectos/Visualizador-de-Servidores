@@ -21,7 +21,6 @@
   <main class="login-scene">
     <section class="glass-panel" aria-label="Panel principal de acceso">
       <div class="glass-reflection" aria-hidden="true"></div>
-      <div class="glass-divider" aria-hidden="true"></div>
 
       <div class="panel-left">
         <div class="login-header">
@@ -109,6 +108,10 @@
             <span id="btnText">Iniciar Sesión</span>
             <span id="btnLoader" class="loader" style="display: none;"></span>
           </button>
+
+          <button type="button" id="guestLogin" class="btn-guest btn-guest-inline">Iniciar sesión de invitado</button>
+
+          <p id="networkStatus" class="network-inline-status" aria-live="polite"></p>
         </form>
 
         <div class="login-footer">
@@ -116,62 +119,8 @@
           <p class="help-text">¿Problemas para iniciar sesión? Contacta al administrador del sistema.</p>
         </div>
       </div>
-
-      <aside class="panel-right" aria-label="Módulo de acceso seguro">
-        <div class="secure-module">
-          <div class="secure-title">
-            <span class="secure-icon" aria-hidden="true">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path
-                  d="M12 2L19 5.2V10.7C19 16.1 15.6 20.9 12 22C8.4 20.9 5 16.1 5 10.7V5.2L12 2Z"
-                  stroke="currentColor" stroke-width="1.8" />
-                <path d="M9.6 11.6L11.3 13.3L14.7 9.9" stroke="currentColor" stroke-width="1.8"
-                  stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </span>
-            <h3>Acceso Seguro</h3>
-          </div>
-
-          <ul class="secure-list">
-            <li>
-              <span class="check-icon" aria-hidden="true">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M5 12.5L10 17L19 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                    stroke-linejoin="round" />
-                </svg>
-              </span>
-              Concxión cifrada
-            </li>
-            <li>
-              <span class="check-icon" aria-hidden="true">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M5 12.5L10 17L19 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                    stroke-linejoin="round" />
-                </svg>
-              </span>
-              Autenticación requerida
-            </li>
-            <li>
-              <span class="check-icon" aria-hidden="true">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M5 12.5L10 17L19 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                    stroke-linejoin="round" />
-                </svg>
-              </span>
-              Sesión automática
-            </li>
-          </ul>
-
-          <div class="network-status" aria-live="polite">
-            <span id="networkStatus"></span>
-          </div>
-
-          <button type="button" id="guestLogin" class="btn-guest">Iniciar sesión de invitado</button>
-        </div>
-      </aside>
     </section>
   </main>
-  <div class="corner-star" aria-hidden="true">✦</div>
 
   <script>
     // Password visibility toggle
@@ -187,15 +136,32 @@
       }
     });
 
-    // Acceso asistido para invitado (no inicia sesión automáticamente)
-    document.getElementById('guestLogin').addEventListener('click', () => {
-      const usernameInput = document.getElementById('username');
-      const passwordInput = document.getElementById('password');
-      const errorMessage = document.getElementById('errorMessage');
-
-      usernameInput.value = 'invitado';
-      passwordInput.focus();
+    // Login de invitado sin contraseña
+    document.getElementById('guestLogin').addEventListener('click', async () => {
+      const guestBtn = document.getElementById('guestLogin');
       errorMessage.style.display = 'none';
+      guestBtn.disabled = true;
+
+      try {
+        const response = await fetch('/api/auth/login-guest', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          window.location.href = '/';
+        } else {
+          showError(data.message || 'No fue posible iniciar sesión como invitado');
+        }
+      } catch (error) {
+        showError('Error de conexión. Verifica tu red e intenta nuevamente.');
+      } finally {
+        guestBtn.disabled = false;
+      }
     });
 
     // Manejo del formulario de login
@@ -259,19 +225,24 @@
     // Verificar estado de red (opcional)
     async function checkNetworkStatus() {
       const networkStatus = document.getElementById('networkStatus');
+      if (!networkStatus) {
+        return;
+      }
+
+      networkStatus.classList.remove('status-online', 'status-warning', 'status-offline');
 
       try {
         const response = await fetch('/api/meta');
         if (response.ok) {
           networkStatus.textContent = 'Servidor en línea';
-          networkStatus.className = 'status-online';
+          networkStatus.classList.add('status-online');
         } else {
           networkStatus.textContent = 'Servidor en mantenimiento';
-          networkStatus.className = 'status-warning';
+          networkStatus.classList.add('status-warning');
         }
       } catch (error) {
         networkStatus.textContent = 'Sin conexión al servidor';
-        networkStatus.className = 'status-offline';
+        networkStatus.classList.add('status-offline');
       }
     }
 
