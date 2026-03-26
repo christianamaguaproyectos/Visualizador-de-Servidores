@@ -220,7 +220,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   };
 
-  const PHYSICAL_PAGE_SIZES = [4, 6, 8, 10, 12];
+  const PHYSICAL_PAGE_SIZES = [4, 5, 6, 8, 10, 12];
   const storedRackPageSize = Number(localStorage.getItem('physicalRackPageSize') || 6);
   const physicalPager = {
     page: 1,
@@ -1353,6 +1353,167 @@ document.addEventListener('DOMContentLoaded', function () {
     };
   }
 
+  // ====== RACK ORDERING (persistido en localStorage) ======
+  function getCustomRackOrder() {
+    try {
+      const stored = localStorage.getItem('physicalRackOrder');
+      if (stored) return JSON.parse(stored);
+    } catch (_) { }
+    return null;
+  }
+
+  function saveCustomRackOrder(orderArray) {
+    localStorage.setItem('physicalRackOrder', JSON.stringify(orderArray));
+  }
+
+  function applyCustomRackOrder(racks) {
+    const order = getCustomRackOrder();
+    if (!order || !Array.isArray(order) || order.length === 0) return racks;
+    const rackMap = new Map();
+    racks.forEach(r => rackMap.set(r.name, r));
+    const ordered = [];
+    // Primero los que están en el orden personalizado
+    order.forEach(name => {
+      if (rackMap.has(name)) {
+        ordered.push(rackMap.get(name));
+        rackMap.delete(name);
+      }
+    });
+    // Luego los nuevos que no estaban en el orden
+    rackMap.forEach(r => ordered.push(r));
+    return ordered;
+  }
+
+  function openRackOrderModal(racks) {
+    // Crear o reutilizar modal
+    let modal = document.getElementById('rackOrderModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'rackOrderModal';
+      modal.className = 'modal-overlay';
+      document.body.appendChild(modal);
+    }
+
+    const pageSize = physicalPager.size;
+    const totalPages = Math.ceil(racks.length / pageSize);
+
+    const renderList = () => {
+      const items = racks.map((r, idx) => {
+        const page = Math.floor(idx / pageSize) + 1;
+        const isPageStart = idx % pageSize === 0;
+        const pageDivider = isPageStart ? `<div class="rack-order-divider">📄 Página ${page}</div>` : '';
+        return `${pageDivider}<div class="rack-order-item" draggable="true" data-rack-idx="${idx}" data-rack-name="${encodeURIComponent(r.name)}">
+          <span class="rack-order-handle">☰</span>
+          <span class="rack-order-name">${fmt(r.name)}</span>
+          <span class="rack-order-page">Pág ${page}</span>
+          <span class="rack-order-servers">${r.servers?.length || 0} srv</span>
+          <span class="rack-order-arrows">
+            <button type="button" class="rack-order-btn" data-move="up" ${idx === 0 ? 'disabled' : ''} title="Subir">▲</button>
+            <button type="button" class="rack-order-btn" data-move="down" ${idx === racks.length - 1 ? 'disabled' : ''} title="Bajar">▼</button>
+          </span>
+        </div>`;
+      }).join('');
+      return items;
+    };
+
+    modal.innerHTML = `
+      <div class="modal-content rack-order-modal" role="dialog" aria-modal="true">
+        <div class="modal-header">
+          <h3>🔧 Organizar Racks en Páginas</h3>
+          <button class="modal-close" id="rackOrderClose">✕ Cerrar</button>
+        </div>
+        <div class="modal-body">
+          <p class="rack-order-hint">Arrastra los racks o usa las flechas ▲▼ para cambiar su orden. Los racks se distribuirán en páginas de <strong>${pageSize}</strong> racks.</p>
+          <div class="rack-order-list" id="rackOrderList">
+            ${renderList()}
+          </div>
+          <div class="rack-order-actions">
+            <button type="button" class="btn btn-secondary" id="rackOrderReset">🔄 Restablecer orden original</button>
+            <button type="button" class="btn btn-primary" id="rackOrderSave">💾 Guardar orden</button>
+          </div>
+        </div>
+      </div>
+    `;
+    modal.style.display = 'flex';
+
+    // Close
+    document.getElementById('rackOrderClose')?.addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+
+    // Move up/down with arrows
+    const list = document.getElementById('rackOrderList');
+    list?.addEventListener('click', (e) => {
+      const btn = e.target.closest('.rack-order-btn');
+      if (!btn) return;
+      const item = btn.closest('.rack-order-item');
+      const idx = Number(item?.getAttribute('data-rack-idx'));
+      const dir = btn.getAttribute('data-move');
+      if (dir === 'up' && idx > 0) {
+        [racks[idx - 1], racks[idx]] = [racks[idx], racks[idx - 1]];
+      } else if (dir === 'down' && idx < racks.length - 1) {
+        [racks[idx], racks[idx + 1]] = [racks[idx + 1], racks[idx]];
+      }
+      list.innerHTML = renderList();
+    });
+
+    // Drag and drop
+    let dragIdx = null;
+    list?.addEventListener('dragstart', (e) => {
+      const item = e.target.closest('.rack-order-item');
+      if (!item) return;
+      dragIdx = Number(item.getAttribute('data-rack-idx'));
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+
+    list?.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const item = e.target.closest('.rack-order-item');
+      if (item) {
+        list.querySelectorAll('.rack-order-item').forEach(el => el.classList.remove('drop-target'));
+        item.classList.add('drop-target');
+      }
+    });
+
+    list?.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const item = e.target.closest('.rack-order-item');
+      if (!item || dragIdx === null) return;
+      const dropIdx = Number(item.getAttribute('data-rack-idx'));
+      if (dragIdx !== dropIdx) {
+        const [moved] = racks.splice(dragIdx, 1);
+        racks.splice(dropIdx, 0, moved);
+      }
+      dragIdx = null;
+      list.querySelectorAll('.rack-order-item').forEach(el => el.classList.remove('dragging', 'drop-target'));
+      list.innerHTML = renderList();
+    });
+
+    list?.addEventListener('dragend', () => {
+      dragIdx = null;
+      list.querySelectorAll('.rack-order-item').forEach(el => el.classList.remove('dragging', 'drop-target'));
+    });
+
+    // Save
+    document.getElementById('rackOrderSave')?.addEventListener('click', () => {
+      const newOrder = racks.map(r => r.name);
+      saveCustomRackOrder(newOrder);
+      modal.style.display = 'none';
+      showToast('Orden de racks guardado');
+      renderHome();
+    });
+
+    // Reset
+    document.getElementById('rackOrderReset')?.addEventListener('click', () => {
+      localStorage.removeItem('physicalRackOrder');
+      modal.style.display = 'none';
+      showToast('Orden de racks restablecido');
+      renderHome();
+    });
+  }
+
   function renderPhysicalPaginationControls(pager) {
     const from = pager.total === 0 ? 0 : pager.start + 1;
     const to = pager.end;
@@ -1360,12 +1521,18 @@ document.addEventListener('DOMContentLoaded', function () {
       .map((size) => `<option value="${size}" ${size === physicalPager.size ? 'selected' : ''}>${size}</option>`)
       .join('');
 
+    const hasCustomOrder = !!getCustomRackOrder();
+
     return `
       <div class="rack-pagination" id="rackPagination">
         <div class="rack-pagination__left">
           <label for="rackPageSize" class="rack-pagination__label">Racks por pagina</label>
           <select id="rackPageSize" class="rack-pagination__select">${options}</select>
           <span class="rack-pagination__summary">Mostrando ${from}-${to} de ${pager.total}</span>
+        </div>
+        <div class="rack-pagination__center">
+          <button type="button" class="btn btn-secondary btn-sm" id="btnOrganizarRacks" title="Reorganizar racks entre páginas">🔧 Organizar Racks</button>
+          ${hasCustomOrder ? '<span class="rack-order-badge" title="Orden personalizado activo">✨ Orden personalizado</span>' : ''}
         </div>
         <div class="rack-pagination__right">
           <button type="button" class="btn btn-secondary btn-sm" data-rack-page-action="first" ${pager.page <= 1 ? 'disabled' : ''}>Primera</button>
@@ -1456,8 +1623,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
       try { document.getElementById('content').style.display = 'block'; } catch (_) { }
 
-      const pager = getPhysicalRackPagination(racks.length);
-      const visibleRacks = racks.slice(pager.start, pager.end).map((rack, idx) => ({
+      // Aplicar orden personalizado de racks
+      const orderedRacks = applyCustomRackOrder([...racks]);
+      const pager = getPhysicalRackPagination(orderedRacks.length);
+      const visibleRacks = orderedRacks.slice(pager.start, pager.end).map((rack, idx) => ({
         rack,
         globalIndex: pager.start + idx
       }));
@@ -1561,6 +1730,12 @@ document.addEventListener('DOMContentLoaded', function () {
           pageSize: selected
         });
         renderHome();
+      });
+
+      // Botón para organizar racks
+      document.getElementById('btnOrganizarRacks')?.addEventListener('click', () => {
+        const orderedCopy = applyCustomRackOrder([...racks]);
+        openRackOrderModal(orderedCopy);
       });
 
       const renderMs = Math.max(0, performance.now() - physicalRenderStart);
@@ -1786,6 +1961,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
         window.addEventListener('resize', onResize, { passive: true });
 
+      } catch (_) { }
+
+      // Vincular scroll wheel en rack-units para que funcione con y sin etiquetas
+      try {
+        document.querySelectorAll('.rack').forEach(rackEl => {
+          const unitsContainer = rackEl.querySelector('.rack-units');
+          const unitsInner = rackEl.querySelector('.rack-units-inner');
+          if (unitsContainer && unitsInner && !unitsContainer.dataset.wheelBound) {
+            unitsContainer.addEventListener('wheel', (event) => {
+              const canScroll = unitsInner.scrollHeight > unitsInner.clientHeight;
+              if (!canScroll) return;
+              unitsInner.scrollTop += event.deltaY;
+              event.preventDefault();
+            }, { passive: false });
+            unitsContainer.dataset.wheelBound = '1';
+          }
+        });
       } catch (_) { }
 
       wirePhysicalUX();
@@ -3262,6 +3454,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const units = [];
 
     const totalUnits = 42;
+    // Rack 1 muestra numeración 1→42; los demás 42→1
+    const isReversedRack = /^rack\s*1$/i.test((rackName || '').trim());
 
     const serverHeight = 2; // Cada servidor ocupa 2U
 
@@ -3595,7 +3789,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
           <div class="unit-led ${statusColor}"></div>
 
-          <div class="unit-label">${String(totalUnits - i).padStart(2, '0')}</div>
+          <div class="unit-label">${String(isReversedRack ? (i + 1) : (totalUnits - i)).padStart(2, '0')}</div>
 
           <div class="unit-led ${statusColor}"></div>
 
