@@ -8,6 +8,9 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Validación de entorno (debe ejecutarse primero)
+import env from './src/config/env.js';
+
 // Configuración y constantes
 import { APP_CONFIG } from './src/config/constants.js';
 
@@ -29,6 +32,7 @@ import { requireAuth, requireAdmin, requireSuperAdmin, injectUser } from './src/
 import { createRateLimiter } from './src/middleware/rateLimitMiddleware.js';
 import { attachRequestContext, structuredApiRequestLogger } from './src/middleware/requestContextMiddleware.js';
 import { securityHeadersMiddleware } from './src/middleware/securityHeadersMiddleware.js';
+import { errorHandler } from './src/middleware/errorHandler.js';
 
 // Utilidades
 import Logger from './src/utils/logger.js';
@@ -129,12 +133,11 @@ class Application {
     });
 
     // API de autenticación
-    this.app.post('/api/auth/login', this.authRateLimiter, (req, res) => authController.login(req, res));
-    this.app.post('/api/auth/login-guest', this.authRateLimiter, (req, res) => authController.loginGuest(req, res));
-    this.app.post('/api/auth/forgot-password', this.authRateLimiter, (req, res) => authController.forgotPassword(req, res));
-    this.app.post('/api/auth/reset-password', this.authRateLimiter, (req, res) => authController.resetPassword(req, res));
-    this.app.post('/api/auth/logout', (req, res) => authController.logout(req, res));
-    this.app.get('/api/auth/session', (req, res) => authController.checkSession(req, res));
+    this.app.post('/api/auth/login', this.authRateLimiter, (req, res, next) => authController.login(req, res, next));
+    this.app.post('/api/auth/forgot-password', this.authRateLimiter, (req, res, next) => authController.forgotPassword(req, res, next));
+    this.app.post('/api/auth/reset-password', this.authRateLimiter, (req, res, next) => authController.resetPassword(req, res, next));
+    this.app.post('/api/auth/logout', (req, res, next) => authController.logout(req, res, next));
+    this.app.get('/api/auth/session', (req, res, next) => authController.checkSession(req, res, next));
 
     // Archivos estáticos públicos (CSS, JS, imágenes)
     // Permitir acceso a archivos de login sin autenticación
@@ -176,15 +179,15 @@ class Application {
     this.app.use(express.static(path.join(__dirname, '..', 'frontend', 'public')));
 
     // API de datos (cualquier usuario autenticado)
-    this.app.get('/api/data', (req, res) => dataController.getData(req, res));
-    this.app.get('/api/racks', (req, res) => dataController.getRacks(req, res));
-    this.app.get('/api/servers', (req, res) => dataController.getServers(req, res));
+    this.app.get('/api/data', (req, res, next) => dataController.getData(req, res, next));
+    this.app.get('/api/racks', (req, res, next) => dataController.getRacks(req, res, next));
+    this.app.get('/api/servers', (req, res, next) => dataController.getServers(req, res, next));
     
     // API de metadata (cualquier usuario autenticado)
-    this.app.get('/api/meta', (req, res) => metaController.getMeta(req, res));
+    this.app.get('/api/meta', (req, res, next) => metaController.getMeta(req, res, next));
     
     // API de usuario actual
-    this.app.get('/api/auth/user', (req, res) => authController.getCurrentUser(req, res));
+    this.app.get('/api/auth/user', (req, res, next) => authController.getCurrentUser(req, res, next));
 
     // API de clusters virtuales
     this.app.use('/api/clusters', clusterRoutes);
@@ -201,30 +204,31 @@ class Application {
     // ========================================
 
     // CRUD de Servidores (solo admin)
-    this.app.post('/api/servers', requireAdmin, (req, res) => dataController.createServer(req, res));
-    this.app.put('/api/servers/:id', requireAdmin, (req, res) => dataController.updateServer(req, res));
-    this.app.delete('/api/servers/:id', requireAdmin, (req, res) => dataController.deleteServer(req, res));
-    this.app.put('/api/servers/:id/move', requireAdmin, (req, res) => dataController.moveServer(req, res));
-    this.app.put('/api/servers/:id/reposition', requireAdmin, (req, res) => dataController.repositionServer(req, res));
-    this.app.post('/api/servers/swap', requireAdmin, (req, res) => dataController.swapServers(req, res));
+    this.app.post('/api/servers', requireAdmin, (req, res, next) => dataController.createServer(req, res, next));
+    this.app.put('/api/servers/:id', requireAdmin, (req, res, next) => dataController.updateServer(req, res, next));
+    this.app.delete('/api/servers/:id', requireAdmin, (req, res, next) => dataController.deleteServer(req, res, next));
+    this.app.put('/api/servers/:id/move', requireAdmin, (req, res, next) => dataController.moveServer(req, res, next));
+    this.app.put('/api/servers/:id/reposition', requireAdmin, (req, res, next) => dataController.repositionServer(req, res, next));
+    this.app.post('/api/servers/swap', requireAdmin, (req, res, next) => dataController.swapServers(req, res, next));
 
     // CRUD de Racks (solo admin)
-    this.app.post('/api/racks', requireAdmin, (req, res) => rackController.createRack(req, res));
-    this.app.get('/api/racks/:id', (req, res) => rackController.getRackDetails(req, res));
-    this.app.put('/api/racks/:id', requireAdmin, (req, res) => rackController.updateRack(req, res));
-    this.app.delete('/api/racks/:id', requireAdmin, (req, res) => rackController.deleteRack(req, res));
-    this.app.delete('/api/racks/by-name/:name', requireAdmin, (req, res) => rackController.deleteRackByName(req, res));
+    this.app.post('/api/racks', requireAdmin, (req, res, next) => rackController.createRack(req, res, next));
+    this.app.get('/api/racks/:id', (req, res, next) => rackController.getRackDetails(req, res, next));
+    this.app.put('/api/racks/:id', requireAdmin, (req, res, next) => rackController.updateRack(req, res, next));
+    this.app.delete('/api/racks/:id', requireAdmin, (req, res, next) => rackController.deleteRack(req, res, next));
+    this.app.delete('/api/racks/by-name/:name', requireAdmin, (req, res, next) => rackController.deleteRackByName(req, res, next));
 
     // CRUD de Usuarios (solo admin)
-    this.app.get('/api/users', (req, res) => userController.getAllUsers(req, res));
-    this.app.get('/api/users/me', (req, res) => userController.getMyProfile(req, res));
-    this.app.post('/api/users', (req, res) => userController.createUser(req, res));
-    this.app.put('/api/users/:id', (req, res) => userController.updateUser(req, res));
-    this.app.post('/api/users/:id/change-password', (req, res) => userController.changePassword(req, res));
-    this.app.delete('/api/users/:id', (req, res) => userController.deleteUser(req, res));
+    this.app.get('/api/users', (req, res, next) => userController.getAllUsers(req, res, next));
+    this.app.get('/api/users/me', (req, res, next) => userController.getMyProfile(req, res, next));
+    this.app.post('/api/users', (req, res, next) => userController.createUser(req, res, next));
+    this.app.put('/api/users/:id', (req, res, next) => userController.updateUser(req, res, next));
+    this.app.post('/api/users/:id/change-password', (req, res, next) => userController.changePassword(req, res, next));
+    this.app.delete('/api/users/:id', (req, res, next) => userController.deleteUser(req, res, next));
+    this.app.delete('/api/users/:id/permanent', (req, res, next) => userController.permanentlyDeleteUser(req, res, next));
 
     // SSE (Server-Sent Events) - todos los usuarios autenticados
-    this.app.get('/events', (req, res) => sseService.addClient(req, res));
+    this.app.get('/events', (req, res, next) => sseService.addClient(req, res, next));
 
     // ========================================
     // RUTAS DE MONITOREO (opt-in)
@@ -234,6 +238,11 @@ class Application {
         this.app.use('/api/monitoring', monitoringRouter);
       }).catch(() => {});
     }
+
+    // ========================================
+    // ERROR HANDLER CENTRALIZADO (debe ir AL FINAL)
+    // ========================================
+    this.app.use(errorHandler);
   }
 
   /**

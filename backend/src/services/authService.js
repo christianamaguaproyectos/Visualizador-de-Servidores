@@ -222,6 +222,33 @@ class AuthService {
   }
 
   /**
+   * Elimina permanentemente un usuario de la base de datos
+   * @param {number} userId - ID del usuario a eliminar
+   * @returns {Promise<boolean>} true si se eliminó correctamente
+   */
+  async permanentlyDeleteUser(userId) {
+    try {
+      return await withClient(async (client) => {
+        const result = await client.query(
+          'DELETE FROM users.users WHERE id = $1 RETURNING username',
+          [userId]
+        );
+
+        if (result.rows.length > 0) {
+          Logger.success(`✅ Usuario '${result.rows[0].username}' eliminado permanentemente`);
+          return true;
+        } else {
+          Logger.warn(`⚠️  Usuario con ID ${userId} no encontrado`);
+          return false;
+        }
+      });
+    } catch (error) {
+      Logger.error('❌ Error al eliminar usuario permanentemente:', error.message);
+      return false;
+    }
+  }
+
+  /**
    * Cambia la contraseña de un usuario
    * @param {number} userId - ID del usuario
    * @param {string} newPassword - Nueva contraseña en texto plano

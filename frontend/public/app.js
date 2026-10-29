@@ -56,7 +56,7 @@ document.addEventListener('DOMContentLoaded', function () {
   function showReadOnlyToast() {
     if (readOnlyNoticeShown) return;
     readOnlyNoticeShown = true;
-    showToast('Modo invitado: solo vista general. No puedes abrir ni modificar racks, servidores o VMs.', 'warning');
+    showToast('Modo solo lectura: solo vista general. No puedes abrir ni modificar racks, servidores o VMs.', 'warning');
     setTimeout(() => { readOnlyNoticeShown = false; }, 2200);
   }
 
@@ -175,6 +175,8 @@ document.addEventListener('DOMContentLoaded', function () {
         return discos.map(d => {
 
           const parts = [];
+
+          if (d.slot) parts.push(`Slot ${d.slot}:`);
 
           if (d.cantidad) parts.push(`${d.cantidad}x`);
 
@@ -365,6 +367,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
   const btnAddRack = document.getElementById('btnAddRack');
 
+  // Marca si el formulario de servidor tiene cambios sin guardar (evita perder
+  // trabajo al cerrar sin guardar). Se resetea al abrir el modal.
+  let serverFormDirty = false;
+
 
 
   function openServerModal(initialRackName) {
@@ -451,6 +457,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     serverModal.style.display = 'flex';
+
+    serverFormDirty = false;
 
   }
 
@@ -634,19 +642,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-    // Normalizar estado para el select (CRITICO, NORMAL, ACTIVO)
+    // Normalizar estado para el select (CRITICO, NO_CRITICO, MANTENIMIENTO)
 
-    const estadoVal = (server.estado || 'ACTIVO').toString().toUpperCase()
+    const estadoVal = (server.estado || 'NO_CRITICO').toString().toUpperCase()
 
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-    let normalizedEstado = 'ACTIVO';
+    let normalizedEstado = 'NO_CRITICO';
 
     if (estadoVal.includes('CRITICO') || estadoVal.includes('CRIT')) normalizedEstado = 'CRITICO';
 
-    else if (estadoVal.includes('NORMAL')) normalizedEstado = 'NORMAL';
-
-    else if (estadoVal.includes('ACTIVO')) normalizedEstado = 'ACTIVO';
+    else if (estadoVal.includes('MANT')) normalizedEstado = 'MANTENIMIENTO';
 
     setVal('serverEstado', normalizedEstado);
 
@@ -701,6 +707,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
     modal.style.display = 'flex';
+
+    serverFormDirty = false;
 
   }
 
@@ -782,7 +790,40 @@ document.addEventListener('DOMContentLoaded', function () {
 
   document.getElementById('serverFormCancel')?.addEventListener('click', closeServerModal);
 
+  // ---- Guarda de cambios sin guardar en el formulario de servidor ----
+  // Cualquier edición del usuario (incluidos los campos de discos, que están
+  // dentro del form) marca el formulario como modificado.
+  serverForm?.addEventListener('input', () => { serverFormDirty = true; });
+  serverForm?.addEventListener('change', () => { serverFormDirty = true; });
+  // Agregar/quitar filas de disco es una modificación estructural.
+  document.getElementById('btnAddDisco')?.addEventListener('click', () => { serverFormDirty = true; });
+  serverForm?.addEventListener('click', (e) => {
+    if (e.target.closest('.disco-remove')) serverFormDirty = true;
+  });
 
+  // Intercepta el cierre/cancelar. El listener se registra en el ANCESTRO
+  // (serverModal) en fase de captura, de modo que corre antes que los handlers
+  // de cierre de los botones. Si hay cambios, pregunta si guardar o descartar.
+  serverModal?.addEventListener('click', (e) => {
+    if (!e.target.closest('#serverModalClose, #serverFormCancel')) return;
+    if (!serverFormDirty) return; // sin cambios: cerrar normal
+    e.preventDefault();
+    e.stopImmediatePropagation(); // impide que el modal se cierre todavía
+    confirmAction({
+      title: 'Cambios sin guardar',
+      message: 'Tienes cambios sin guardar en este formulario. ¿Deseas guardarlos antes de cerrar?',
+      confirmText: '💾 Guardar',
+      cancelText: 'Descartar',
+      tone: 'primary'
+    }).then((guardar) => {
+      serverFormDirty = false;
+      if (guardar) {
+        serverForm?.requestSubmit(); // dispara el guardado completo
+      } else {
+        closeServerModal();
+      }
+    });
+  }, true);
 
   // Note: Modal no longer closes on outside click - only via X button or Cancel
 
@@ -816,7 +857,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
       const so = document.getElementById('serverSO')?.value?.trim();
 
-      const estado = document.getElementById('serverEstado')?.value || 'ACTIVO';
+      const estado = document.getElementById('serverEstado')?.value || 'NO_CRITICO';
 
       const usuario = document.getElementById('serverUsuario')?.value?.trim();
 
@@ -1282,15 +1323,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (e.includes('critico') || e.includes('crit')) return 'critico';
 
-    if (e.includes('activo') || e === 'si' || e === 'yes') return 'activo';
-
-    if (e.includes('normal') || e.includes('ok')) return 'normal';
-
-    if (e.includes('inactivo') || e === 'no') return 'inactivo';
-
     if (e.includes('mant')) return 'mantenimiento';
 
-    return 'activo'; // Por defecto
+    if (e.includes('inactivo') || e === 'no' || e === 'apagado') return 'inactivo';
+
+    return 'no_critico'; // Por defecto
 
   }
 
@@ -1299,8 +1336,7 @@ document.addEventListener('DOMContentLoaded', function () {
       totalServers: servers.length,
       criticos: 0,
       mantenimiento: 0,
-      inactivos: 0,
-      activos: 0,
+      noCriticos: 0,
       occupiedUnits: 0
     };
 
@@ -1308,8 +1344,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const estado = normalizeEstado(server?.estado || server?.activo || '');
       if (estado === 'critico') summary.criticos += 1;
       else if (estado === 'mantenimiento') summary.mantenimiento += 1;
-      else if (estado === 'inactivo') summary.inactivos += 1;
-      else summary.activos += 1;
+      else summary.noCriticos += 1;
 
       const units = Number(server?.rackUnits || server?.rack_units || 2);
       summary.occupiedUnits += Number.isFinite(units) && units > 0 ? units : 2;
@@ -1644,7 +1679,7 @@ document.addEventListener('DOMContentLoaded', function () {
           const modelPreview = getRackModelPreview(r.servers || []);
           return `
 
-          <div class="rack" data-view="rack" data-idx="${i}" data-name="${encodeURIComponent(r.name)}" data-rack-name="${encodeURIComponent(r.name)}" title="Ver detalle de ${fmt(r.name)}">
+          <div class="rack" data-view="rack" data-idx="${DATA.racks.findIndex(rack => rack.name === r.name)}" data-name="${encodeURIComponent(r.name)}" data-rack-name="${encodeURIComponent(r.name)}" title="Ver detalle de ${fmt(r.name)}">
 
             <div class="rack-chassis">
 
@@ -1674,7 +1709,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
                   <div class="rack-content__stats">
                     <span class="rack-kpi rack-kpi--critical">🔴 ${summary.criticos}</span>
-                    <span class="rack-kpi rack-kpi--active">🟢 ${summary.activos}</span>
+                    <span class="rack-kpi rack-kpi--active">🟢 ${summary.noCriticos}</span>
                     <span class="rack-kpi rack-kpi--maint">🛠️ ${summary.mantenimiento}</span>
                   </div>
 
@@ -3251,7 +3286,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
       const estado = normalizeEstado(vm.estado || '');
 
-      if (vmFilter !== 'all' && estado !== vmFilter) return false;
+      if (vmFilter !== 'all') {
+        if (vmFilter === 'no_critico') {
+          if (estado === 'critico' || estado === 'mantenimiento') return false;
+        } else if (estado !== vmFilter) {
+          return false;
+        }
+      }
 
       if (vmSearch) {
 
@@ -3783,7 +3824,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
       units.push(`
 
-      <div class="rack-unit ${isServer ? 'active' : 'inactive'} ${isFirstUnitOfServer ? 'server-top' : ''} ${srvParity}" ${tooltip} ${dataAttrs} ${draggableAttr} ${serverNameAttr} data-estado="${estadoAttr}">
+      <div class="rack-unit ${isServer ? 'active' : 'inactive'} ${isFirstUnitOfServer ? 'server-top' : ''} ${srvParity}" ${tooltip} ${dataAttrs} ${draggableAttr} ${serverNameAttr} data-position="${totalUnits - i}" data-estado="${estadoAttr}">
 
         <div class="unit-panel">
 
@@ -4954,7 +4995,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
         let match = true;
         if (q) match = name.includes(q) || num.includes(q);
-        if (isServer && f !== 'all') match = match && estado === f;
+        if (isServer && f !== 'all') {
+          if (f === 'no_critico') {
+            match = match && estado !== 'critico' && estado !== 'mantenimiento';
+          } else {
+            match = match && estado === f;
+          }
+        }
 
         if (f !== 'all' && isServer) {
           u.classList.toggle('dim', !match);

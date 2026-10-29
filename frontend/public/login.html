@@ -109,11 +109,7 @@
             <span id="btnLoader" class="loader" style="display: none;"></span>
           </button>
 
-          <button type="button" id="guestLogin" class="btn-guest btn-guest-inline">Iniciar sesión de invitado</button>
-
           <button type="button" id="forgotPasswordBtn" class="btn-forgot">¿Olvidaste tu contraseña?</button>
-
-          <p id="networkStatus" class="network-inline-status" aria-live="polite"></p>
         </form>
 
         <div class="login-footer">
@@ -135,34 +131,6 @@
       } else {
         pwd.type = 'password';
         icon.innerHTML = '<path d="M2 12s3.8-7 10-7 10 7 10 7-3.8 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="2.8"/>';
-      }
-    });
-
-    // Login de invitado sin contraseña
-    document.getElementById('guestLogin').addEventListener('click', async () => {
-      const guestBtn = document.getElementById('guestLogin');
-      errorMessage.style.display = 'none';
-      guestBtn.disabled = true;
-
-      try {
-        const response = await fetch('/api/auth/login-guest', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-          window.location.href = '/';
-        } else {
-          showError(data.message || 'No fue posible iniciar sesión como invitado');
-        }
-      } catch (error) {
-        showError('Error de conexión. Verifica tu red e intenta nuevamente.');
-      } finally {
-        guestBtn.disabled = false;
       }
     });
 
@@ -282,34 +250,7 @@
       }, 10);
     }
 
-    // Verificar estado de red (opcional)
-    async function checkNetworkStatus() {
-      const networkStatus = document.getElementById('networkStatus');
-      if (!networkStatus) {
-        return;
-      }
-
-      networkStatus.classList.remove('status-online', 'status-warning', 'status-offline');
-
-      try {
-        const response = await fetch('/api/meta');
-        if (response.ok) {
-          networkStatus.textContent = 'Servidor en línea';
-          networkStatus.classList.add('status-online');
-        } else {
-          networkStatus.textContent = 'Servidor en mantenimiento';
-          networkStatus.classList.add('status-warning');
-        }
-      } catch (error) {
-        networkStatus.textContent = 'Sin conexión al servidor';
-        networkStatus.classList.add('status-offline');
-      }
-    }
-
-    // Verificar estado al cargar
-    checkNetworkStatus();
     tryPasswordResetFromUrl();
-    setInterval(checkNetworkStatus, 30000); // Cada 30 segundos
   </script>
 </body>
 

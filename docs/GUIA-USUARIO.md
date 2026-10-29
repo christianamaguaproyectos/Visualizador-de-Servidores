@@ -1,213 +1,297 @@
-# Guía de Usuario - Gestión Web de Servidores
+# 📖 Guía de Usuario — Diagrama de Servidores
+
+> **Última actualización:** Marzo 2026
+
+---
 
 ## Descripción General
 
-El sistema ahora permite gestionar completamente el inventario de servidores y racks directamente desde la interfaz web, sin necesidad de archivos Excel.
-
-## Características Principales
-
-### ✅ Gestión de Servidores
-- **Crear** nuevos servidores con un formulario completo
-- **Editar** servidores existentes desde el detalle de cada rack
-- **Eliminar** servidores con confirmación
-- **Mover** servidores entre racks
-
-### ✅ Gestión de Racks/Hosts
-- **Crear** nuevos racks (físicos) o hosts (virtuales)
-- **Visualizar** detalles de cada rack
-- Los racks se eliminan automáticamente si quedan vacíos
+**Diagrama de Servidores** es una plataforma web para gestionar el inventario de servidores físicos y virtuales de la organización. Ofrece una visualización de racks interactiva, gestión de usuarios con roles, sistema de monitoreo en tiempo real y alertas por correo electrónico.
 
 ---
 
-## Cómo Usar
+## Acceso al Sistema
 
-### 1. Agregar un Servidor
+### Inicio de Sesión
 
-**Desde la Vista de Racks Físicos:**
-1. Haz clic en el botón **"➕ Agregar Servidor"** en el header
+1. Abre el navegador y dirígete a la URL del sistema (ej. `http://192.168.0.108:3000`).
+2. Ingresa tu **usuario** y **contraseña**.
+3. Haz clic en **Iniciar Sesión**.
+
+> 💡 Si es tu primera vez y recibiste un **email de invitación**, haz clic en el enlace del correo para establecer tu contraseña antes de iniciar sesión.
+
+### Roles de Usuario
+
+| Rol        | Permisos                                                            |
+|------------|---------------------------------------------------------------------|
+| **Admin**  | Lectura y escritura: crear, editar, mover y eliminar servidores     |
+| **Viewer** | Solo lectura: consultar datos, no puede modificar nada              |
+| **Superadmin** | Todo lo anterior + gestionar usuarios                          |
+
+### Recuperación de Contraseña
+
+1. En la pantalla de login, haz clic en **"¿Olvidaste tu contraseña?"**.
+2. Ingresa tu usuario o email.
+3. Recibirás un correo con un enlace para restablecer tu contraseña (válido por 30 minutos).
+
+---
+
+## Navegación Principal
+
+La aplicación tiene las siguientes secciones accesibles desde el menú de navegación:
+
+| Página              | Descripción                                                    |
+|---------------------|----------------------------------------------------------------|
+| 🏠 **Inicio**       | Dashboard principal con resumen general                        |
+| 🖥️ **Racks Físicos** | Visualización y gestión de servidores físicos en racks         |
+| 💻 **Virtuales**      | Gestión de máquinas virtuales agrupadas por host/cluster       |
+| 👥 **Usuarios**       | Gestión de usuarios del sistema (solo superadmin)              |
+| 📡 **Monitoreo**      | Panel de monitoreo con checks de disponibilidad y alertas      |
+
+---
+
+## Racks Físicos
+
+### Vista General
+
+Al ingresar a **Racks Físicos** se muestra una grilla horizontal con todos los racks. Cada rack muestra:
+
+- **Nombre** del rack en la parte superior.
+- **Unidades de servidor** representadas visualmente con LEDs de estado:
+  - 🔴 **Rojo** — Servidor **Crítico** (alta prioridad).
+  - 🟢 **Verde** — Servidor **No Crítico** (funcionando con normalidad).
+  - 🟠 **Naranja** — Servidor **En Mantenimiento**.
+  - ⚪ **Gris/Apagado** — Unidad vacía o servidor inactivo.
+- **Etiquetas laterales** con la IP y hostname de cada servidor.
+- **KPIs en la parte inferior**: conteo de servidores críticos, no críticos y en mantenimiento.
+
+### Filtros de Estado
+
+Usa el menú desplegable **"Todos"** en la barra superior para filtrar servidores por estado:
+
+| Filtro             | Muestra                                                 |
+|--------------------|----------------------------------------------------------|
+| **Todos**          | Todos los servidores                                     |
+| **Críticos**       | Solo servidores marcados como críticos                   |
+| **No Críticos**    | Servidores que no son críticos ni en mantenimiento        |
+| **En Mantenimiento** | Solo servidores en mantenimiento                        |
+
+### Paginación
+
+Puedes controlar cuántos racks se muestran a la vez seleccionando entre 3, 5, 10 o todos desde el selector de paginación. También puedes saltar directamente a un rack específico usando el botón **"Ir a Rack"**.
+
+### Ver Detalle de un Rack
+
+Haz clic en cualquier rack para abrir su vista de detalle, que muestra:
+- Lista completa de servidores instalados.
+- Botones de acción: editar, eliminar y mover servidores.
+- Botón **"🗑️ Eliminar Rack"** (solo si no tiene servidores).
+- Botón **"← Volver"** para regresar a la vista general.
+
+### Mover Servidores (Drag & Drop)
+
+Puedes **arrastrar** un servidor de un rack y **soltarlo** en una unidad vacía de otro rack para moverlo visualmente.
+
+---
+
+## Gestión de Servidores
+
+### Agregar un Servidor
+
+1. Haz clic en **"➕ Agregar Servidor"** en la barra superior.
 2. Completa el formulario:
-   - **Nombre** (requerido): ej. `WEB-SERVER-01`
-   - **Rack** (requerido): Selecciona el rack donde se instalará
-   - **IP**: Dirección IP del servidor
-   - **Hostname**: Nombre de host
-   - **Marca**: Dell, HP, etc.
-   - **Modelo**: PowerEdge R740, ProLiant DL380, etc.
-   - **RAM (GB)**: Cantidad de memoria RAM
-   - **Sistema Operativo**: Windows Server 2022, Ubuntu 20.04, etc.
-   - **Estado**: ACTIVO, MANTENIMIENTO, INACTIVO, BACKUP
-3. Haz clic en **"Guardar"**
+   - **Nombre** (requerido): ej. `SRV-WEB-01`
+   - **Rack** (requerido): selecciona el rack destino
+   - **Unidades de Rack**: tamaño en U del servidor (por defecto 2U)
+   - **Posición en Rack**: unidad inicial (opcional, autoasigna si se deja vacío)
+   - **IP / Hostname**: datos de red del servidor
+   - **Marca/Modelo/Tipo/Serie**: datos de hardware
+   - **RAM / Socket / N° por Socket / Procesadores Lógicos**: specs de hardware
+   - **Discos**: agregá discos dinámicamente con el botón "Agregar Disco"
+   - **Sistema Operativo / Software**: datos de software
+   - **Estado (Prioridad)**:
+     - 🔴 **CRÍTICO** — Servidor de alta importancia
+     - 🟢 **NO CRÍTICO** — Servidor normal
+     - 🛠️ **EN MANTENIMIENTO** — Servidor temporal fuera de servicio
+   - **Backup / Fechas**: información de respaldo
+3. Haz clic en **"Guardar"**.
 
-**Desde la Vista de Servidores Virtuales:**
-1. Haz clic en el botón **"➕ Agregar VM"**
-2. El proceso es idéntico al de servidores físicos
-3. En el campo **Rack**, selecciona el host ESXi donde se creará la VM
+### Editar un Servidor
 
-### 2. Editar un Servidor
+1. Ve al detalle de un rack.
+2. Haz clic en **✏️ Editar** junto al servidor.
+3. Modifica los campos necesarios.
+4. Haz clic en **"Guardar"**.
 
-1. Navega a la vista de detalle de un rack (haz clic en cualquier rack)
-2. En la lista de servidores, busca el servidor que deseas editar
-3. Haz clic en el botón **✏️** (editar)
-4. Se abrirá el formulario con los datos actuales del servidor
-5. Modifica los campos que necesites
-6. Haz clic en **"Guardar"**
+### Eliminar un Servidor
 
-### 3. Eliminar un Servidor
+1. Ve al detalle de un rack.
+2. Haz clic en **🗑️ Eliminar** junto al servidor.
+3. Confirma la acción.
 
-1. Navega a la vista de detalle de un rack
-2. En la lista de servidores, busca el servidor que deseas eliminar
-3. Haz clic en el botón **🗑️** (eliminar)
-4. Confirma la acción en el diálogo que aparece
-5. El servidor será eliminado de la base de datos
+> ⚠️ **Esta acción es permanente** y no se puede deshacer.
 
-⚠️ **Advertencia**: Esta acción NO se puede deshacer.
+### Ver Detalle de un Servidor
 
-### 4. Mover un Servidor entre Racks
-
-Hay dos formas de mover un servidor:
-
-**Opción A: Editar el Rack**
-1. Edita el servidor (botón ✏️)
-2. Cambia el valor del campo **Rack**
-3. Guarda los cambios
-
-**Opción B: Función de Mover (en desarrollo)**
-- Se planea implementar drag-and-drop para mover servidores visualmente entre racks
-
-### 5. Crear un Rack/Host
-
-**Para Servidores Físicos:**
-1. Haz clic en el botón **"🗄️ Agregar Rack"** en el header
-2. Ingresa el nombre del rack: ej. `Rack 10`, `Rack A1`
-3. Haz clic en **"Crear Rack"**
-4. El rack aparecerá vacío en la vista principal
-
-**Para Servidores Virtuales:**
-1. Haz clic en el botón **"➕ Agregar Host"** en el header
-2. Ingresa el nombre del host ESXi: ej. `ESXI-HOST-01`, `SRVESXI12`
-3. Haz clic en **"Crear Host"**
-4. El host aparecerá en la vista de clusters
-
-### 6. Visualizar Detalles de Servidor
-
-1. Desde la vista principal de racks, haz clic en cualquier unidad de servidor (las cajas iluminadas en los racks)
-2. O desde la vista de detalle de rack, haz clic en el nombre de cualquier servidor
-3. Se mostrará una vista completa con todos los datos:
-   - Información básica (nombre, IP, hostname)
-   - Hardware (marca, modelo, RAM, procesadores, discos)
-   - Software (sistema operativo, software instalado)
-   - Gestión (estado, backup, fechas de instalación/mantenimiento)
+Haz clic en cualquier servidor dentro de un rack o en las etiquetas laterales para abrir su ficha completa con toda la información registrada.
 
 ---
 
-## API REST
+## Servidores Virtuales
 
-Todas las operaciones se realizan a través de la API REST documentada en [`API-REST.md`](./API-REST.md).
+La vista de **Virtuales** organiza las máquinas virtuales por **hosts ESXi** y/o **clusters**. Funciona de forma similar a la vista física, con las siguientes diferencias:
 
-### Endpoints Principales
+- Las VMs se agrupan por **cluster → host**.
+- Puedes cambiar la vista entre **Clusters**, **Hosts** o **Lista**.
+- Puedes agregar VMs directamente dentro de un host.
 
-```
-POST   /api/servers       - Crear servidor
-GET    /api/servers       - Listar servidores (con filtro ?type=fisicos|virtuales)
-PUT    /api/servers/:id   - Actualizar servidor
-DELETE /api/servers/:id   - Eliminar servidor
-PUT    /api/servers/:id/move - Mover servidor a otro rack
-
-POST   /api/racks         - Crear rack/host
-GET    /api/racks         - Listar racks (con filtro ?type=fisicos|virtuales)
-GET    /api/racks/:name   - Detalle de rack
-PUT    /api/racks/:name   - Actualizar rack
-DELETE /api/racks/:name   - Eliminar rack
-```
+Los filtros de estado (**Críticos**, **No Críticos**, **En Mantenimiento**) también están disponibles en esta vista.
 
 ---
 
-## Validaciones y Restricciones
+## Gestión de Usuarios (Solo Superadmin)
 
-### Al Crear/Editar Servidores:
-- ✅ **Nombre**: Obligatorio
-- ✅ **Rack**: Obligatorio, debe existir en la base de datos
-- ⚠️ **IP**: Opcional pero recomendado
-- ⚠️ **Hostname**: Opcional pero recomendado
+### Acceso
 
-### Al Crear Racks:
-- ✅ **Nombre**: Obligatorio y único
-- ⚠️ Si intentas crear un rack que ya existe, recibirás un error
+Navega a la página **👥 Usuarios** desde el menú de navegación (solo visible para superadmins).
 
-### Al Eliminar:
-- ⚠️ **Servidores**: Se eliminan permanentemente de la base de datos
-- ⚠️ **Racks**: No se pueden eliminar si tienen servidores asignados
-  - Primero debes mover o eliminar todos los servidores del rack
+### Crear un Usuario
+
+1. Haz clic en **"➕ Agregar Usuario"**.
+2. Completa el formulario:
+   - **Usuario** (requerido): nombre único de inicio de sesión.
+   - **Nombre Completo** (requerido).
+   - **Email**: dirección para recibir la invitación.
+   - **Rol**: `Viewer` (solo lectura) o `Admin` (lectura y escritura).
+   - **Contraseña** (opcional):
+     - Si la dejas vacía, se enviará un **email de invitación** al usuario para que establezca su propia contraseña.
+     - Si la completas, el usuario se crea con esa contraseña directamente.
+3. Haz clic en **"Guardar"**.
+
+> 💡 Si el SMTP no está configurado o el email falla, el sistema mostrará un **enlace de invitación** en pantalla para compartirlo manualmente.
+
+### Editar un Usuario
+
+1. Haz clic en **✏️ Editar** junto al usuario.
+2. Modifica nombre, email o rol.
+3. Haz clic en **"Guardar"**.
+
+### Cambiar Contraseña
+
+1. Haz clic en **🔑 Contraseña** junto al usuario.
+2. Ingresa la nueva contraseña (mínimo 6 caracteres).
+3. Confirma la contraseña.
+4. Haz clic en **"Cambiar Contraseña"**.
+
+### Inhabilitar un Usuario
+
+1. Haz clic en **⛔ Inhabilitar** (botón naranja).
+2. Confirma la acción.
+3. El usuario quedará **inactivo** (no podrá iniciar sesión, pero sus datos se conservan).
+
+### Eliminar Permanentemente un Usuario
+
+1. Haz clic en **🗑️ Eliminar** (botón rojo).
+2. Confirma la primera advertencia.
+3. Confirma la segunda advertencia (doble confirmación).
+4. El usuario se **borra permanentemente** de la base de datos.
+
+> ⚠️ **No se puede deshacer.** Todos los datos del usuario se perderán.
+
+---
+
+## Monitoreo
+
+### Panel de Monitoreo
+
+Accede a **📡 Monitoreo** desde el menú. El sistema realiza checks automatizados de disponibilidad (ping, TCP, HTTP) a los servidores registrados.
+
+### Funcionalidades
+
+- **Dashboard de checks**: visualización del estado actual de cada servidor monitoreado.
+- **Incidentes**: registro automático de caídas y recuperaciones.
+- **Ventanas de Mantenimiento**: programa ventanas donde las alertas se silencian.
+- **Alertas por Email**: notificaciones automáticas cuando un servidor cae o se recupera (requiere SMTP configurado).
 
 ---
 
 ## Actualizaciones en Tiempo Real
 
-El sistema utiliza **Server-Sent Events (SSE)** para actualizar los datos automáticamente cuando hay cambios:
+El sistema utiliza **Server-Sent Events (SSE)** para sincronizar datos automáticamente:
 
-- 🔄 Al crear, editar o eliminar un servidor, todos los usuarios conectados verán los cambios
-- 🔄 Al crear o eliminar un rack, la vista se actualiza automáticamente
-- 📊 Los contadores de servidores por rack se actualizan en tiempo real
+- 🔄 Al crear, editar, mover o eliminar un servidor, todos los usuarios verán los cambios.
+- 🔄 Al crear o eliminar un rack, la vista se actualiza.
+- 📊 Los contadores de KPIs se recalculan automáticamente.
+
+---
+
+## Exportar Datos
+
+Haz clic en **"📊 Exportar Excel"** en la barra superior de racks físicos o virtuales para descargar el inventario en formato Excel.
 
 ---
 
 ## Solución de Problemas
 
-### El botón "Agregar Servidor" no responde
-- Verifica que estés en la página correcta (index.html o virtual.html)
-- Abre la consola del navegador (F12) y busca errores JavaScript
-- Recarga la página (F5)
-
-### No veo los racks al seleccionar
-- Verifica que existan racks creados en la base de datos
-- Revisa que el tipo de servidor (físico/virtual) coincida con los racks disponibles
-
-### Error al guardar: "Rack no encontrado"
-- El rack seleccionado no existe en la base de datos
-- Crea primero el rack usando el botón "Agregar Rack"
-
-### Los cambios no se reflejan
-- Verifica la conexión SSE en la consola del navegador
-- Haz clic en el botón "🔄 Actualizar" para forzar la recarga de datos
-- Revisa que el servidor backend esté ejecutándose
+| Problema                                      | Solución                                                     |
+|-----------------------------------------------|--------------------------------------------------------------|
+| El botón "Agregar Servidor" no responde        | Recarga la página (F5). Revisa la consola (F12) para errores |
+| No aparecen los racks en el selector           | Verifica que existan racks creados para el tipo seleccionado  |
+| Error: "Rack no encontrado"                    | Crea primero el rack con "Agregar Rack"                       |
+| Los cambios no se reflejan                     | Haz clic en "🔄 Actualizar" o recarga con Ctrl+F5            |
+| El email de invitación no llega                | Verifica la configuración SMTP en `.env`                      |
+| Al hacer clic en un rack abre otro             | Limpia la caché del navegador (Ctrl+Shift+Delete)             |
 
 ---
 
 ## Consejos y Mejores Prácticas
 
-1. **Nomenclatura consistente**
-   - Usa un esquema de nombres coherente: `SRV-TIPO-NN` (ej. `SRV-WEB-01`)
-   - Para hosts ESXi: `SRVESXI##` (ej. `SRVESXI06`)
-   
-2. **Datos completos**
-   - Aunque IP y Hostname son opcionales, es muy recomendable llenarlos
-   - Esto facilita la identificación y gestión posterior
+1. **Nomenclatura consistente**: Usa esquemas como `SRV-TIPO-NN` (ej. `SRV-WEB-01`) para servidores y `SRVESXI##` para hosts ESXi.
 
-3. **Estados descriptivos**
-   - Usa `ACTIVO` para servidores en producción
-   - Usa `MANTENIMIENTO` durante actualizaciones o reparaciones
-   - Usa `INACTIVO` para servidores apagados temporalmente
-   - Usa `BACKUP` para servidores de respaldo
+2. **Datos completos**: Aunque campos como IP y Hostname son opcionales, llenarlos facilita la identificación y el monitoreo.
 
-4. **Organización por racks**
-   - Agrupa servidores relacionados en el mismo rack
-   - Para virtuales, agrupa VMs por host ESXi
+3. **Estados correctos**: Usa los tres estados disponibles de manera coherente:
+   - **Crítico** — Servidores de producción o alta prioridad.
+   - **No Crítico** — Servidores auxiliares o de baja prioridad.
+   - **En Mantenimiento** — Servidores temporalmente fuera de servicio.
+
+4. **Posición en Rack**: Asignar posiciones exactas ayuda a reflejar la distribución real del datacenter.
+
+5. **Usuarios por invitación**: Crea usuarios sin contraseña para que cada persona establezca su propia credencial de forma segura.
 
 ---
 
-## Próximas Funcionalidades
+## API REST
 
-🚧 **En desarrollo:**
-- Drag-and-drop para mover servidores visualmente entre racks
-- Filtros avanzados por marca, modelo, estado
-- Exportación de inventario a Excel/CSV
-- Historial de cambios
-- Notificaciones por email al realizar cambios críticos
+Documentación técnica completa disponible en [`API-REST.md`](./API-REST.md).
+
+### Endpoints Principales
+
+```
+POST   /api/servers              - Crear servidor
+GET    /api/servers              - Listar servidores (?type=fisicos|virtuales)
+PUT    /api/servers/:id          - Actualizar servidor
+DELETE /api/servers/:id          - Eliminar servidor
+PUT    /api/servers/:id/move     - Mover servidor a otro rack
+PUT    /api/servers/:id/reposition - Cambiar posición en rack
+
+POST   /api/racks                - Crear rack/host
+GET    /api/racks                - Listar racks (?type=fisicos|virtuales)
+DELETE /api/racks/:id            - Eliminar rack
+
+GET    /api/users                - Listar usuarios
+POST   /api/users                - Crear usuario (con invitación)
+PUT    /api/users/:id            - Actualizar usuario
+DELETE /api/users/:id            - Inhabilitar usuario
+DELETE /api/users/:id/permanent  - Eliminar permanentemente
+POST   /api/users/:id/change-password - Cambiar contraseña
+```
 
 ---
 
 ## Soporte
 
 Para reportar problemas o sugerencias:
-1. Revisa la documentación en `/docs`
-2. Consulta los logs del servidor en `/logs`
-3. Contacta al administrador del sistema
+1. Revisa la documentación en `/docs`.
+2. Consulta los logs del servidor en `/logs`.
+3. Contacta al administrador del sistema.

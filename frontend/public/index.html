@@ -18,9 +18,9 @@
         style="padding:6px 10px;border:1px solid #e2e8f0;border-radius:8px;outline:none" />
       <select id="filterStatus" style="padding:6px 10px;border:1px solid #e2e8f0;border-radius:8px">
         <option value="all">Todos</option>
-        <option value="critico">Solo Críticos 🔴</option>
-        <option value="activo">Solo Activos 🟢</option>
-        <option value="normal">Solo Normal ⚪</option>
+        <option value="critico">Críticos 🔴</option>
+        <option value="no_critico">No Críticos 🟢</option>
+        <option value="mantenimiento">En Mantenimiento 🛠️</option>
       </select>
       <button id="btnAddServer" class="home-btn btn btn-primary" title="Agregar nuevo servidor">➕ Agregar Servidor</button>
       <button id="btnAddRack" class="home-btn btn btn-primary" title="Agregar nuevo rack">🗄️ Agregar Rack</button>
@@ -162,8 +162,8 @@
               <input type="text" id="serverDatastore" placeholder="Datastore1" />
             </div>
             <div class="form-field">
-              <label for="serverConexion">Conexión</label>
-              <input type="text" id="serverConexion" placeholder="10Gb Ethernet" />
+              <label for="serverConexion">Conexión / Puerto de Switch</label>
+              <input type="text" id="serverConexion" placeholder="Ej: SW-CORE-01 / Gi1/0/24 (10Gb)" />
             </div>
           </fieldset>
 
@@ -214,8 +214,8 @@
                 <label for="serverEstado">Estado (Prioridad)</label>
                 <select id="serverEstado">
                   <option value="CRITICO">🔴 CRÍTICO (Servidor importante)</option>
-                  <option value="NORMAL" selected>⚪ NORMAL</option>
-                  <option value="ACTIVO">🟢 ACTIVO</option>
+                  <option value="NO_CRITICO" selected>🟢 NO CRÍTICO</option>
+                  <option value="MANTENIMIENTO">🛠️ EN MANTENIMIENTO</option>
                 </select>
               </div>
               <div class="form-field">

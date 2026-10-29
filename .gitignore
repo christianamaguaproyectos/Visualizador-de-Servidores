@@ -44,3 +44,6 @@ __pycache__/
 # Inventario/local data
 Servidores Danec.xlsx
 clusters_dump.csv
+Formulario_Hardening_PCs_y_Servidores.xlsx
+*.xlsx
+*.xls

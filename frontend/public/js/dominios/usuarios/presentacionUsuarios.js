@@ -34,7 +34,8 @@ export function formatearUsuarioFila(user) {
         <div class="user-actions">
           <button class="btn-edit" data-action="editar" data-user-id="${id}">✏️ Editar</button>
           <button class="btn-edit" data-action="password" data-user-id="${id}">🔑 Contraseña</button>
-          <button class="btn-delete" data-action="eliminar" data-user-id="${id}" data-username="${username}">🗑️ Eliminar</button>
+          <button class="btn-delete" style="background:#f59e0b" data-action="inhabilitar" data-user-id="${id}" data-username="${username}">⛔ Inhabilitar</button>
+          <button class="btn-delete" data-action="eliminar_permanente" data-user-id="${id}" data-username="${username}">🗑️ Eliminar</button>
         </div>
       </td>
     </tr>

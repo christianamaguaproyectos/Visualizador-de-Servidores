@@ -1,4 +1,4 @@
-﻿/**
+/**
  * MÃ³dulo para gestionar servidores (CRUD)
  */
 
@@ -15,7 +15,7 @@ class ServerManager {
 
   notifyReadOnly() {
     if (typeof showToast === 'function') {
-      showToast('Modo invitado: solo lectura.', 'warning');
+      showToast('Modo solo lectura.', 'warning');
     }
   }
 
@@ -160,7 +160,7 @@ class ServerManager {
         if (document.getElementById('serverConexion')) document.getElementById('serverConexion').value = server.conexion || '';
         document.getElementById('serverSO').value = server.so || '';
         document.getElementById('serverSoftware').value = server.software || '';
-        document.getElementById('serverEstado').value = server.estado || 'ACTIVO';
+        document.getElementById('serverEstado').value = server.estado || 'NO_CRITICO';
         if (document.getElementById('serverActivo')) document.getElementById('serverActivo').value = server.activo || 'SI';
         if (document.getElementById('serverOperativo')) document.getElementById('serverOperativo').value = server.activo || 'SI';
         if (document.getElementById('serverFechaInstalacion')) document.getElementById('serverFechaInstalacion').value = server.fecha_instalacion || server.fechaInstalacion || '';
@@ -219,7 +219,7 @@ class ServerManager {
     if (document.getElementById('serverConexion')) document.getElementById('serverConexion').value = '';
     document.getElementById('serverSO').value = '';
     document.getElementById('serverSoftware').value = '';
-    document.getElementById('serverEstado').value = 'NORMAL';
+    document.getElementById('serverEstado').value = 'NO_CRITICO';
     if (document.getElementById('serverActivo')) document.getElementById('serverActivo').value = 'SI';
     if (document.getElementById('serverOperativo')) document.getElementById('serverOperativo').value = 'SI';
     if (document.getElementById('serverFechaInstalacion')) document.getElementById('serverFechaInstalacion').value = '';
@@ -295,7 +295,7 @@ class ServerManager {
       conexion: document.getElementById('serverConexion')?.value || null,
       so: document.getElementById('serverSO')?.value || null,
       software: document.getElementById('serverSoftware')?.value || null,
-      estado: document.getElementById('serverEstado')?.value || 'NORMAL',
+      estado: document.getElementById('serverEstado')?.value || 'NO_CRITICO',
       activo: document.getElementById('serverActivo')?.value || document.getElementById('serverOperativo')?.value || 'SI',
       fecha_instalacion: document.getElementById('serverFechaInstalacion')?.value || null,
       fecha_mantenimiento: document.getElementById('serverFechaMantenimiento')?.value || null,

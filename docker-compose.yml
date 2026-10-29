@@ -41,8 +41,9 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      # Conexión a PostgreSQL
+      # Conexión a PostgreSQL (POSTGRES_URL para pg nativo, DATABASE_URL para Prisma)
       POSTGRES_URL: postgresql://${POSTGRES_USER:-diagrama}:${POSTGRES_PASSWORD:-DiagramaServers2025}@postgres:5432/${POSTGRES_DB:-diagrama_servers}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-diagrama}:${POSTGRES_PASSWORD:-DiagramaServers2025}@postgres:5432/${POSTGRES_DB:-diagrama_servers}
       
       # Configuración de la app
       PORT: 3000

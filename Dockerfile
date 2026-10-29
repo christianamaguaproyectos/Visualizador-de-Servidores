@@ -1,7 +1,7 @@
 # Dockerfile para DiagramaServers
 # Aplicación Node.js con frontend estático
 
-FROM node:20-alpine
+FROM node:22-alpine
 
 # Instalar dependencias del sistema para bcrypt y ping
 RUN apk add --no-cache python3 make g++ iputils
@@ -12,8 +12,16 @@ WORKDIR /app
 # Copiar archivos de dependencias primero (para cache de Docker)
 COPY package*.json ./
 
-# Instalar dependencias
+# Copiar schema de Prisma (necesario para prisma generate durante install)
+COPY backend/prisma/ ./backend/prisma/
+
+# Instalar dependencias (incluye @prisma/client)
 RUN npm ci --only=production
+
+# Generar Prisma Client
+ENV DATABASE_URL="postgresql://user:pass@localhost:5432/db"
+RUN npx prisma generate --schema=backend/prisma/schema.prisma
+ENV DATABASE_URL=""
 
 # Copiar el resto del código fuente
 COPY backend/ ./backend/
