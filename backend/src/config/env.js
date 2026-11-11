@@ -53,6 +53,23 @@ function isValidHttpUrl(value) {
 }
 
 /**
+ * Interpreta TRUST_PROXY para Express ("trust proxy")
+ * - vacío / "false" -> false (no confiar en cabeceras X-Forwarded-*)
+ * - "true"          -> true
+ * - "1", "2"...     -> número de proxies
+ * - otro texto      -> se pasa tal cual (ej. "loopback" o "10.0.0.0/8")
+ * @param {string} value
+ * @returns {boolean|number|string}
+ */
+function parseTrustProxy(value) {
+  const texto = String(value || '').trim().toLowerCase();
+  if (!texto || texto === 'false' || texto === '0') return false;
+  if (texto === 'true') return true;
+  if (/^\d+$/.test(texto)) return Number(texto);
+  return String(value).trim();
+}
+
+/**
  * Valida que las variables requeridas estén presentes y resuelve defaults.
  * Construye DATABASE_URL a partir de POSTGRES_URL o variables individuales.
  * @returns {EnvConfig} Configuración validada
@@ -135,7 +152,15 @@ function validateEnv() {
     NODE_ENV: process.env.NODE_ENV,
     SESSION_SECRET: process.env.SESSION_SECRET,
     MONITORING_ENABLED: process.env.MONITORING_ENABLED === '1',
-    APP_URL: process.env.APP_URL,
+    // URL canónica sin "/" final (para enlaces de correo)
+    APP_URL: process.env.APP_URL.replace(/\/+$/, ''),
+    // Orígenes externos autorizados para CORS (vacío = solo el mismo origen)
+    CORS_ORIGINS: (process.env.CORS_ORIGINS || '')
+      .split(',')
+      .map(o => o.trim().replace(/\/+$/, ''))
+      .filter(Boolean),
+    // Express "trust proxy": false por defecto; true, número de saltos o lista de IPs/subredes
+    TRUST_PROXY: parseTrustProxy(process.env.TRUST_PROXY),
   };
 
   Logger.info(`✅ Entorno validado: ${config.NODE_ENV} | Puerto: ${config.PORT} | Monitoreo: ${config.MONITORING_ENABLED}`);

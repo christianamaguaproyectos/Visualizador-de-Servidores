@@ -6,6 +6,11 @@
 import authService from '../services/authService.js';
 import passwordRecoveryService from '../services/passwordRecoveryService.js';
 import { Logger } from '../utils/logger.js';
+import env from '../config/env.js';
+import { ensureCsrfToken } from '../middleware/csrfMiddleware.js';
+
+/** Nombre por defecto de la cookie de express-session */
+const SESSION_COOKIE_NAME = 'connect.sid';
 
 /**
  * Controlador de autenticación
@@ -59,14 +64,20 @@ class AuthController {
         });
       }
 
-      // Crear sesión
+      // Crear una sesión NUEVA (nuevo ID) para evitar Session Fixation:
+      // un ID de sesión fijado por un atacante antes del login queda inválido.
+      await new Promise((resolve, reject) => {
+        req.session.regenerate((err) => (err ? reject(err) : resolve()));
+      });
       req.session.user = user;
+      const csrfToken = ensureCsrfToken(req);
 
       Logger.success(`✅ Sesión creada para ${this.sanitizeForLog(user.username)}`);
 
       res.json({
         success: true,
         message: 'Login exitoso',
+        csrfToken,
         user: {
           username: user.username,
           name: user.name,
@@ -100,8 +111,11 @@ class AuthController {
         });
       }
 
-      Logger.info(`ℹ️  Sesión cerrada: ${username}`);
-      
+      // Borrar también la cookie de sesión del navegador
+      res.clearCookie(SESSION_COOKIE_NAME, { path: '/' });
+
+      Logger.info(`ℹ️  Sesión cerrada: ${this.sanitizeForLog(username)}`);
+
       res.json({
         success: true,
         message: 'Sesión cerrada correctamente'
@@ -183,7 +197,9 @@ class AuthController {
         });
       }
 
-      const resetLink = `${req.protocol}://${req.get('host')}/login?resetToken=${encodeURIComponent(result.token)}`;
+      // El enlace se arma SOLO con APP_URL (validada al arrancar), nunca con la cabecera Host,
+      // que un atacante puede falsificar para robar el token (Host Header Injection)
+      const resetLink = `${env.APP_URL}/login?resetToken=${encodeURIComponent(result.token)}`;
       const mail = await passwordRecoveryService.sendResetEmail({
         to: result.user.email,
         name: result.user.name || result.user.username,

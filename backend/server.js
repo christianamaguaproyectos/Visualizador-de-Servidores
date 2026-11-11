@@ -33,6 +33,7 @@ import { createRateLimiter } from './src/middleware/rateLimitMiddleware.js';
 import { attachRequestContext, structuredApiRequestLogger } from './src/middleware/requestContextMiddleware.js';
 import { securityHeadersMiddleware } from './src/middleware/securityHeadersMiddleware.js';
 import { errorHandler } from './src/middleware/errorHandler.js';
+import { createCsrfProtection, getCsrfToken } from './src/middleware/csrfMiddleware.js';
 
 // Utilidades
 import Logger from './src/utils/logger.js';
@@ -86,9 +87,15 @@ class Application {
    * Configura el middleware de Express
    */
   _setupMiddleware() {
-    this.app.use(cors());
+    // Detrás de un reverse proxy, permite que req.ip / req.protocol usen X-Forwarded-*
+    // (configurable con TRUST_PROXY; por defecto desactivado)
+    this.app.set('trust proxy', env.TRUST_PROXY);
+
+    // CORS: solo los orígenes listados en CORS_ORIGINS (vacío = solo el mismo origen)
+    this.app.use(cors({ origin: env.CORS_ORIGINS, credentials: true }));
     this.app.use(securityHeadersMiddleware);
-    this.app.use(express.json());
+    // Límite explícito del cuerpo JSON para evitar cuerpos enormes
+    this.app.use(express.json({ limit: '256kb' }));
     this.app.use(attachRequestContext);
     
     // Middleware de sesiones
@@ -106,6 +113,9 @@ class Application {
       }
     }));
     
+    // Protección CSRF para POST/PUT/PATCH/DELETE (origen + token X-CSRF-Token)
+    this.app.use(createCsrfProtection({ allowedOrigins: env.CORS_ORIGINS }));
+
     // Inyectar información de usuario en todas las vistas
     this.app.use(injectUser);
     this.app.use(structuredApiRequestLogger);
@@ -192,6 +202,9 @@ class Application {
     
     // API de usuario actual
     this.app.get('/api/auth/user', (req, res, next) => authController.getCurrentUser(req, res, next));
+
+    // Token CSRF de la sesión (lo usa /js/csrf.js para firmar las peticiones que modifican datos)
+    this.app.get('/api/auth/csrf', getCsrfToken);
 
     // API de clusters virtuales
     this.app.use('/api/clusters', clusterRoutes);

@@ -2,11 +2,15 @@
  * Rate limiter en memoria para despliegues simples (PM2 single instance).
  * Para multi-instancia se recomienda migrar a Redis.
  */
+/** Tope de claves en memoria por limitador (evita crecimiento sin límite) */
+const MAX_KEYS_DEFAULT = 10_000;
+
 export function createRateLimiter({
   windowMs = 60 * 1000,
   maxRequests = 60,
   message = 'Demasiadas solicitudes. Intente nuevamente más tarde.',
-  keyGenerator
+  keyGenerator,
+  maxKeys = MAX_KEYS_DEFAULT
 } = {}) {
   const hits = new Map();
 
@@ -26,6 +30,10 @@ export function createRateLimiter({
 
     const current = hits.get(key);
     if (!current || current.resetAt <= now) {
+      // Si se alcanza el tope, descartar la clave más antigua (Map conserva orden de inserción)
+      if (!current && hits.size >= maxKeys) {
+        hits.delete(hits.keys().next().value);
+      }
       hits.set(key, { count: 1, resetAt: now + windowMs });
       return next();
     }
