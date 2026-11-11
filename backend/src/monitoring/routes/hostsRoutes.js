@@ -227,7 +227,7 @@ router.get('/:id', async (req, res) => {
 
       // Últimos 50 check_runs
       const { rows: runs } = await client.query(`
-        SELECT cr.*, c.kind 
+        SELECT cr.*, (cr.sample - 'headers') AS sample, c.kind
         FROM check_runs cr
         JOIN checks c ON cr.check_id = c.id
         WHERE cr.host_id = $1

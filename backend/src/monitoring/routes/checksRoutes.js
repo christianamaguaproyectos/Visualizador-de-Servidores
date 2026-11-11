@@ -5,7 +5,8 @@ import express from 'express';
 import { withMonitoringClient } from '../config/monitoringDb.js';
 import Logger from '../../utils/logger.js';
 import { requireAdmin } from '../../middleware/authMiddleware.js';
-import { validarConfiguracionChequeo } from '../domain/validators/checkConfigValidator.js';
+import { validarConfiguracionChequeo, validarParametrosChequeo } from '../domain/validators/checkConfigValidator.js';
+import { validarDestinoChequeo } from '../domain/validators/networkTargetValidator.js';
 import { TiposChequeo } from '../domain/glosario/terminosDominio.js';
 
 const router = express.Router();
@@ -144,6 +145,11 @@ router.post('/', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: validacionConfig.error });
     }
 
+    const validacionParametros = validarParametrosChequeo({ frequency_sec, timeout_ms, retries });
+    if (!validacionParametros.valido) {
+      return res.status(400).json({ error: validacionParametros.error });
+    }
+
     const result = await withClient(async (client) => {
       // Verificar que el host existe
       const { rows: hostRows } = await client.query('SELECT id, ip FROM hosts WHERE id = $1', [host_id]);
@@ -158,6 +164,12 @@ router.post('/', requireAdmin, async (req, res) => {
       }
       if (kind === 'tcp' && !finalConfig.host && !finalConfig.ip) {
         finalConfig.ip = hostRows[0].ip;
+      }
+
+      // Anti-SSRF: el destino no puede ser loopback, link-local, metadatos, etc.
+      const destino = await validarDestinoChequeo(kind, finalConfig);
+      if (!destino.valido) {
+        throw { status: 400, message: destino.error };
       }
 
       const { rows } = await client.query(`
@@ -197,6 +209,11 @@ router.put('/:id', requireAdmin, async (req, res) => {
       enabled
     } = req.body;
 
+    const validacionParametros = validarParametrosChequeo({ frequency_sec, timeout_ms, retries });
+    if (!validacionParametros.valido) {
+      return res.status(400).json({ error: validacionParametros.error });
+    }
+
     const result = await withClient(async (client) => {
       // Verificar que existe
       const { rows: existing } = await client.query('SELECT * FROM checks WHERE id = $1', [id]);
@@ -221,6 +238,11 @@ router.put('/:id', requireAdmin, async (req, res) => {
         const validacionConfig = validarConfiguracionChequeo(tipoFinal, config);
         if (!validacionConfig.valido) {
           throw { status: 400, message: validacionConfig.error };
+        }
+        // Anti-SSRF
+        const destino = await validarDestinoChequeo(tipoFinal, config);
+        if (!destino.valido) {
+          throw { status: 400, message: destino.error };
         }
         updates.push(`config = $${idx++}`);
         values.push(JSON.stringify(config));
@@ -346,6 +368,11 @@ router.post('/bulk', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: validacionConfig.error });
     }
 
+    const validacionParametros = validarParametrosChequeo({ frequency_sec, timeout_ms, retries });
+    if (!validacionParametros.valido) {
+      return res.status(400).json({ error: validacionParametros.error });
+    }
+
     const result = await withClient(async (client) => {
       const created = [];
       const errors = [];
@@ -362,6 +389,13 @@ router.post('/bulk', requireAdmin, async (req, res) => {
           const finalConfig = { ...config };
           if ((kind === 'icmp' || kind === 'tcp') && !finalConfig.host && !finalConfig.ip) {
             finalConfig.ip = hostRows[0].ip;
+          }
+
+          // Anti-SSRF
+          const destino = await validarDestinoChequeo(kind, finalConfig);
+          if (!destino.valido) {
+            errors.push({ host_id, error: destino.error });
+            continue;
           }
 
           const { rows } = await client.query(`
