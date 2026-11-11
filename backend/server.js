@@ -93,7 +93,7 @@ class Application {
     
     // Middleware de sesiones
     this.app.use(session({
-      secret: process.env.SESSION_SECRET || 'GrupoDanec-DiagramaServidores-2025-SecretKey',
+      secret: env.SESSION_SECRET,
       resave: false,
       saveUninitialized: false,
       cookie: {
