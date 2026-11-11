@@ -12,9 +12,9 @@ const router = express.Router();
 router.use(requireAuth);
 
 // GET /api/export/fisicos - Exportar servidores físicos
-router.get('/fisicos', (req, res) => exportController.exportFisicos(req, res));
+router.get('/fisicos', (req, res, next) => exportController.exportFisicos(req, res, next));
 
 // GET /api/export/virtuales - Exportar máquinas virtuales
-router.get('/virtuales', (req, res) => exportController.exportVirtuales(req, res));
+router.get('/virtuales', (req, res, next) => exportController.exportVirtuales(req, res, next));
 
 export default router;

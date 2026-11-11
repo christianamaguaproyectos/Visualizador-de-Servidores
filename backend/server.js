@@ -63,8 +63,8 @@ class Application {
     // Configurar middleware
     this._setupMiddleware();
 
-    // Configurar rutas
-    this._setupRoutes();
+    // Configurar rutas (async: carga routers dinámicos antes del errorHandler)
+    await this._setupRoutes();
 
     // Iniciar monitoreo si está habilitado
     if (monitoringConfig.enabled) {
@@ -118,7 +118,7 @@ class Application {
   /**
    * Configura todas las rutas de la aplicación
    */
-  _setupRoutes() {
+  async _setupRoutes() {
     // ========================================
     // RUTAS PÚBLICAS (Sin autenticación)
     // ========================================
@@ -193,11 +193,9 @@ class Application {
     this.app.use('/api/clusters', clusterRoutes);
 
     // API de exportación (cualquier usuario autenticado)
-    import('./src/routes/exportRoutes.js').then(({ default: exportRoutes }) => {
-      this.app.use('/api/export', exportRoutes);
-    }).catch(err => {
-      console.error('❌ Error cargando rutas de exportación:', err);
-    });
+    // Se espera (await) la carga para que quede registrada ANTES del errorHandler
+    const { default: exportRoutes } = await import('./src/routes/exportRoutes.js');
+    this.app.use('/api/export', exportRoutes);
 
     // ========================================
     // RUTAS DE ADMINISTRADOR (Solo admin)
@@ -234,10 +232,24 @@ class Application {
     // RUTAS DE MONITOREO (opt-in)
     // ========================================
     if (monitoringConfig.enabled) {
-      import('./src/monitoring/routes/index.js').then(({ default: monitoringRouter }) => {
+      try {
+        const { default: monitoringRouter } = await import('./src/monitoring/routes/index.js');
         this.app.use('/api/monitoring', monitoringRouter);
-      }).catch(() => {});
+      } catch (err) {
+        Logger.error('❌ Error cargando rutas de monitoreo:', err);
+      }
     }
+
+    // ========================================
+    // 404 JSON para rutas /api inexistentes
+    // ========================================
+    this.app.use('/api', (req, res) => {
+      res.status(404).json({
+        error: 'Ruta no encontrada',
+        code: 'NOT_FOUND',
+        requestId: req.requestId || null,
+      });
+    });
 
     // ========================================
     // ERROR HANDLER CENTRALIZADO (debe ir AL FINAL)

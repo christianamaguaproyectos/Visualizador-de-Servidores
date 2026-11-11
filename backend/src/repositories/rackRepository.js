@@ -4,6 +4,7 @@
  */
 
 import prisma from '../config/prisma.js';
+import { parsePositiveBigInt } from '../utils/ids.js';
 
 class RackRepository {
   /**
@@ -25,7 +26,7 @@ class RackRepository {
    */
   async findById(id) {
     return prisma.rack.findUnique({
-      where: { id: BigInt(id) },
+      where: { id: parsePositiveBigInt(id, 'id') },
     });
   }
 
@@ -69,7 +70,7 @@ class RackRepository {
    */
   async update(id, data) {
     return prisma.rack.update({
-      where: { id: BigInt(id) },
+      where: { id: parsePositiveBigInt(id, 'id') },
       data,
     });
   }
@@ -81,7 +82,7 @@ class RackRepository {
    */
   async delete(id) {
     return prisma.rack.delete({
-      where: { id: BigInt(id) },
+      where: { id: parsePositiveBigInt(id, 'id') },
     });
   }
 
@@ -92,7 +93,7 @@ class RackRepository {
    */
   async findByIdWithServers(id) {
     return prisma.rack.findUnique({
-      where: { id: BigInt(id) },
+      where: { id: parsePositiveBigInt(id, 'id') },
       include: {
         servers: {
           orderBy: { nombre: 'asc' },
@@ -108,7 +109,7 @@ class RackRepository {
    */
   async countServers(rackId) {
     return prisma.server.count({
-      where: { rackId: BigInt(rackId) },
+      where: { rackId: parsePositiveBigInt(rackId, 'rackId') },
     });
   }
 
@@ -119,7 +120,7 @@ class RackRepository {
    */
   async deleteServersByRackId(rackId) {
     return prisma.server.deleteMany({
-      where: { rackId: BigInt(rackId) },
+      where: { rackId: parsePositiveBigInt(rackId, 'rackId') },
     });
   }
 

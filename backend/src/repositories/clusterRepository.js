@@ -4,6 +4,7 @@
  */
 
 import prisma from '../config/prisma.js';
+import { parsePositiveBigInt } from '../utils/ids.js';
 
 class ClusterRepository {
   /**
@@ -23,7 +24,7 @@ class ClusterRepository {
    */
   async findById(id) {
     return prisma.virtualCluster.findUnique({
-      where: { id: BigInt(id) },
+      where: { id: parsePositiveBigInt(id, 'id') },
     });
   }
 
@@ -44,7 +45,7 @@ class ClusterRepository {
    */
   async update(id, data) {
     return prisma.virtualCluster.update({
-      where: { id: BigInt(id) },
+      where: { id: parsePositiveBigInt(id, 'id') },
       data,
     });
   }
@@ -56,7 +57,7 @@ class ClusterRepository {
    */
   async delete(id) {
     return prisma.virtualCluster.delete({
-      where: { id: BigInt(id) },
+      where: { id: parsePositiveBigInt(id, 'id') },
     });
   }
 
@@ -67,7 +68,7 @@ class ClusterRepository {
    */
   async findHosts(clusterId) {
     return prisma.clusterHost.findMany({
-      where: { clusterId: BigInt(clusterId) },
+      where: { clusterId: parsePositiveBigInt(clusterId, 'clusterId') },
       include: {
         rack: {
           select: { id: true, name: true },
@@ -87,14 +88,14 @@ class ClusterRepository {
     return prisma.clusterHost.upsert({
       where: {
         clusterId_rackId: {
-          clusterId: BigInt(clusterId),
-          rackId: BigInt(rackId),
+          clusterId: parsePositiveBigInt(clusterId, 'clusterId'),
+          rackId: parsePositiveBigInt(rackId, 'rackId'),
         },
       },
       update: {},
       create: {
-        clusterId: BigInt(clusterId),
-        rackId: BigInt(rackId),
+        clusterId: parsePositiveBigInt(clusterId, 'clusterId'),
+        rackId: parsePositiveBigInt(rackId, 'rackId'),
       },
     });
   }
@@ -109,8 +110,8 @@ class ClusterRepository {
     return prisma.clusterHost.delete({
       where: {
         clusterId_rackId: {
-          clusterId: BigInt(clusterId),
-          rackId: BigInt(rackId),
+          clusterId: parsePositiveBigInt(clusterId, 'clusterId'),
+          rackId: parsePositiveBigInt(rackId, 'rackId'),
         },
       },
     });

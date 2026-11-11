@@ -1,31 +1,42 @@
-import configManager from '../config/configManager.js';
-import cacheService from '../services/cacheService.js';
-import Logger from '../utils/logger.js';
+import { readFileSync } from 'fs';
+import prisma from '../config/prisma.js';
+import env from '../config/env.js';
+
+// Versión de la app leída una sola vez desde package.json
+const APP_VERSION = (() => {
+  try {
+    return JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')).version || null;
+  } catch {
+    return null;
+  }
+})();
 
 /**
  * Controlador para endpoints de metadata
- * Proporciona información sobre configuración y estado del sistema
+ * Devuelve información básica y segura del sistema (sin rutas de disco ni secretos).
  */
 class MetaController {
   /**
-   * Obtiene metadata completa del sistema
+   * Obtiene metadata del sistema
    * GET /api/meta
    */
-  getMeta(req, res) {
+  async getMeta(req, res, next) {
     try {
-      const config = configManager.getConfig();
-      const cacheMetadata = cacheService.getMetadata();
+      const [racks, servers, clusters] = await Promise.all([
+        prisma.rack.count(),
+        prisma.server.count(),
+        prisma.virtualCluster.count(),
+      ]);
 
       res.json({
-        excelPaths: config.excelPaths,
-        sheetName: config.sheetName || null,
-        sheetNameVirtuales: config.sheetNameVirtuales || null,
-        caches: cacheMetadata
+        mode: 'postgresql',
+        version: APP_VERSION,
+        environment: env.NODE_ENV,
+        monitoringEnabled: env.MONITORING_ENABLED,
+        counts: { racks, servers, clusters },
       });
-
     } catch (error) {
-      Logger.error('Error en /api/meta:', error);
-      res.status(500).json({ error: 'Error obteniendo metadata' });
+      next(error);
     }
   }
 }

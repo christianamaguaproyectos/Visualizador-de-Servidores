@@ -4,15 +4,15 @@ import { requireAdmin } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-router.get('/', (req, res) => clusterController.getAllClusters(req, res));
-router.get('/:id', (req, res) => clusterController.getClusterById(req, res));
-router.get('/:id/hosts', (req, res) => clusterController.getClusterHosts(req, res));
+router.get('/', (req, res, next) => clusterController.getAllClusters(req, res, next));
+router.get('/:id', (req, res, next) => clusterController.getClusterById(req, res, next));
+router.get('/:id/hosts', (req, res, next) => clusterController.getClusterHosts(req, res, next));
 
-router.post('/', requireAdmin, (req, res) => clusterController.createCluster(req, res));
-router.put('/:id', requireAdmin, (req, res) => clusterController.updateCluster(req, res));
-router.delete('/:id', requireAdmin, (req, res) => clusterController.deleteCluster(req, res));
+router.post('/', requireAdmin, (req, res, next) => clusterController.createCluster(req, res, next));
+router.put('/:id', requireAdmin, (req, res, next) => clusterController.updateCluster(req, res, next));
+router.delete('/:id', requireAdmin, (req, res, next) => clusterController.deleteCluster(req, res, next));
 
-router.post('/:id/hosts', requireAdmin, (req, res) => clusterController.addHostToCluster(req, res));
-router.delete('/:id/hosts/:rackId', requireAdmin, (req, res) => clusterController.removeHostFromCluster(req, res));
+router.post('/:id/hosts', requireAdmin, (req, res, next) => clusterController.addHostToCluster(req, res, next));
+router.delete('/:id/hosts/:rackId', requireAdmin, (req, res, next) => clusterController.removeHostFromCluster(req, res, next));
 
 export default router;
