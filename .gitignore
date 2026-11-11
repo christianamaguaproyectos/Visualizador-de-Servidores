@@ -6,9 +6,9 @@ logs/
 # Node modules
 node_modules/
 
-# Archivos subidos
-backend/uploads/*.xlsx
-backend/uploads/*.xls
+# Archivos subidos (se ignora todo excepto el marcador .gitkeep)
+backend/uploads/*
+!backend/uploads/.gitkeep
 
 # Configuración local
 config.json
@@ -22,10 +22,15 @@ backend/config/users.json
 # PM2
 .pm2/
 
-# Backups y dumps locales
+# Backups y dumps locales (NUNCA subir volcados de base de datos)
 *.dump
 backup*.sql
 backup*.dump
+/*.sql
+*.sql.gz
+*.bak
+#Excepcion: los scripts de esquema SI deben versionarse 
+!/scripts/sql/*.sql
 
 # Artefactos locales pesados
 *.tar
