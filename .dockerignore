@@ -43,3 +43,28 @@ ecosystem.config.cjs
 # Package lock alternativo
 yarn.lock
 pnpm-lock.yaml
+
+# ===== Secretos y datos sensibles (Fase 0.2 del plan de seguridad) =====
+# Archivos de entorno con contraseñas (solo se permite la plantilla de ejemplo)
+.env.*
+!.env.docker.example
+
+# Usuarios con contraseñas
+backend/config/users.json
+
+# Archivos subidos por usuarios y datos locales
+backend/uploads/*
+backend/data/*
+
+# Volcados de base de datos (solo se permiten los scripts de esquema)
+**/*.sql
+!scripts/sql/*.sql
+**/*.dump
+
+# Hojas de calculo y exportaciones con datos reales
+**/*.csv
+**/*.xlsx
+**/*.xls
+
+# Archivos comprimidos pesados
+**/*.tar
