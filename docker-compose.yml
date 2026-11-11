@@ -12,7 +12,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-diagrama}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-DiagramaServers2025}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD en .env}
       POSTGRES_DB: ${POSTGRES_DB:-diagrama_servers}
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -41,13 +41,14 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      # Conexión a PostgreSQL
-      POSTGRES_URL: postgresql://${POSTGRES_USER:-diagrama}:${POSTGRES_PASSWORD:-DiagramaServers2025}@postgres:5432/${POSTGRES_DB:-diagrama_servers}
+      # Conexión a PostgreSQL (POSTGRES_URL para pg nativo, DATABASE_URL para Prisma)
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-diagrama}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-diagrama_servers}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-diagrama}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-diagrama_servers}
       
       # Configuración de la app
       PORT: 3000
       NODE_ENV: production
-      SESSION_SECRET: ${SESSION_SECRET:-GrupoDanec-DiagramaServidores-2025-DockerSecret}
+      SESSION_SECRET: ${SESSION_SECRET:?Defina SESSION_SECRET en .env}
       
       # Forzar binding a todas las interfaces (necesario para Docker)
       BIND_ALL_INTERFACES: "true"

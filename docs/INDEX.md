@@ -2,6 +2,9 @@
 
 ## 🎯 ¿Por dónde empezar?
 
+### 🛡️ Si vas a ejecutar la **Auditoría de Seguridad y Plan de Mejora (2026)**
+👉 Empieza aquí: [**AUDITORIA-SEGURIDAD-Y-PLAN-MEJORA-2026.md**](./AUDITORIA-SEGURIDAD-Y-PLAN-MEJORA-2026.md)
+
 ### Si eres **Usuario/Admin**
 👉 Empieza aquí: [**GUIA-RAPIDA.md**](./GUIA-RAPIDA.md)
 

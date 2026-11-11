@@ -1,7 +1,8 @@
 ﻿import { Client } from 'pg';
+import { requireDatabaseUrl } from './lib/requireDatabaseUrl.js';
 
 async function main() {
-  const client = new Client({ connectionString: 'postgres://postgres:admin@localhost:5432/monitoring' });
+  const client = new Client({ connectionString: requireDatabaseUrl() });
   await client.connect();
   
   await client.query('SET search_path TO inventory, monitoring, public');

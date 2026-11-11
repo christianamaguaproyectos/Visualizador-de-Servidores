@@ -20,9 +20,15 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 const { Pool } = pg;
 
-// Construir connection string desde variables del .env o usar POSTGRES_URL directamente
-const connectionString = process.env.POSTGRES_URL || 
-  `postgresql://${process.env.POSTGRES_USER || 'diagrama'}:${encodeURIComponent(process.env.POSTGRES_PASSWORD || 'diagrama123')}@localhost:5432/${process.env.POSTGRES_DB || 'diagrama_servers'}`;
+// Construir connection string desde variables del .env (sin contraseñas por defecto)
+let connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL;
+if (!connectionString) {
+  if (!process.env.POSTGRES_PASSWORD) {
+    console.error('❌ Defina POSTGRES_URL / DATABASE_URL o POSTGRES_PASSWORD en el archivo .env');
+    process.exit(1);
+  }
+  connectionString = `postgresql://${process.env.POSTGRES_USER || 'diagrama'}:${encodeURIComponent(process.env.POSTGRES_PASSWORD)}@localhost:5432/${process.env.POSTGRES_DB || 'diagrama_servers'}`;
+}
 
 const pool = new Pool({ connectionString });
 

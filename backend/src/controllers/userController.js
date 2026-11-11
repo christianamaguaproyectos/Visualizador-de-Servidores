@@ -1,5 +1,7 @@
 import authService from '../services/authService.js';
+import passwordRecoveryService from '../services/passwordRecoveryService.js';
 import Logger from '../utils/logger.js';
+import crypto from 'crypto';
 
 /**
  * Controlador para gestión de usuarios
@@ -39,6 +41,9 @@ class UserController {
   /**
    * Crea un nuevo usuario
    * POST /api/users
+   * - Si se envía password: se crea con esa contraseña directamente
+   * - Si NO se envía password: se genera una temporal, se crea un token de invitación
+   *   y se envía un email para que el usuario establezca su propia contraseña
    */
   async createUser(req, res) {
     try {
@@ -48,27 +53,64 @@ class UserController {
 
       const { username, password, role, name, email } = req.body;
 
-      if (!username || !password) {
-        return res.status(400).json({ error: 'Username y password son requeridos' });
+      if (!username) {
+        return res.status(400).json({ error: 'Username es requerido' });
       }
 
       if (role && role !== 'admin' && role !== 'viewer') {
         return res.status(400).json({ error: 'Rol debe ser admin o viewer' });
       }
 
+      // Si no se provee password, generar uno aleatorio temporal
+      const finalPassword = password || crypto.randomBytes(16).toString('hex');
+
       const success = await authService.addUser(
         username,
-        password,
+        finalPassword,
         role || 'viewer',
         name || username,
         email || null
       );
 
-      if (success) {
-        res.json({ ok: true, message: 'Usuario creado exitosamente' });
-      } else {
-        res.status(400).json({ error: 'No se pudo crear el usuario (posiblemente ya existe)' });
+      if (!success) {
+        return res.status(400).json({ error: 'No se pudo crear el usuario (posiblemente ya existe)' });
       }
+
+      // Si no se envió contraseña, generar token de invitación y enviar email
+      if (!password) {
+        const tokenResult = await authService.createPasswordResetToken(username);
+
+        if (tokenResult.found && tokenResult.token) {
+          const appUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+          const inviteLink = `${appUrl}/login?resetToken=${tokenResult.token}`;
+
+          let emailResult = { sent: false, reason: 'no_email' };
+
+          if (email) {
+            emailResult = await passwordRecoveryService.sendInvitationEmail({
+              to: email,
+              name: name || username,
+              inviteLink
+            });
+          }
+
+          if (emailResult.sent) {
+            return res.json({
+              ok: true,
+              message: `Usuario creado. Se envió un email de invitación a ${email}.`
+            });
+          } else {
+            // Fallback: devolver el enlace en la respuesta
+            return res.json({
+              ok: true,
+              message: 'Usuario creado. Comparte el enlace de invitación manualmente.',
+              inviteLink
+            });
+          }
+        }
+      }
+
+      res.json({ ok: true, message: 'Usuario creado exitosamente' });
     } catch (error) {
       Logger.error('Error creando usuario:', error);
       res.status(500).json({ error: 'Error creando usuario' });
@@ -184,6 +226,37 @@ class UserController {
       }
     } catch (error) {
       Logger.error('Error eliminando usuario:', error);
+      res.status(500).json({ error: 'Error eliminando usuario' });
+    }
+  }
+
+  /**
+   * Elimina permanentemente un usuario de la BD
+   * DELETE /api/users/:id/permanent
+   */
+  async permanentlyDeleteUser(req, res) {
+    try {
+      if (!this._isSuperAdmin(req)) {
+        return res.status(403).json({ error: 'Solo superadmin puede eliminar usuarios permanentemente' });
+      }
+
+      const { id } = req.params;
+      const targetId = parseInt(id);
+
+      // Proteger contra eliminar al propio usuario
+      if (targetId === this._currentUserId(req)) {
+        return res.status(400).json({ error: 'No puedes eliminarte a ti mismo' });
+      }
+
+      const success = await authService.permanentlyDeleteUser(targetId);
+
+      if (success) {
+        res.json({ ok: true, message: 'Usuario eliminado permanentemente' });
+      } else {
+        res.status(404).json({ error: 'Usuario no encontrado' });
+      }
+    } catch (error) {
+      Logger.error('Error eliminando usuario permanentemente:', error);
       res.status(500).json({ error: 'Error eliminando usuario' });
     }
   }

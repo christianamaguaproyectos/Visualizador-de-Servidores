@@ -48,9 +48,14 @@ function setupEventListeners() {
       changePassword(userId);
       return;
     }
-    if (action === 'eliminar') {
+    if (action === 'inhabilitar') {
       const username = button.dataset.username || 'usuario';
-      deleteUser(userId, username);
+      disableUser(userId, username);
+      return;
+    }
+    if (action === 'eliminar_permanente') {
+      const username = button.dataset.username || 'usuario';
+      permanentlyDeleteUser(userId, username);
     }
   });
 }
@@ -126,7 +131,8 @@ function openUserModal(userId = null) {
     document.getElementById('userForm').reset();
     document.getElementById('username').disabled = false;
     passwordGroup.style.display = 'block';
-    passwordInput.required = true;
+    passwordInput.required = false; // Opcional: si no se pone, se envía email de invitación
+    document.getElementById('passwordHint').style.display = 'block';
   }
 
   modal.classList.add('show');
@@ -175,7 +181,14 @@ async function handleUserSubmit(e) {
     const result = await response.json();
 
     if (response.ok) {
-      showToast(editingUserId ? 'Usuario actualizado exitosamente' : 'Usuario creado exitosamente', 'success');
+      if (result.inviteLink) {
+        // SMTP falló o no tiene email: mostrar enlace de invitación
+        const msg = result.message + '\n\nEnlace de invitación:\n' + result.inviteLink;
+        showToast(result.message, 'success');
+        prompt('Copia este enlace y compártelo con el usuario:', result.inviteLink);
+      } else {
+        showToast(result.message || (editingUserId ? 'Usuario actualizado exitosamente' : 'Usuario creado exitosamente'), 'success');
+      }
       closeUserModal();
       loadUsers();
     } else {
@@ -248,10 +261,10 @@ async function handlePasswordSubmit(e) {
 }
 
 /**
- * Elimina (desactiva) un usuario
+ * Inhabilita (desactiva) un usuario
  */
-async function deleteUser(userId, username) {
-  if (!confirm(`¿Estás seguro de desactivar al usuario "${username}"?`)) {
+async function disableUser(userId, username) {
+  if (!confirm(`¿Estás seguro de inhabilitar al usuario "${username}"?\n\nEl usuario no podrá iniciar sesión pero sus datos se conservarán.`)) {
     return;
   }
 
@@ -263,7 +276,39 @@ async function deleteUser(userId, username) {
     const result = await response.json();
 
     if (response.ok) {
-      showToast('Usuario desactivado exitosamente', 'success');
+      showToast('Usuario inhabilitado exitosamente', 'success');
+      loadUsers();
+    } else {
+      showToast('Error: ' + (result.error || 'No se pudo inhabilitar el usuario'), 'error');
+    }
+  } catch (error) {
+    console.error('Error inhabilitando usuario:', error);
+    showToast('Error de conexión al inhabilitar usuario', 'error');
+  }
+}
+
+/**
+ * Elimina permanentemente un usuario de la BD
+ */
+async function permanentlyDeleteUser(userId, username) {
+  if (!confirm(`⚠️ ¿Estás SEGURO de ELIMINAR PERMANENTEMENTE al usuario "${username}"?\n\nEsta acción NO se puede deshacer. Todos los datos del usuario se perderán.`)) {
+    return;
+  }
+
+  // Doble confirmación
+  if (!confirm(`🗑️ ÚLTIMA CONFIRMACIÓN\n\nEl usuario "${username}" será eliminado permanentemente.\n\n¿Continuar?`)) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/users/${userId}/permanent`, {
+      method: 'DELETE'
+    });
+
+    const result = await response.json();
+
+    if (response.ok) {
+      showToast('Usuario eliminado permanentemente', 'success');
       loadUsers();
     } else {
       showToast('Error: ' + (result.error || 'No se pudo eliminar el usuario'), 'error');

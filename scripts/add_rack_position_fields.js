@@ -1,8 +1,9 @@
 import pkg from 'pg';
+import { requireDatabaseUrl } from './lib/requireDatabaseUrl.js';
 const { Client } = pkg;
 
 const client = new Client({
-  connectionString: 'postgres://mon_user:Danec_mo_2025*_*@localhost:5432/monitoring'
+  connectionString: requireDatabaseUrl()
 });
 
 async function addRackPositionFields() {

@@ -1,15 +1,20 @@
 {
   "name": "diagrama-servers",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Visualizador interactivo de racks y servidores enlazado a Excel",
   "main": "backend/server.js",
   "type": "module",
   "scripts": {
     "start": "node backend/server.js",
-    "dev": "nodemon backend/server.js"
+    "dev": "nodemon backend/server.js",
+    "prisma:generate": "npx prisma generate --schema=backend/prisma/schema.prisma",
+    "prisma:migrate": "npx prisma migrate dev --schema=backend/prisma/schema.prisma",
+    "prisma:studio": "npx prisma studio --schema=backend/prisma/schema.prisma"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "7.7.0",
+    "@prisma/client": "^7.7.0",
     "bcrypt": "^6.0.0",
     "chokidar": "^3.6.0",
     "cors": "^2.8.5",
@@ -23,6 +28,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "nodemon": "^3.1.0"
+    "nodemon": "^3.1.0",
+    "prisma": "^7.7.0"
   }
 }

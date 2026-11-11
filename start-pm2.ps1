@@ -3,8 +3,8 @@
 
 Write-Host "Iniciando PM2 DiagramaServers..." -ForegroundColor Green
 
-# Cambiar al directorio del proyecto
-Set-Location "c:\Users\pasanteoptimus\OneDrive - Grupo Danec\TI\DiagramaServers"
+# Cambiar al directorio del proyecto (la carpeta donde está este script, sin rutas personales)
+Set-Location $PSScriptRoot
 
 try {
     # Verificar si PM2 ya está ejecutándose

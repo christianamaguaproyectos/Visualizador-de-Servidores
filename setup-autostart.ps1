@@ -22,10 +22,13 @@ function Install-AutoStart {
         }
         
         # Crear la tarea programada
-        $Action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$ScriptPath`""
+        $Action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-NoProfile -ExecutionPolicy RemoteSigned -File `"$ScriptPath`""
         $Trigger = New-ScheduledTaskTrigger -AtStartup
         $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
-        $Principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest
+        # RunLevel Limited: la app NO necesita permisos de administrador de Windows.
+        # Recomendado: usar una cuenta de servicio sin privilegios y dar permisos NTFS
+        # de solo lectura sobre la carpeta del proyecto (escritura solo en logs/ y backend/uploads/).
+        $Principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
         
         # Registrar la tarea
         Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Settings $Settings -Principal $Principal -Description "Inicio automático de PM2 para DiagramaServers" -Force

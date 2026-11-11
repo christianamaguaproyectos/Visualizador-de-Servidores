@@ -4,15 +4,13 @@
  */
 
 import pg from 'pg';
-import dotenv from 'dotenv';
-
-dotenv.config();
+import { requireDatabaseUrl } from '../lib/requireDatabaseUrl.js';
 
 const { Pool } = pg;
 
-// Configuración de conexión
+// Configuración de conexión (se lee del .env, sin contraseñas por defecto)
 const pool = new Pool({
-  connectionString: process.env.POSTGRES_URL || 'postgresql://diagrama:DiagramaServers2025@localhost:5432/diagrama_servers'
+  connectionString: requireDatabaseUrl()
 });
 
 /**

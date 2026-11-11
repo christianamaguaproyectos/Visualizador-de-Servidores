@@ -319,16 +319,13 @@ class RackDragDrop {
    * Mueve un servidor a una posición vacía específica
    */
   async handleRepositionToEmpty(emptyUnit) {
-    // Obtener la posición de la unidad vacía (número de rack)
-    const unitLabel = emptyUnit.querySelector('.unit-label')?.textContent;
-    if (!unitLabel) {
-      console.error('No se pudo determinar la posición de la unidad');
-      return;
-    }
-
-    const position = parseInt(unitLabel, 10);
+    // Usar data-position (el rack_position real que coloca un servidor en esta
+    // unidad), NO el texto de la etiqueta: en racks invertidos la etiqueta
+    // visible no coincide con la posición almacenada en la base de datos.
+    const rawPosition = emptyUnit.getAttribute('data-position');
+    const position = parseInt(rawPosition ?? '', 10);
     if (isNaN(position)) {
-      console.error('Posición inválida:', unitLabel);
+      console.error('No se pudo determinar la posición de la unidad:', rawPosition);
       return;
     }
 

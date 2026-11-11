@@ -24,9 +24,9 @@
       <select id="filterVMStatus"
         style="padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;background:white;font-size:14px">
         <option value="all">Todos los estados</option>
-        <option value="critico">Solo Críticos 🔴</option>
-        <option value="activo">Solo Activos 🟢</option>
-        <option value="normal">Solo Normal ⚪</option>
+        <option value="critico">Críticos 🔴</option>
+        <option value="no_critico">No Críticos 🟢</option>
+        <option value="mantenimiento">En Mantenimiento 🛠️</option>
       </select>
     </div>
     <div class="header-actions">
@@ -161,8 +161,8 @@
 
             <div class="form-grid-2">
               <div class="form-field">
-                <label for="serverConexion">Conexión / Red</label>
-                <textarea id="serverConexion" rows="2" placeholder="Detalles de red"></textarea>
+                <label for="serverConexion">Conexión / Puerto de Switch</label>
+                <textarea id="serverConexion" rows="2" placeholder="Ej: SW-CORE-01 / Gi1/0/24 (10Gb Ethernet)"></textarea>
               </div>
               <div class="form-field">
                 <label for="serverBackup">Backup</label>
@@ -343,8 +343,8 @@
                 <label for="serverEstado">Estado (Prioridad)</label>
                 <select id="serverEstado">
                   <option value="CRITICO">🔴 CRÍTICO (VM importante)</option>
-                  <option value="NORMAL" selected>⚪ NORMAL</option>
-                  <option value="ACTIVO">🟢 ACTIVO</option>
+                  <option value="NO_CRITICO" selected>🟢 NO CRÍTICO</option>
+                  <option value="MANTENIMIENTO">🛠️ EN MANTENIMIENTO</option>
                 </select>
               </div>
               <div class="form-field">

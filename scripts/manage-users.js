@@ -5,14 +5,18 @@
  * Herramienta CLI para administrar usuarios del sistema
  * 
  * Uso:
- *   node scripts/manage-users.js add --username admin --password Admin2025! --role admin --name "Administrador"
+ *   node scripts/manage-users.js add --username admin --password <CONTRASEÑA_SEGURA> --role admin --name "Administrador"
  *   node scripts/manage-users.js remove --username usuario1
  *   node scripts/manage-users.js list
- *   node scripts/manage-users.js change-password --username admin --password NuevaContraseña123!
+ *   node scripts/manage-users.js change-password --username admin --password <CONTRASEÑA_SEGURA>
  *   node scripts/manage-users.js init
  */
 
+// Debe ir primero: carga el .env antes de que authService/db.js lean POSTGRES_URL
+import 'dotenv/config';
+import crypto from 'crypto';
 import authService from '../backend/src/services/authService.js';
+import { closePool } from '../backend/src/config/db.js';
 import { Logger } from '../backend/src/utils/logger.js';
 
 // Argumentos de línea de comandos
@@ -142,34 +146,48 @@ async function changePassword() {
 }
 
 /**
+ * Genera una contraseña aleatoria segura (24 caracteres)
+ * @returns {string}
+ */
+function generateRandomPassword() {
+  return crypto.randomBytes(18).toString('base64url');
+}
+
+/**
  * Inicializa usuarios por defecto
  */
 async function initUsers() {
   console.log('\n🔧 Inicializando usuarios por defecto...\n');
 
-  // Usuario admin
-  const adminExists = authService.getAllUsers().find(u => u.username === 'admin');
+  const users = await authService.getAllUsers();
+
+  // Usuario admin (contraseña aleatoria o tomada de INITIAL_ADMIN_PASSWORD; nunca fija en el código)
+  const adminExists = users.find(u => u.username === 'admin');
   if (!adminExists) {
-    await authService.addUser('admin', 'Admin2025!', 'admin', 'Administrador');
+    const adminPassword = process.env.INITIAL_ADMIN_PASSWORD || generateRandomPassword();
+    await authService.addUser('admin', adminPassword, 'admin', 'Administrador');
     console.log('✅ Usuario admin creado');
     console.log('   Username: admin');
-    console.log('   Password: Admin2025!');
+    console.log(`   Password: ${process.env.INITIAL_ADMIN_PASSWORD ? '(la definida en INITIAL_ADMIN_PASSWORD)' : adminPassword}`);
     console.log('   Rol: admin\n');
   } else {
     console.log('ℹ️  Usuario "admin" ya existe\n');
   }
 
-  // Usuario viewer
-  const viewerExists = authService.getAllUsers().find(u => u.username === 'viewer');
+  // Usuario viewer (contraseña aleatoria)
+  const viewerExists = users.find(u => u.username === 'viewer');
   if (!viewerExists) {
-    await authService.addUser('viewer', 'Viewer2025!', 'viewer', 'Usuario Lectura');
+    const viewerPassword = generateRandomPassword();
+    await authService.addUser('viewer', viewerPassword, 'viewer', 'Usuario Lectura');
     console.log('✅ Usuario viewer creado');
     console.log('   Username: viewer');
-    console.log('   Password: Viewer2025!');
+    console.log(`   Password: ${viewerPassword}`);
     console.log('   Rol: viewer\n');
   } else {
     console.log('ℹ️  Usuario "viewer" ya existe\n');
   }
+
+  console.log('🔐 Guarda estas contraseñas ahora: no se volverán a mostrar.');
 
   console.log('═══════════════════════════════════════════════════════');
   console.log('✅ Inicialización completada');
@@ -187,7 +205,8 @@ function showHelp() {
   console.log('═══════════════════════════════════════════════════════\n');
   console.log('Comandos disponibles:\n');
   console.log('  init');
-  console.log('    Crea usuarios por defecto (admin y viewer)');
+  console.log('    Crea usuarios por defecto (admin y viewer) con contraseñas aleatorias');
+  console.log('    (opcional: defina INITIAL_ADMIN_PASSWORD en .env para elegir la del admin)');
   console.log('    Ejemplo: node scripts/manage-users.js init\n');
   console.log('  add');
   console.log('    Agrega un nuevo usuario');
@@ -244,8 +263,10 @@ async function main() {
   }
 }
 
-// Ejecutar
-main().catch(error => {
-  console.error('\n❌ Error:', error.message);
-  process.exit(1);
-});
+// Ejecutar (al terminar se cierra el pool de PostgreSQL para que el proceso no quede colgado)
+main()
+  .then(() => closePool())
+  .catch(error => {
+    console.error('\n❌ Error:', error.message);
+    process.exit(1);
+  });
