@@ -1,6 +1,11 @@
 const base = process.env.BASE_URL || 'http://localhost:8082';
-const username = process.env.SMOKE_USER || 'admin';
-const password = process.env.SMOKE_PASS || 'Admin2025!';
+const username = process.env.SMOKE_USER;
+const password = process.env.SMOKE_PASS;
+
+if (!username || !password) {
+  console.error('❌ Defina SMOKE_USER y SMOKE_PASS como variables de entorno antes de ejecutar este script.');
+  process.exit(1);
+}
 
 function pickCookie(headers) {
   if (!headers) return '';
