@@ -294,25 +294,25 @@ flowchart LR
 - [x] **0.4 (`SEC-CRIT-08`)**: Corregir `setup-autostart.ps1` (`-RunLevel Limited`), `start-pm2.ps1` (`$PSScriptRoot`) y `start-pm2.bat` (`%~dp0`).
 
 ### Fase 1 — Seguridad Crítica Backend, RBAC, Anti-SSRF y Dependencias (P0/P1)
-- [ ] **1.1 (`ARCH-HIGH-07`)**: Añadir `import 'dotenv/config';` al inicio de `backend/src/config/env.js`, validar `SESSION_SECRET.length >= 32` y `APP_URL` válida, y consumir `env` desde `monitoringConfig.js`.
-- [ ] **1.2 (`SEC-CRIT-06` & `ARCH-HIGH-08`)**:
+- [x] **1.1 (`ARCH-HIGH-07`)**: Añadir `import 'dotenv/config';` al inicio de `backend/src/config/env.js`, validar `SESSION_SECRET.length >= 32` y `APP_URL` válida, y consumir `env` desde `monitoringConfig.js`.
+- [x] **1.2 (`SEC-CRIT-06` & `ARCH-HIGH-08`)**:
   - Pasar `(req, res, next)` en todas las rutas de `backend/src/routes/clusterRoutes.js` y `exportRoutes.js`.
   - Validar parámetros numéricos (`parsePositiveBigInt`) antes de convertir a `BigInt` en servicios/repositorios.
   - Hacer `_setupRoutes()` asíncrona en `backend/server.js`, esperando `await import(...)` de `/api/export` y `/api/monitoring` **antes** de `this.app.use(errorHandler)`.
   - Corregir `GET /api/meta` (`metaController.js`) para no depender de `configManager` nulo ni exponer rutas locales.
-- [ ] **1.3 (`SEC-CRIT-03` & `MON-MED-02`)**:
+- [x] **1.3 (`SEC-CRIT-03` & `MON-MED-02`)**:
   - Cambiar `req.path.startsWith('/api/')` por `req.originalUrl.startsWith('/api/')` en `backend/src/middleware/authMiddleware.js`.
   - Proteger `/users.html` con `requireSuperAdmin` antes de `express.static` en `backend/server.js`.
   - Aplicar `requireAdmin` en todas las rutas mutantes (`POST`/`PUT`/`DELETE`) de `checksRoutes.js` y `hostsRoutes.js`, y en `GET /api/monitoring/alert-recipients` y `/alert-recipients/hosts`.
-- [ ] **1.4 (`SEC-CRIT-04` & `SEC-HIGH-04`)**:
+- [x] **1.4 (`SEC-CRIT-04` & `SEC-HIGH-04`)**:
   - Endurecer `checkConfigValidator.js` y `checkExecutorService.js`: validación estricta de IP/hostname sin guion inicial, resolución DNS previa bloqueando loopback/link-local/metadata/servicios internos salvo subredes permitidas (`MONITORING_ALLOWED_CIDRS`), sin redirecciones HTTP automáticas, y sin guardar `headers` completos en `check_runs.sample`.
   - Corregir `runICMP` en Windows verificando `TTL=` en `stdout` y soportando `tiempo=` / `time=`.
   - Validar rangos numéricos de `frequency_sec` (`15..86400`), `timeout_ms` (`200..15000`) y `retries` (`0..5`) en `checksRoutes.js`.
-- [ ] **1.5 (`SEC-HIGH-01` & `SEC-HIGH-02`)**:
+- [x] **1.5 (`SEC-HIGH-01` & `SEC-HIGH-02`)**:
   - Usar `req.session.regenerate()` en `authController.login` y `res.clearCookie('connect.sid')` en `logout`.
   - Construir enlaces de recuperación/invitación únicamente con `env.APP_URL` (nunca `req.get('host')`), no exponer `inviteLink` en respuestas HTTP en producción y exigir longitud mínima >= 8 caracteres en `userController.createUser` y `changePassword`.
   - Configurar `cors` restringido por `env.CORS_ORIGINS`, `express.json({ limit: '256kb' })`, `trust proxy` configurable, tope de memoria en `rateLimitMiddleware.js` y protección CSRF (`X-CSRF-Token`) en peticiones mutantes.
-- [ ] **1.6 (`SEC-HIGH-03`, `SEC-HIGH-05`, `SEC-HIGH-06`)**:
+- [x] **1.6 (`SEC-HIGH-03`, `SEC-HIGH-05`, `SEC-HIGH-06`)**:
   - Actualizar dependencias vulnerables (`express`, `undici`, `nodemailer`, `prisma`, `@prisma/client`, `@prisma/adapter-pg`) y migrar `exportController.js` de `xlsx` a `exceljs` incluyendo sanitización contra Formula Injection (`^[=+\-@\t\r]`), dejando `npm audit --omit=dev` en **0 vulnerabilidades**.
   - Activar verificación TLS en SMTP (`notificationService.js`, `test-email.mjs`) y escapar HTML en plantillas de correo (`notificationService.js`, `passwordRecoveryService.js`, `alertRecipientsRoutes.js`).
   - Corregir comparación exacta de IP loopback en `networkSecurityService.js:180`.
