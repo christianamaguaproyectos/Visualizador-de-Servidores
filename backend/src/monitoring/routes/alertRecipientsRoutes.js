@@ -7,6 +7,7 @@ import { withMonitoringClient } from '../config/monitoringDb.js';
 import Logger from '../../utils/logger.js';
 import { requireAdmin } from '../../middleware/authMiddleware.js';
 import { createRateLimiter } from '../../middleware/rateLimitMiddleware.js';
+import { escapeHtml, esEmailValido } from '../../utils/htmlEscape.js';
 
 const router = express.Router();
 const alertasOperacionRateLimiter = createRateLimiter({
@@ -74,7 +75,7 @@ router.post('/', requireAdmin, async (req, res) => {
   try {
     const { email, name, notify_down = true, notify_degraded = true, notify_recovery = true } = req.body;
 
-    if (!email || !email.includes('@')) {
+    if (!esEmailValido(String(email || '').trim())) {
       return res.status(400).json({ error: 'Email inválido' });
     }
 
@@ -117,6 +118,9 @@ router.put('/:id', requireAdmin, async (req, res) => {
       let paramCount = 1;
 
       if (email !== undefined) {
+        if (!esEmailValido(String(email).trim())) {
+          throw { status: 400, message: 'Email inválido' };
+        }
         updates.push(`email = $${paramCount++}`);
         values.push(email.toLowerCase().trim());
       }
@@ -278,7 +282,7 @@ router.post('/test', requireAdmin, alertasOperacionRateLimiter, async (req, res)
             <p>Este es un email de prueba del Sistema de Monitoreo.</p>
             <p>Si recibes este mensaje, las alertas están configuradas correctamente.</p>
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-            <p><strong>Destinatarios:</strong> ${emails.join(', ')}</p>
+            <p><strong>Destinatarios:</strong> ${escapeHtml(emails.join(', '))}</p>
             <p><strong>Fecha:</strong> ${formatDateEcuador()}</p>
           </div>
           <div style="background: #f9fafb; padding: 10px; text-align: center; font-size: 12px; color: #6b7280; border-radius: 0 0 8px 8px;">

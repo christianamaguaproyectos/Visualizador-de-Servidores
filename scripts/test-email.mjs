@@ -29,7 +29,8 @@ const transporter = nodemailer.createTransport({
     pass: config.pass
   },
   tls: {
-    rejectUnauthorized: false
+    // Verificar el certificado (solo se desactiva con SMTP_TLS_REJECT_UNAUTHORIZED=false)
+    rejectUnauthorized: process.env.SMTP_TLS_REJECT_UNAUTHORIZED !== 'false'
   }
 });
 

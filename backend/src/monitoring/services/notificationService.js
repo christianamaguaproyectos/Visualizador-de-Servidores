@@ -5,6 +5,8 @@
 import nodemailer from 'nodemailer';
 import monitoringConfig from '../config/monitoringConfig.js';
 import Logger from '../../utils/logger.js';
+import env from '../../config/env.js';
+import { escapeHtml, limpiarEncabezado } from '../../utils/htmlEscape.js';
 
 /**
  * Formatea una fecha con la zona horaria de Ecuador (UTC-5)
@@ -50,7 +52,9 @@ class NotificationService {
             pass: smtp.pass
           },
           tls: {
-            rejectUnauthorized: false // Para servidores internos
+            // Verificar el certificado del servidor SMTP (evita robo de credenciales por MitM).
+            // Solo se desactiva explícitamente con SMTP_TLS_REJECT_UNAUTHORIZED=false
+            rejectUnauthorized: process.env.SMTP_TLS_REJECT_UNAUTHORIZED !== 'false'
           }
         });
         Logger.success('📧 NotificationService: Transporter de email configurado');
@@ -99,7 +103,7 @@ class NotificationService {
       const info = await this.transporter.sendMail({
         from: monitoringConfig.smtp.user,
         to: Array.isArray(to) ? to.join(', ') : to,
-        subject,
+        subject: limpiarEncabezado(subject),
         html,
         text
       });
@@ -200,45 +204,45 @@ class NotificationService {
       <div class="info-grid">
         <div class="info-item">
           <label>Hostname</label>
-          <value>${host.name || 'N/A'}</value>
+          <value>${escapeHtml(host.name || 'N/A')}</value>
         </div>
         <div class="info-item">
           <label>IP</label>
-          <value>${host.ip || 'N/A'}</value>
+          <value>${escapeHtml(host.ip || 'N/A')}</value>
         </div>
         <div class="info-item">
           <label>Estado Anterior</label>
-          <value>${prevState || 'N/A'}</value>
+          <value>${escapeHtml(prevState || 'N/A')}</value>
         </div>
         <div class="info-item">
           <label>Estado Actual</label>
-          <value>${newState}</value>
+          <value>${escapeHtml(newState)}</value>
         </div>
         <div class="info-item">
           <label>Tipo</label>
-          <value>${host.type || 'N/A'}</value>
+          <value>${escapeHtml(host.type || 'N/A')}</value>
         </div>
         <div class="info-item">
           <label>Rack</label>
-          <value>${host.rack || 'N/A'}</value>
+          <value>${escapeHtml(host.rack || 'N/A')}</value>
         </div>
       </div>
       
       <div class="timeline">
         <div class="timeline-item">
           <div class="timeline-time">${formatDateEcuador()}</div>
-          <div>Cambio de estado detectado: ${prevState} → ${newState}</div>
+          <div>Cambio de estado detectado: ${escapeHtml(prevState)} → ${escapeHtml(newState)}</div>
         </div>
         ${incident ? `
         <div class="timeline-item">
           <div class="timeline-time">${incident.opened_at ? formatDateEcuador(new Date(incident.opened_at)) : 'N/A'}</div>
-          <div>Incidente abierto - Severidad: ${incident.severity}</div>
+          <div>Incidente abierto - Severidad: ${escapeHtml(incident.severity)}</div>
         </div>
         ` : ''}
       </div>
       
       <center>
-        <a href="${process.env.APP_URL || 'http://localhost:3050'}/monitoring.html" class="btn">Ver Dashboard de Monitoreo</a>
+        <a href="${escapeHtml(env.APP_URL)}/monitoring.html" class="btn">Ver Dashboard de Monitoreo</a>
       </center>
     </div>
     <div class="footer">
@@ -342,7 +346,7 @@ class NotificationService {
       const html = this.generateAlertEmailHtml({ host, incident, prevState, newState });
       results.email = await this.sendEmail({
         to: recipients,
-        subject,
+        subject: limpiarEncabezado(subject),
         html,
         text: `Host ${host.name} (${host.ip}) cambió de ${prevState} a ${newState}`
       });
@@ -440,7 +444,7 @@ class NotificationService {
   <p><strong>Total de hosts:</strong> ${total}</p>
   <p><strong>Incidentes abiertos:</strong> ${incidents}</p>
   
-  <p><a href="${process.env.APP_URL || 'http://localhost:3050'}/monitoring.html">Ver Dashboard Completo</a></p>
+  <p><a href="${escapeHtml(env.APP_URL)}/monitoring.html">Ver Dashboard Completo</a></p>
 </body>
 </html>
     `;
@@ -449,7 +453,7 @@ class NotificationService {
     if (emailTo) {
       await this.sendEmail({
         to: emailTo.split(',').map(e => e.trim()),
-        subject,
+        subject: limpiarEncabezado(subject),
         html
       });
     }

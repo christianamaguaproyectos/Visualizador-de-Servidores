@@ -45,7 +45,7 @@ async function ingestType(type) {
   if (!configManager.getConfig()) {
     configManager.load();
   }
-  const data = excelParserService.parseExcelByType(type);
+  const data = await excelParserService.parseExcelByType(type);
   const servers = data.servers || [];
   console.log(`Ingestando ${servers.length} servidores (${type})...`);
   await withClient(async (client) => {

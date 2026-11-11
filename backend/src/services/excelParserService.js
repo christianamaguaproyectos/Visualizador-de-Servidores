@@ -1,5 +1,5 @@
 import fs from 'fs';
-import xlsx from 'xlsx';
+import ExcelJS from 'exceljs';
 import configManager from '../config/configManager.js';
 import { APP_CONFIG } from '../config/constants.js';
 import Logger from '../utils/logger.js';
@@ -11,16 +11,64 @@ import {
 } from '../utils/dataHelpers.js';
 
 /**
+ * Convierte el valor de una celda de exceljs a un valor simple
+ * (equivalente a lo que devolvía xlsx.utils.sheet_to_json con defval: '')
+ * @param {*} value
+ * @returns {*}
+ */
+function valorSimple(value) {
+  if (value === null || value === undefined) return '';
+  if (value instanceof Date) return value;
+  if (typeof value === 'object') {
+    if ('result' in value) return valorSimple(value.result);          // fórmula
+    if (Array.isArray(value.richText)) return value.richText.map(t => t.text).join(''); // texto con formato
+    if ('text' in value) return value.text;                            // hipervínculo
+    if ('error' in value) return '';                                   // #N/A, #REF!...
+  }
+  return value;
+}
+
+/**
+ * Convierte una hoja de exceljs en un arreglo de objetos usando la fila 1 como encabezados
+ * @param {ExcelJS.Worksheet} worksheet
+ * @returns {Object[]}
+ */
+function hojaAFilas(worksheet) {
+  const encabezados = [];
+  worksheet.getRow(1).eachCell({ includeEmpty: true }, (cell, columna) => {
+    encabezados[columna] = String(valorSimple(cell.value)).trim();
+  });
+
+  const filas = [];
+  worksheet.eachRow({ includeEmpty: false }, (row, numeroFila) => {
+    if (numeroFila === 1) return;
+
+    const fila = {};
+    let tieneDatos = false;
+    for (let columna = 1; columna < encabezados.length; columna++) {
+      const encabezado = encabezados[columna];
+      if (!encabezado) continue;
+      const valor = valorSimple(row.getCell(columna).value);
+      fila[encabezado] = valor;
+      if (valor !== '') tieneDatos = true;
+    }
+    if (tieneDatos) filas.push(fila);
+  });
+
+  return filas;
+}
+
+/**
  * Servicio para parsear archivos Excel y convertirlos a estructuras de datos
  * Responsable de toda la lógica de lectura y transformación de Excel
  */
 class ExcelParserService {
   /**
-   * Parsea un archivo Excel según el tipo especificado
+   * Parsea un archivo Excel (.xlsx) según el tipo especificado
    * @param {string} type - Tipo de servidor (fisicos|virtuales)
-   * @returns {Object} Estructura { racks, servers, meta }
+   * @returns {Promise<Object>} Estructura { racks, servers, meta }
    */
-  parseExcelByType(type = APP_CONFIG.SERVER_TYPES.FISICOS) {
+  async parseExcelByType(type = APP_CONFIG.SERVER_TYPES.FISICOS) {
     const excelPath = configManager.getExcelPath(type);
 
     // Validar existencia del archivo
@@ -32,23 +80,23 @@ class ExcelParserService {
     }
 
     try {
-      // Leer workbook
-      const workbook = xlsx.readFile(excelPath, { cellDates: true });
-      
+      // Leer workbook (exceljs solo soporta .xlsx, no el formato antiguo .xls)
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.readFile(excelPath);
+
+      const hojas = workbook.worksheets.map(ws => ({ nombre: ws.name, filas: hojaAFilas(ws) }));
+
       // Seleccionar hoja apropiada
-      const sheet = this._selectSheet(workbook, type);
-      if (!sheet) {
+      const hoja = this._selectSheet(hojas, type);
+      if (!hoja) {
         return this._createErrorResponse(
           type,
           'No se encontró ninguna hoja válida en el Excel'
         );
       }
 
-      // Convertir hoja a JSON
-      const rows = xlsx.utils.sheet_to_json(sheet, { defval: '' });
-
       // Procesar datos
-      return this._processRows(rows, type);
+      return this._processRows(hoja.filas, type);
 
     } catch (error) {
       Logger.error(`Error parseando Excel (${type}):`, error.message);
@@ -57,44 +105,44 @@ class ExcelParserService {
   }
 
   /**
-   * Selecciona la hoja apropiada del workbook según el tipo
-   * @param {Object} workbook - Workbook de xlsx
+   * Selecciona la hoja apropiada según el tipo
+   * @param {{nombre: string, filas: Object[]}[]} hojas - Hojas ya convertidas a filas
    * @param {string} type - Tipo de servidor
-   * @returns {Object|null} Sheet seleccionada o null
+   * @returns {{nombre: string, filas: Object[]}|null} Hoja seleccionada o null
    */
-  _selectSheet(workbook, type) {
+  _selectSheet(hojas, type) {
     const forcedSheetName = configManager.getSheetName(type);
 
     // Si hay nombre de hoja forzado y existe, usarla
-    if (forcedSheetName && workbook.Sheets[forcedSheetName]) {
+    const forzada = forcedSheetName && hojas.find(h => h.nombre === forcedSheetName);
+    if (forzada) {
       Logger.info(`📊 Usando hoja configurada: ${forcedSheetName}`);
-      return workbook.Sheets[forcedSheetName];
+      return forzada;
     }
 
     // Autodetección de hoja apropiada
-    for (const sheetName of workbook.SheetNames) {
-      const testSheet = workbook.Sheets[sheetName];
-      const testRows = xlsx.utils.sheet_to_json(testSheet, { defval: '' });
-      
-      Logger.debug(`Analizando hoja: ${sheetName}, filas: ${testRows.length}`);
+    for (const hoja of hojas) {
+      const testRows = hoja.filas;
+
+      Logger.debug(`Analizando hoja: ${hoja.nombre}, filas: ${testRows.length}`);
 
       const hasVirtualServers = testRows.some(row => isVirtualServer(row));
 
       // Para virtuales, buscar hojas con servidores virtuales
       if (type === APP_CONFIG.SERVER_TYPES.VIRTUALES && hasVirtualServers) {
-        Logger.success(`Hoja de VIRTUALES detectada: ${sheetName}`);
-        return testSheet;
+        Logger.success(`Hoja de VIRTUALES detectada: ${hoja.nombre}`);
+        return hoja;
       }
 
       // Para físicos, usar cualquier hoja con datos (que no sea solo virtuales)
       if (type === APP_CONFIG.SERVER_TYPES.FISICOS && testRows.length > 0 && !hasVirtualServers) {
-        Logger.success(`Hoja de FÍSICOS detectada: ${sheetName}`);
-        return testSheet;
+        Logger.success(`Hoja de FÍSICOS detectada: ${hoja.nombre}`);
+        return hoja;
       }
 
       // Fallback: primera hoja con datos
       if (!forcedSheetName && testRows.length > 0) {
-        return testSheet;
+        return hoja;
       }
     }
 

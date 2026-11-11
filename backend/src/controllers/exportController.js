@@ -1,9 +1,64 @@
 /**
  * exportController.js - Controlador para exportación de datos a Excel
+ *
+ * Usa exceljs (la librería xlsx/SheetJS de npm tiene vulnerabilidades sin parche).
  */
 
-import xlsx from 'xlsx';
+import ExcelJS from 'exceljs';
 import { withClient } from '../config/db.js';
+
+const CONTENT_TYPE_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+/** Caracteres con los que Excel puede interpretar un texto como fórmula */
+const INICIO_FORMULA = /^[=+\-@\t\r]/;
+
+/**
+ * Protege contra Formula Injection (CSV/Excel Injection):
+ * si un texto empieza con = + - @ tab o retorno de carro, se le antepone ' para
+ * que Excel lo trate siempre como texto y nunca lo ejecute como fórmula.
+ * @param {*} valor
+ * @returns {*}
+ */
+export function sanitizarCeldaExcel(valor) {
+  if (typeof valor === 'string' && INICIO_FORMULA.test(valor)) {
+    return `'${valor}`;
+  }
+  return valor;
+}
+
+/**
+ * Genera el archivo .xlsx a partir del resultado de la consulta y lo envía
+ * @param {Object} res - Response de Express
+ * @param {{rows: Object[], fields: {name: string}[]}} resultado - Resultado de pg
+ * @param {{nombreHoja: string, anchos: number[], nombreArchivo: string}} opciones
+ */
+async function enviarExcel(res, resultado, { nombreHoja, anchos, nombreArchivo }) {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet(nombreHoja);
+
+  // Columnas tomadas de la consulta (así el encabezado existe aunque no haya filas)
+  const encabezados = resultado.fields.map(f => f.name);
+  worksheet.columns = encabezados.map((encabezado, i) => ({
+    header: encabezado,
+    key: encabezado,
+    width: anchos[i] || 15,
+  }));
+
+  for (const fila of resultado.rows) {
+    const filaSegura = {};
+    for (const encabezado of encabezados) {
+      filaSegura[encabezado] = sanitizarCeldaExcel(fila[encabezado]);
+    }
+    worksheet.addRow(filaSegura);
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer();
+
+  const fecha = new Date().toISOString().split('T')[0];
+  res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}_${fecha}.xlsx"`);
+  res.setHeader('Content-Type', CONTENT_TYPE_XLSX);
+  res.send(Buffer.from(buffer));
+}
 
 export class ExportController {
   /**
@@ -13,8 +68,8 @@ export class ExportController {
   async exportFisicos(req, res) {
     try {
       await withClient(async (client) => {
-        const { rows } = await client.query(
-          `SELECT 
+        const resultado = await client.query(
+          `SELECT
             id as "No.",
             nombre as "SERVERS",
             ip as "IP",
@@ -43,64 +98,17 @@ export class ExportController {
             activo as "ACTIVO",
             rack_position as "Posición en Rack",
             rack_units as "Unidades (U)"
-          FROM inventory.servers 
+          FROM inventory.servers
           WHERE type = 'fisicos'
           ORDER BY rack_norm, rack_position NULLS LAST, nombre`
         );
 
-        // Crear libro de Excel
-        const workbook = xlsx.utils.book_new();
-        
-        // Convertir datos a hoja
-        const worksheet = xlsx.utils.json_to_sheet(rows);
-        
-        // Ajustar ancho de columnas
-        const columnWidths = [
-          { wch: 8 },  // No.
-          { wch: 25 }, // SERVERS
-          { wch: 15 }, // IP
-          { wch: 20 }, // HOSTNAME
-          { wch: 20 }, // USUARIO
-          { wch: 12 }, // RACK
-          { wch: 15 }, // HARDWARE
-          { wch: 15 }, // MARCA
-          { wch: 25 }, // MODELO SERVER
-          { wch: 15 }, // TIPO
-          { wch: 20 }, // NO. SERIE
-          { wch: 12 }, // SOCKET
-          { wch: 15 }, // NO. POR SOCKET
-          { wch: 20 }, // PROCESADOR LÓGICOS
-          { wch: 12 }, // RAM GB
-          { wch: 40 }, // DISCOS DEL SERVER
-          { wch: 30 }, // DATASTORE
-          { wch: 25 }, // CONEXIÓN
-          { wch: 40 }, // SOFTWARE
-          { wch: 30 }, // SISTEMA OPERATIVO
-          { wch: 20 }, // FECHA DE INSTALACION
-          { wch: 22 }, // FECHA DE MANTENIMIENTO
-          { wch: 15 }, // ESTADO
-          { wch: 25 }, // BACKUP
-          { wch: 18 }, // FECHA BACKUP
-          { wch: 12 }, // ACTIVO
-          { wch: 15 }, // Posición en Rack
-          { wch: 13 }  // Unidades (U)
-        ];
-        worksheet['!cols'] = columnWidths;
-
-        // Agregar hoja al libro
-        xlsx.utils.book_append_sheet(workbook, worksheet, 'Servidores Físicos');
-
-        // Generar buffer
-        const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-
-        // Generar nombre de archivo con fecha
-        const fecha = new Date().toISOString().split('T')[0];
-        const filename = `servidores_fisicos_${fecha}.xlsx`;
-
-        // Enviar archivo
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.send(buffer);
+        await enviarExcel(res, resultado, {
+          nombreHoja: 'Servidores Físicos',
+          nombreArchivo: 'servidores_fisicos',
+          // Ancho de columnas (mismo orden que el SELECT)
+          anchos: [8, 25, 15, 20, 20, 12, 15, 15, 25, 15, 20, 12, 15, 20, 12, 40, 30, 25, 40, 30, 20, 22, 15, 25, 18, 12, 15, 13],
+        });
       });
     } catch (error) {
       console.error('❌ Error exportando servidores físicos:', error);
@@ -115,8 +123,8 @@ export class ExportController {
   async exportVirtuales(req, res) {
     try {
       await withClient(async (client) => {
-        const { rows } = await client.query(
-          `SELECT 
+        const resultado = await client.query(
+          `SELECT
             id as "No.",
             nombre as "SERVERS",
             ip as "IP",
@@ -139,58 +147,17 @@ export class ExportController {
             fecha_backup as "FECHA BACKUP",
             rack_position as "Posición en Host",
             rack_units as "Unidades (U)"
-          FROM inventory.servers 
+          FROM inventory.servers
           WHERE type = 'virtuales'
           ORDER BY rack_norm, nombre`
         );
 
-        // Crear libro de Excel
-        const workbook = xlsx.utils.book_new();
-        
-        // Convertir datos a hoja
-        const worksheet = xlsx.utils.json_to_sheet(rows);
-        
-        // Ajustar ancho de columnas
-        const columnWidths = [
-          { wch: 8 },  // No.
-          { wch: 25 }, // SERVERS
-          { wch: 15 }, // IP
-          { wch: 20 }, // HOSTNAME
-          { wch: 20 }, // USUARIO
-          { wch: 20 }, // HOST
-          { wch: 15 }, // HARDWARE
-          { wch: 15 }, // TIPO
-          { wch: 12 }, // RAM GB
-          { wch: 30 }, // SISTEMA OPERATIVO
-          { wch: 40 }, // SOFTWARE
-          { wch: 40 }, // DISCOS
-          { wch: 30 }, // DATASTORE
-          { wch: 25 }, // CONEXIÓN
-          { wch: 25 }, // BACKUP
-          { wch: 15 }, // ESTADO
-          { wch: 12 }, // ACTIVO
-          { wch: 20 }, // FECHA DE INSTALACION
-          { wch: 22 }, // FECHA DE MANTENIMIENTO
-          { wch: 18 }, // FECHA BACKUP
-          { wch: 15 }, // Posición en Host
-          { wch: 13 }  // Unidades (U)
-        ];
-        worksheet['!cols'] = columnWidths;
-
-        // Agregar hoja al libro
-        xlsx.utils.book_append_sheet(workbook, worksheet, 'Máquinas Virtuales');
-
-        // Generar buffer
-        const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-
-        // Generar nombre de archivo con fecha
-        const fecha = new Date().toISOString().split('T')[0];
-        const filename = `maquinas_virtuales_${fecha}.xlsx`;
-
-        // Enviar archivo
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.send(buffer);
+        await enviarExcel(res, resultado, {
+          nombreHoja: 'Máquinas Virtuales',
+          nombreArchivo: 'maquinas_virtuales',
+          // Ancho de columnas (mismo orden que el SELECT)
+          anchos: [8, 25, 15, 20, 20, 20, 15, 15, 12, 30, 40, 40, 30, 25, 25, 15, 12, 20, 22, 18, 15, 13],
+        });
       });
     } catch (error) {
       console.error('❌ Error exportando máquinas virtuales:', error);
