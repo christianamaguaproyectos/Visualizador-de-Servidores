@@ -16,6 +16,7 @@
 import 'dotenv/config';
 import crypto from 'crypto';
 import authService from '../backend/src/services/authService.js';
+import { closePool } from '../backend/src/config/db.js';
 import { Logger } from '../backend/src/utils/logger.js';
 
 // Argumentos de línea de comandos
@@ -262,8 +263,10 @@ async function main() {
   }
 }
 
-// Ejecutar
-main().catch(error => {
-  console.error('\n❌ Error:', error.message);
-  process.exit(1);
-});
+// Ejecutar (al terminar se cierra el pool de PostgreSQL para que el proceso no quede colgado)
+main()
+  .then(() => closePool())
+  .catch(error => {
+    console.error('\n❌ Error:', error.message);
+    process.exit(1);
+  });
