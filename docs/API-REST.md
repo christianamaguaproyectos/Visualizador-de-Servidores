@@ -29,7 +29,7 @@ Content-Type: application/json
 
 {
   "username": "admin",
-  "password": "Admin2025!"
+  "password": "<CONTRASEÑA_SEGURA>"
 }
 ```
 

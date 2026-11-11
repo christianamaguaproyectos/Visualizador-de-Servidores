@@ -26,10 +26,10 @@ backend/config/users.json
 *.dump
 backup*.sql
 backup*.dump
-/*.sql
+*.sql
 *.sql.gz
 *.bak
-#Excepcion: los scripts de esquema SI deben versionarse 
+#Excepcion: los scripts de esquema SI deben versionarse
 !/scripts/sql/*.sql
 
 # Artefactos locales pesados

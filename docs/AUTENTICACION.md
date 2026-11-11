@@ -30,13 +30,21 @@ El sistema implementa **autenticación con sesiones** para proteger el acceso a 
 
 ## 👥 Usuarios por Defecto
 
-Al inicializar el sistema, se crean 2 usuarios:
+El sistema **no trae contraseñas por defecto**. Los usuarios iniciales se crean con:
+
+```powershell
+node scripts/manage-users.js init
+```
+
+Este comando crea 2 usuarios con **contraseñas aleatorias** que se muestran **una sola vez**
+en pantalla (guárdalas en un lugar seguro). Para elegir la contraseña del admin, define
+`INITIAL_ADMIN_PASSWORD` en `.env` antes de ejecutarlo.
 
 ### 🔑 Usuario Administrador
 
 ```
 Usuario: admin
-Contraseña: Admin2025!
+Contraseña: (aleatoria, mostrada por "init" o la definida en INITIAL_ADMIN_PASSWORD)
 Rol: admin
 ```
 
@@ -51,7 +59,7 @@ Rol: admin
 
 ```
 Usuario: viewer
-Contraseña: Viewer2025!
+Contraseña: (aleatoria, mostrada por "init")
 Rol: viewer
 ```
 
@@ -181,13 +189,13 @@ node scripts/manage-users.js add --username USUARIO --password CONTRASEÑA --rol
 
 ```powershell
 # Agregar administrador
-node scripts/manage-users.js add --username carlos --password Carlos2025! --role admin --name "Carlos Pérez"
+node scripts/manage-users.js add --username carlos --password <CONTRASEÑA_SEGURA> --role admin --name "Carlos Pérez"
 
 # Agregar viewer
-node scripts/manage-users.js add --username maria --password Maria2025! --role viewer --name "María García"
+node scripts/manage-users.js add --username maria --password <CONTRASEÑA_SEGURA> --role viewer --name "María García"
 
 # Usuario sin nombre completo
-node scripts/manage-users.js add --username tech1 --password Tech123! --role viewer
+node scripts/manage-users.js add --username tech1 --password <CONTRASEÑA_SEGURA> --role viewer
 ```
 
 **Salida exitosa**:
@@ -231,13 +239,13 @@ node scripts/manage-users.js change-password --username USUARIO --password NUEVA
 
 ```powershell
 # Cambiar contraseña de admin
-node scripts/manage-users.js change-password --username admin --password MiNuevaContraseña2025!
+node scripts/manage-users.js change-password --username admin --password <CONTRASEÑA_SEGURA>
 
 # Cambiar contraseña de viewer
-node scripts/manage-users.js change-password --username viewer --password NuevoViewer2025!
+node scripts/manage-users.js change-password --username viewer --password <CONTRASEÑA_SEGURA>
 
 # Cambiar contraseña de usuario personalizado
-node scripts/manage-users.js change-password --username carlos --password NuevoCarlos123!
+node scripts/manage-users.js change-password --username carlos --password <CONTRASEÑA_SEGURA>
 ```
 
 **Salida**:
@@ -295,7 +303,7 @@ Las contraseñas **NO se guardan en texto plano**:
 
 ```javascript
 // ❌ NUNCA guardamos así:
-"password": "Admin2025!"
+"password": "<contraseña_en_texto_plano>"
 
 // ✅ Se guardan hasheadas con bcrypt:
 "password": "$2b$10$xK2.wNZYq8RfEoO8h9.4vu8FxYz9..."
@@ -329,7 +337,7 @@ Las contraseñas **NO se guardan en texto plano**:
 **Configuración actual**:
 ```javascript
 {
-  secret: 'GrupoDanec-DiagramaServidores-2025-SecretKey',
+  secret: env.SESSION_SECRET,  // Obligatorio en .env (mínimo 32 caracteres, sin valor por defecto)
   maxAge: 24 * 60 * 60 * 1000, // 24 horas
   httpOnly: true,              // No accesible desde JavaScript
   secure: false                // Cambiar a true con HTTPS
@@ -382,7 +390,7 @@ cookie: {
 node scripts/manage-users.js list
 
 # Si existe, cambiar contraseña
-node scripts/manage-users.js change-password --username admin --password Admin2025!
+node scripts/manage-users.js change-password --username admin --password <CONTRASEÑA_SEGURA>
 
 # Si no existe, crearlo
 node scripts/manage-users.js init
@@ -400,9 +408,7 @@ node scripts/manage-users.js init
 node scripts/manage-users.js init
 ```
 
-Esto crea:
-- admin / Admin2025!
-- viewer / Viewer2025!
+Esto crea `admin` y `viewer` con contraseñas aleatorias que se muestran **una sola vez** en pantalla.
 
 ---
 
@@ -526,14 +532,14 @@ cmd /c "pm2 save"
 
 **Crear usuario viewer**:
 ```powershell
-node scripts/manage-users.js add --username jperez --password JuanPerez2025! --role viewer --name "Juan Pérez"
+node scripts/manage-users.js add --username jperez --password <CONTRASEÑA_SEGURA> --role viewer --name "Juan Pérez"
 ```
 
 **Compartir credenciales**:
 ```
 URL: http://192.168.100.20:3050
 Usuario: jperez
-Contraseña: JuanPerez2025!
+Contraseña: <CONTRASEÑA_SEGURA>
 Rol: Viewer (solo lectura)
 ```
 
@@ -546,7 +552,7 @@ Rol: Viewer (solo lectura)
 node scripts/manage-users.js remove --username jperez
 
 # Crear nuevamente como admin
-node scripts/manage-users.js add --username jperez --password JuanPerez2025! --role admin --name "Juan Pérez"
+node scripts/manage-users.js add --username jperez --password <CONTRASEÑA_SEGURA> --role admin --name "Juan Pérez"
 ```
 
 **Nota**: No hay comando para cambiar rol directamente. Debes eliminar y recrear.
@@ -557,7 +563,7 @@ node scripts/manage-users.js add --username jperez --password JuanPerez2025! --r
 
 ```powershell
 # Resetear contraseña de admin
-node scripts/manage-users.js change-password --username admin --password NuevaClave2025!
+node scripts/manage-users.js change-password --username admin --password <CONTRASEÑA_SEGURA>
 ```
 
 ---
@@ -591,8 +597,8 @@ Ejecutar:
 
 1. **Cambiar contraseñas por defecto**:
    ```powershell
-   node scripts/manage-users.js change-password --username admin --password TuContraseñaSegura2025!
-   node scripts/manage-users.js change-password --username viewer --password OtraContraseñaSegura2025!
+   node scripts/manage-users.js change-password --username admin --password <CONTRASEÑA_SEGURA>
+   node scripts/manage-users.js change-password --username viewer --password <CONTRASEÑA_SEGURA>
    ```
 
 2. **Usar contraseñas robustas**:

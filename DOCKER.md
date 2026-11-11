@@ -8,20 +8,32 @@
 
 ### 1. Configurar variables de entorno
 ```bash
-cp .env.docker.example .env
-# Editar .env con tus valores
+cp .env.docker.example .env      # definir POSTGRES_PASSWORD y SESSION_SECRET
 ```
+
+> ⚠️ `POSTGRES_PASSWORD` y `SESSION_SECRET` son **obligatorias**: si no están definidas en `.env`,
+> `docker compose` se detiene con un error. No existen valores por defecto.
+> `SESSION_SECRET` debe tener al menos 32 caracteres aleatorios.
 
 ### 2. Construir y levantar contenedores
 ```bash
 # Primera vez (construye imagen)
-docker-compose up -d --build
+docker compose up -d --build
 
 # Siguientes veces
-docker-compose up -d
+docker compose up -d
 ```
 
-### 3. Acceder a la aplicación
+### 3. Crear el primer administrador (solo la primera vez)
+Docker **ya no crea un usuario admin automáticamente**. Ejecuta:
+```bash
+docker compose exec app node scripts/manage-users.js init
+```
+Esto crea los usuarios `admin` y `viewer` con **contraseñas aleatorias** que se muestran
+**una sola vez** en pantalla: guárdalas en un lugar seguro. Si prefieres elegir la del admin,
+define `INITIAL_ADMIN_PASSWORD` en `.env` antes de ejecutar el comando.
+
+### 4. Acceder a la aplicación
 - **App**: http://localhost:3000
 - **PostgreSQL**: localhost:5432 (usuario: diagrama)
 
@@ -101,11 +113,12 @@ docker-compose exec app node scripts/manage-users.js list
 | Variable | Descripción | Default |
 |----------|-------------|---------|
 | `POSTGRES_USER` | Usuario de PostgreSQL | diagrama |
-| `POSTGRES_PASSWORD` | Contraseña de PostgreSQL | DiagramaServers2025 |
+| `POSTGRES_PASSWORD` | Contraseña de PostgreSQL | **Obligatoria** (sin valor por defecto) |
 | `POSTGRES_DB` | Nombre de la base de datos | diagrama_servers |
 | `POSTGRES_PORT` | Puerto expuesto de PostgreSQL | 5432 |
 | `APP_PORT` | Puerto expuesto de la app | 3000 |
-| `SESSION_SECRET` | Secreto para sesiones | (generado) |
+| `SESSION_SECRET` | Secreto para sesiones (mínimo 32 caracteres) | **Obligatoria** (sin valor por defecto) |
+| `INITIAL_ADMIN_PASSWORD` | Contraseña del admin creado por `manage-users.js init` | (aleatoria) |
 | `MONITORING_ENABLED` | Habilitar monitoreo | 1 |
 | `SMTP_HOST` | Servidor SMTP para alertas | (vacío) |
 | `SMTP_PORT` | Puerto SMTP | 587 |
@@ -117,7 +130,7 @@ docker-compose exec app node scripts/manage-users.js list
 ## Producción
 
 ### Recomendaciones de Seguridad
-1. **Cambiar contraseñas**: Modifica `POSTGRES_PASSWORD` y `SESSION_SECRET`
+1. **Contraseñas propias**: Define valores únicos y aleatorios para `POSTGRES_PASSWORD` y `SESSION_SECRET` (nunca reutilices los de otro ambiente)
 2. **Red**: Usa una red Docker aislada
 3. **HTTPS**: Configura un reverse proxy (nginx/traefik) con SSL
 4. **Backups**: Programa backups automáticos de PostgreSQL

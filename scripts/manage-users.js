@@ -8,10 +8,12 @@
  *   node scripts/manage-users.js add --username admin --password <CONTRASEÑA_SEGURA> --role admin --name "Administrador"
  *   node scripts/manage-users.js remove --username usuario1
  *   node scripts/manage-users.js list
- *   node scripts/manage-users.js change-password --username admin --password NuevaContraseña123!
+ *   node scripts/manage-users.js change-password --username admin --password <CONTRASEÑA_SEGURA>
  *   node scripts/manage-users.js init
  */
 
+// Debe ir primero: carga el .env antes de que authService/db.js lean POSTGRES_URL
+import 'dotenv/config';
 import crypto from 'crypto';
 import authService from '../backend/src/services/authService.js';
 import { Logger } from '../backend/src/utils/logger.js';
