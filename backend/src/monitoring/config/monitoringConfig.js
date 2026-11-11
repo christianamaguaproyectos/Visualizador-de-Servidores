@@ -1,11 +1,9 @@
-import dotenv from 'dotenv';
-
-// Intentar cargar variables de entorno desde .env si existiera (opcional)
-try { dotenv.config?.(); } catch {}
+// La carga del .env y la validación ocurren en un solo lugar: config/env.js
+import env from '../../config/env.js';
 
 const monitoringConfig = {
-  enabled: process.env.MONITORING_ENABLED === '1',
-  postgresUrl: process.env.POSTGRES_URL || '',
+  enabled: env.MONITORING_ENABLED,
+  postgresUrl: env.DATABASE_URL || '',
   smtp: {
     host: process.env.SMTP_HOST || '',
     port: Number(process.env.SMTP_PORT || 587),

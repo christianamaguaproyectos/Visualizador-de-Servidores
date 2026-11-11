@@ -1,3 +1,6 @@
+// Debe ser el PRIMER import: carga el archivo .env antes de leer process.env
+import 'dotenv/config';
+
 /**
  * Validación centralizada de variables de entorno
  * Si alguna variable requerida falta, la aplicación NO arranca.
@@ -5,6 +8,9 @@
  */
 
 import Logger from '../utils/logger.js';
+
+/** Longitud mínima aceptada para SESSION_SECRET */
+const MIN_SESSION_SECRET_LENGTH = 32;
 
 /**
  * @typedef {Object} EnvConfig
@@ -31,6 +37,20 @@ const DEFAULTS = {
   DEFAULT_TCP_TIMEOUT_MS: '2000',
   DEFAULT_HTTP_TIMEOUT_MS: '3000',
 };
+
+/**
+ * Indica si un texto es una URL http/https válida
+ * @param {string} value
+ * @returns {boolean}
+ */
+function isValidHttpUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Valida que las variables requeridas estén presentes y resuelve defaults.
@@ -74,6 +94,11 @@ function validateEnv() {
     }
   }
 
+  // SESSION_SECRET debe ser largo para que no se pueda adivinar
+  if (process.env.SESSION_SECRET && process.env.SESSION_SECRET.length < MIN_SESSION_SECRET_LENGTH) {
+    errors.push(`SESSION_SECRET debe tener al menos ${MIN_SESSION_SECRET_LENGTH} caracteres`);
+  }
+
   // Aplicar defaults
   for (const [key, defaultValue] of Object.entries(DEFAULTS)) {
     if (!process.env[key]) {
@@ -81,9 +106,14 @@ function validateEnv() {
     }
   }
 
+  // APP_URL se usa para construir enlaces de correo: debe ser una URL http(s) válida
+  if (!isValidHttpUrl(process.env.APP_URL)) {
+    errors.push('APP_URL debe ser una URL válida que empiece con http:// o https://');
+  }
+
   // Reportar errores
   if (errors.length > 0) {
-    Logger.error('❌ Variables de entorno faltantes:');
+    Logger.error('❌ Variables de entorno faltantes o inválidas:');
     errors.forEach(e => Logger.error(`   - ${e}`));
 
     // En producción, fallar rápido. En desarrollo, advertir.
