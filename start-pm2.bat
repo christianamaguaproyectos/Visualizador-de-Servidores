@@ -4,8 +4,8 @@ REM Este script debe ejecutarse al inicio del sistema
 
 echo Iniciando PM2 DiagramaServers...
 
-REM Cambiar al directorio del proyecto
-cd /d "c:\Users\pasanteoptimus\OneDrive - Grupo Danec\TI\DiagramaServers"
+REM Cambiar al directorio del proyecto (la carpeta donde está este .bat, sin rutas personales)
+cd /d "%~dp0"
 
 REM Iniciar PM2 con la configuración del ecosistema
 pm2 start ecosystem.config.cjs

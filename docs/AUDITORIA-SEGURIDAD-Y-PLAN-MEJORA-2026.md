@@ -288,10 +288,10 @@ flowchart LR
 ```
 
 ### Fase 0 — Higiene de Secretos, Git y Contexto de Contenedores (Inmediata)
-- [ ] **0.1 (`SEC-CRIT-01`)**: Ejecutar `git rm --cached update_db.sql` y actualizar `.gitignore` bloqueando `/*.sql`, `*.sql.gz`, `*.bak`, `backend/uploads/*` (con `!backend/uploads/.gitkeep` y `!/scripts/sql/*.sql`). *(Nota: coordinar con el administrador del repositorio la purga de historial Git y rotación de claves).*
-- [ ] **0.2 (`SEC-CRIT-02`)**: Actualizar `.dockerignore` agregando `.env.*`, `!.env.docker.example`, `backend/config/users.json`, `backend/uploads/*`, `backend/data/*`, `*.sql`, `!scripts/sql/*.sql`, `*.dump`, `*.csv`, `*.xlsx`, `*.xls`, `*.tar`.
-- [ ] **0.3 (`SEC-CRIT-05`)**: Eliminar todos los secretos/contraseñas por defecto en `backend/server.js:96`, `docker-compose.yml`, `.env.docker.example` y scripts bajo `scripts/`. Eliminar `backend/src/debug_5am_incident.js` y retirar `scripts/sql/05-seed-admin.sql` del arranque automático, creando en su lugar un comando seguro de inicialización de administrador.
-- [ ] **0.4 (`SEC-CRIT-08`)**: Corregir `setup-autostart.ps1` (`-RunLevel Limited`), `start-pm2.ps1` (`$PSScriptRoot`) y `start-pm2.bat` (`%~dp0`).
+- [x] **0.1 (`SEC-CRIT-01`)**: Ejecutar `git rm --cached update_db.sql` y actualizar `.gitignore` bloqueando `/*.sql`, `*.sql.gz`, `*.bak`, `backend/uploads/*` (con `!backend/uploads/.gitkeep` y `!/scripts/sql/*.sql`). *(Nota: coordinar con el administrador del repositorio la purga de historial Git y rotación de claves).*
+- [x] **0.2 (`SEC-CRIT-02`)**: Actualizar `.dockerignore` agregando `.env.*`, `!.env.docker.example`, `backend/config/users.json`, `backend/uploads/*`, `backend/data/*`, `*.sql`, `!scripts/sql/*.sql`, `*.dump`, `*.csv`, `*.xlsx`, `*.xls`, `*.tar`.
+- [x] **0.3 (`SEC-CRIT-05`)**: Eliminar todos los secretos/contraseñas por defecto en `backend/server.js:96`, `docker-compose.yml`, `.env.docker.example` y scripts bajo `scripts/`. Eliminar `backend/src/debug_5am_incident.js` y retirar `scripts/sql/05-seed-admin.sql` del arranque automático, creando en su lugar un comando seguro de inicialización de administrador.
+- [x] **0.4 (`SEC-CRIT-08`)**: Corregir `setup-autostart.ps1` (`-RunLevel Limited`), `start-pm2.ps1` (`$PSScriptRoot`) y `start-pm2.bat` (`%~dp0`).
 
 ### Fase 1 — Seguridad Crítica Backend, RBAC, Anti-SSRF y Dependencias (P0/P1)
 - [ ] **1.1 (`ARCH-HIGH-07`)**: Añadir `import 'dotenv/config';` al inicio de `backend/src/config/env.js`, validar `SESSION_SECRET.length >= 32` y `APP_URL` válida, y consumir `env` desde `monitoringConfig.js`.
