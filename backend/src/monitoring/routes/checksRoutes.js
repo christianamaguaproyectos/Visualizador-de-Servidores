@@ -4,6 +4,7 @@
 import express from 'express';
 import { withMonitoringClient } from '../config/monitoringDb.js';
 import Logger from '../../utils/logger.js';
+import { requireAdmin } from '../../middleware/authMiddleware.js';
 import { validarConfiguracionChequeo } from '../domain/validators/checkConfigValidator.js';
 import { TiposChequeo } from '../domain/glosario/terminosDominio.js';
 
@@ -118,7 +119,7 @@ router.get('/:id', async (req, res) => {
  * Crea un nuevo check
  * Body: { host_id, kind, config, frequency_sec, timeout_ms, retries, enabled }
  */
-router.post('/', async (req, res) => {
+router.post('/', requireAdmin, async (req, res) => {
   try {
     const {
       host_id,
@@ -183,7 +184,7 @@ router.post('/', async (req, res) => {
  * PUT /api/monitoring/checks/:id
  * Actualiza un check existente
  */
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAdmin, async (req, res) => {
   try {
     const id = parseIdOrFail(req.params.id, res);
     if (!id) return;
@@ -268,7 +269,7 @@ router.put('/:id', async (req, res) => {
  * DELETE /api/monitoring/checks/:id
  * Elimina un check y su historial
  */
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
   try {
     const id = parseIdOrFail(req.params.id, res);
     if (!id) return;
@@ -295,7 +296,7 @@ router.delete('/:id', async (req, res) => {
  * POST /api/monitoring/checks/:id/run
  * Ejecuta un check INMEDIATAMENTE y devuelve el resultado
  */
-router.post('/:id/run', async (req, res) => {
+router.post('/:id/run', requireAdmin, async (req, res) => {
   try {
     const id = parseIdOrFail(req.params.id, res);
     if (!id) return;
@@ -321,7 +322,7 @@ router.post('/:id/run', async (req, res) => {
  * Crea checks en lote para múltiples hosts
  * Body: { host_ids: [], kind, config, frequency_sec, ... }
  */
-router.post('/bulk', async (req, res) => {
+router.post('/bulk', requireAdmin, async (req, res) => {
   try {
     const {
       host_ids = [],

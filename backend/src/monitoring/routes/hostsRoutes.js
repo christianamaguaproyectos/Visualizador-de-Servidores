@@ -4,6 +4,7 @@
 import express from 'express';
 import { withMonitoringClient } from '../config/monitoringDb.js';
 import Logger from '../../utils/logger.js';
+import { requireAdmin } from '../../middleware/authMiddleware.js';
 import scheduler from '../scheduler/scheduler.js';
 
 const router = express.Router();
@@ -274,7 +275,7 @@ router.get('/:id', async (req, res) => {
  * POST /api/monitoring/hosts
  * Crea un nuevo host en monitoreo
  */
-router.post('/', async (req, res) => {
+router.post('/', requireAdmin, async (req, res) => {
   try {
     const { name, ip, type = 'fisico', rack, critical = false, group_tags = [], enabled = true } = req.body;
 
@@ -326,7 +327,7 @@ router.post('/', async (req, res) => {
  * PUT /api/monitoring/hosts/:id
  * Actualiza un host
  */
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, ip, type, rack, critical, group_tags, enabled } = req.body;
@@ -379,7 +380,7 @@ router.put('/:id', async (req, res) => {
  * DELETE /api/monitoring/hosts/:id
  * Elimina un host y sus datos asociados
  */
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -409,7 +410,7 @@ router.delete('/:id', async (req, res) => {
  * POST /api/monitoring/hosts/:id/maintenance
  * Pone un host en mantenimiento
  */
-router.post('/:id/maintenance', async (req, res) => {
+router.post('/:id/maintenance', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { duration_hours = 1, comment = '' } = req.body;
@@ -444,7 +445,7 @@ router.post('/:id/maintenance', async (req, res) => {
  * DELETE /api/monitoring/hosts/:id/maintenance
  * Saca un host de mantenimiento
  */
-router.delete('/:id/maintenance', async (req, res) => {
+router.delete('/:id/maintenance', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -474,7 +475,7 @@ router.delete('/:id/maintenance', async (req, res) => {
  * POST /api/monitoring/hosts/import
  * Importa hosts desde el inventario existente
  */
-router.post('/import', async (req, res) => {
+router.post('/import', requireAdmin, async (req, res) => {
   try {
     const { type = 'fisicos' } = req.body;
 
@@ -543,7 +544,7 @@ router.post('/import', async (req, res) => {
  * POST /api/monitoring/hosts/cleanup-duplicates
  * Limpia hosts duplicados (mismo nombre), manteniendo el que tiene más checks o actividad más reciente
  */
-router.post('/cleanup-duplicates', async (req, res) => {
+router.post('/cleanup-duplicates', requireAdmin, async (req, res) => {
   try {
     const result = await withClient(async (client) => {
       // Encontrar nombres duplicados

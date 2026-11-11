@@ -175,6 +175,10 @@ class Application {
       res.sendFile(path.join(__dirname, '..', 'frontend', 'public', 'monitoring.html'));
     });
 
+    // La pantalla de usuarios solo para superadmin, también si se pide el archivo directo
+    // (debe ir ANTES de express.static, que si no la entregaría a cualquier sesión)
+    this.app.use(['/users.html', '/users.js'], requireSuperAdmin);
+
     // Middleware estático (archivos protegidos)
     this.app.use(express.static(path.join(__dirname, '..', 'frontend', 'public')));
 

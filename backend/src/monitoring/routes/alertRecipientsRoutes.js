@@ -49,7 +49,7 @@ async function withClient(fn) {
  * GET /api/monitoring/alert-recipients
  * Lista todos los destinatarios de alertas
  */
-router.get('/', async (req, res) => {
+router.get('/', requireAdmin, async (req, res) => {
   try {
     const result = await withClient(async (client) => {
       const { rows } = await client.query(`
@@ -418,7 +418,7 @@ router.post('/simulate', requireAdmin, alertasOperacionRateLimiter, async (req, 
  * GET /api/monitoring/alert-recipients/hosts
  * Lista hosts disponibles para simular
  */
-router.get('/hosts', async (req, res) => {
+router.get('/hosts', requireAdmin, async (req, res) => {
   try {
     const result = await withClient(async (client) => {
       const { rows } = await client.query(`
