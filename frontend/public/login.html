@@ -4,6 +4,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Debe ir ANTES de cargar recursos externos: evita que el ?resetToken= de la URL
+       se envíe a terceros (Google Fonts) en la cabecera Referer -->
+  <meta name="referrer" content="no-referrer">
   <title>Inicio de Sesión - Diagrama de Servidores</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -120,7 +123,35 @@
     </section>
   </main>
 
+  <!-- Formulario para la nueva contraseña (reemplaza al window.prompt, que mostraba la clave en texto plano) -->
+  <dialog id="resetDialog" class="reset-dialog" aria-labelledby="resetDialogTitle">
+    <form id="resetForm" novalidate>
+      <h2 id="resetDialogTitle">Restablecer contraseña</h2>
+      <p class="reset-dialog__hint">Escribe tu nueva contraseña (mínimo 8 caracteres).</p>
+
+      <label for="resetPassword">Nueva contraseña</label>
+      <input type="password" id="resetPassword" autocomplete="new-password" minlength="8" maxlength="256" required>
+
+      <label for="resetPasswordConfirm">Confirmar contraseña</label>
+      <input type="password" id="resetPasswordConfirm" autocomplete="new-password" minlength="8" maxlength="256" required>
+
+      <p id="resetError" class="reset-dialog__error" role="alert" hidden></p>
+
+      <div class="reset-dialog__actions">
+        <button type="button" id="resetCancel" class="reset-dialog__btn">Cancelar</button>
+        <button type="submit" id="resetSubmit" class="reset-dialog__btn reset-dialog__btn--primary">Guardar contraseña</button>
+      </div>
+    </form>
+  </dialog>
+
   <script>
+    // Tomar el token de recuperación y QUITARLO de la barra de direcciones de inmediato
+    // (así no queda en el historial ni se comparte por error al copiar la URL)
+    const resetTokenDesdeUrl = new URLSearchParams(window.location.search).get('resetToken');
+    if (resetTokenDesdeUrl) {
+      window.history.replaceState({}, '', '/login');
+    }
+
     // Password visibility toggle
     document.getElementById('togglePassword').addEventListener('click', () => {
       const pwd = document.getElementById('password');
@@ -162,34 +193,68 @@
       }
     });
 
-    async function tryPasswordResetFromUrl() {
-      const params = new URLSearchParams(window.location.search);
-      const token = params.get('resetToken');
+    function tryPasswordResetFromUrl() {
+      const token = resetTokenDesdeUrl;
       if (!token) return;
 
-      const password = window.prompt('Ingresa tu nueva contraseña (mínimo 8 caracteres):');
-      if (!password) return;
+      const dialog = document.getElementById('resetDialog');
+      const form = document.getElementById('resetForm');
+      const campoClave = document.getElementById('resetPassword');
+      const campoConfirmar = document.getElementById('resetPasswordConfirm');
+      const errorEl = document.getElementById('resetError');
+      const btnGuardar = document.getElementById('resetSubmit');
 
-      try {
-        const response = await fetch('/api/auth/reset-password', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ token, password })
-        });
+      const mostrarErrorReset = (mensaje) => {
+        errorEl.textContent = mensaje;
+        errorEl.hidden = false;
+      };
 
-        const data = await response.json();
+      document.getElementById('resetCancel').addEventListener('click', () => {
+        form.reset();
+        dialog.close();
+      });
 
-        if (response.ok && data.success) {
-          showError('Contraseña actualizada correctamente. Ya puedes iniciar sesión.');
-          window.history.replaceState({}, '', '/login');
-        } else {
-          showError(data.message || 'El enlace de recuperación no es válido o expiró.');
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        errorEl.hidden = true;
+
+        const password = campoClave.value;
+        if (password.length < 8 || password.length > 256) {
+          mostrarErrorReset('La contraseña debe tener entre 8 y 256 caracteres.');
+          campoClave.focus();
+          return;
         }
-      } catch (_) {
-        showError('Error de conexión. Verifica tu red e intenta nuevamente.');
-      }
+        if (password !== campoConfirmar.value) {
+          mostrarErrorReset('Las contraseñas no coinciden.');
+          campoConfirmar.focus();
+          return;
+        }
+
+        btnGuardar.disabled = true;
+        try {
+          const response = await fetch('/api/auth/reset-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token, password })
+          });
+          const data = await response.json().catch(() => ({}));
+
+          if (response.ok && data.success) {
+            form.reset();
+            dialog.close();
+            showError('Contraseña actualizada correctamente. Ya puedes iniciar sesión.');
+          } else {
+            mostrarErrorReset(data.message || 'El enlace de recuperación no es válido o expiró.');
+          }
+        } catch (_) {
+          mostrarErrorReset('Error de conexión. Verifica tu red e intenta nuevamente.');
+        } finally {
+          btnGuardar.disabled = false;
+        }
+      });
+
+      dialog.showModal();
+      campoClave.focus();
     }
 
     // Manejo del formulario de login

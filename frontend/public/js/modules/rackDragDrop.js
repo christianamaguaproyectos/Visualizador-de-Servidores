@@ -12,14 +12,33 @@ class RackDragDrop {
     this.ghostEl = null;
   }
 
+  /**
+   * Fail-closed: mientras no se confirme que el usuario es admin/superadmin,
+   * se trata como solo lectura (antes, si window.currentUser aún no había cargado,
+   * se habilitaba el arrastre para cualquiera).
+   */
   isReadOnlyUser() {
-    return window.currentUser?.role === 'viewer';
+    const usuario = window.currentUser;
+    return !(usuario && (usuario.role === 'admin' || usuario.isSuperAdmin));
+  }
+
+  /** Espera a conocer el usuario de la sesión (si otro script aún no lo cargó) */
+  async asegurarUsuario() {
+    if (window.currentUser) return;
+    try {
+      const res = await fetch('/api/auth/user');
+      const data = await res.json();
+      if (data?.success && data.user && !window.currentUser) window.currentUser = data.user;
+    } catch (_) {
+      // Sin sesión confirmada: se queda en solo lectura
+    }
   }
 
   /**
    * Inicializa el drag-and-drop en todos los servidores
    */
-  init() {
+  async init() {
+    await this.asegurarUsuario();
     if (this.isReadOnlyUser()) {
       console.log('ℹ️ Drag-and-drop deshabilitado para usuario en modo solo lectura');
       return;

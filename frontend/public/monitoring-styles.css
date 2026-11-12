@@ -1387,3 +1387,31 @@ fieldset legend {
 .empty-state p {
   margin-bottom: 8px;
 }
+
+/* ===== RBAC en pantalla (fail-closed) =====
+   Mientras <body> NO tenga la clase .rol-admin (la pone monitoring.js solo si el
+   usuario es admin/superadmin), se ocultan todos los controles que modifican datos. */
+body:not(.rol-admin) #btnImportHosts,
+body:not(.rol-admin) #btnAddCheck,
+body:not(.rol-admin) #btnBulkCheck,
+body:not(.rol-admin) #btnPurgeCheckRuns,
+body:not(.rol-admin) #btnPurgeIncidents,
+body:not(.rol-admin) #btnVacuum,
+body:not(.rol-admin) #btnAddRecipient,
+body:not(.rol-admin) #btnTestEmail,
+body:not(.rol-admin) #btnSimulateDown,
+body:not(.rol-admin) #btnSimulateUp,
+body:not(.rol-admin) #tab-btn-maintenance,
+body:not(.rol-admin) #tab-btn-alerts-config,
+body:not(.rol-admin) .btn-icon-delete,
+body:not(.rol-admin) [data-action="ack"],
+body:not(.rol-admin) [data-action="resolve"],
+body:not(.rol-admin) [data-action="close"],
+body:not(.rol-admin) [data-action="add-note"],
+body:not(.rol-admin) [data-action="run-check"],
+body:not(.rol-admin) [data-action="delete-check"],
+body:not(.rol-admin) [data-action="maintenance"],
+body:not(.rol-admin) [data-action="add-check"],
+body:not(.rol-admin) [data-recipient-action] {
+  display: none !important;
+}

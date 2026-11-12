@@ -40,6 +40,19 @@
         }
     ];
 
+    /**
+     * Limpia el estado del cliente al cerrar sesión: cierra la conexión en vivo (SSE)
+     * para que no siga reconectando y olvida al usuario en memoria.
+     */
+    function limpiarEstadoCliente() {
+        try { window.__eventosServidor?.close(); } catch (_) { /* ya cerrada */ }
+        window.__eventosServidor = null;
+        window.currentUser = null;
+        try { sessionStorage.clear(); } catch (_) { /* sin acceso */ }
+    }
+    // auth.js usa la misma limpieza
+    window.limpiarEstadoCliente = limpiarEstadoCliente;
+
     function detectActivePage() {
         const path = window.location.pathname;
         if (path === '/' || path === '/home' || path === '/home.html') return 'home';
@@ -165,6 +178,7 @@
         if (logoutBtn) {
             logoutBtn.addEventListener('click', async () => {
                 try {
+                    limpiarEstadoCliente();
                     const response = await fetch('/api/auth/logout', { method: 'POST' });
                     const data = await response.json();
                     if (data.success) {
@@ -251,17 +265,34 @@
         });
     }
 
+    /**
+     * Prepara los fieldsets colapsables ahora y cuando se AGREGUEN nodos a la página.
+     * Antes se observaban también los cambios de "style" de todo el body, y el
+     * observer se disparaba en cada movimiento del tooltip (costoso). Ahora:
+     * solo cambios de hijos y como máximo una vez por frame.
+     */
+    function observarFieldsetsColapsables() {
+        initCollapsibleFieldsets();
+        let pendiente = false;
+        const obs = new MutationObserver(() => {
+            if (pendiente) return;
+            pendiente = true;
+            requestAnimationFrame(() => {
+                pendiente = false;
+                initCollapsibleFieldsets();
+            });
+        });
+        obs.observe(document.body, { childList: true, subtree: true });
+    }
+
     // Initialize when DOM ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
             buildNav();
-            // Observe modals for collapsible init
-            const obs = new MutationObserver(() => initCollapsibleFieldsets());
-            obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
+            observarFieldsetsColapsables();
         });
     } else {
         buildNav();
-        const obs = new MutationObserver(() => initCollapsibleFieldsets());
-        obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
+        observarFieldsetsColapsables();
     }
 })();

@@ -211,9 +211,11 @@ function editUser(userId) {
  * Abre modal para cambiar contraseña
  */
 function changePassword(userId) {
+  // Primero limpiar el formulario y DESPUÉS asignar el ID: antes reset() borraba
+  // el ID oculto y se enviaba POST /api/users//change-password (cambio roto)
+  document.getElementById('passwordForm').reset();
   document.getElementById('passwordUserId').value = userId;
   document.getElementById('passwordModal').classList.add('show');
-  document.getElementById('passwordForm').reset();
 }
 
 /**

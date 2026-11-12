@@ -47,7 +47,8 @@ document.addEventListener('DOMContentLoaded', function () {
   const isVirtuales = serverType === 'virtuales';
 
   let currentUserRole = null;
-  let readOnlyUser = false;
+  // RBAC del cliente "fail-closed": solo lectura hasta confirmar que el usuario es admin
+  let readOnlyUser = true;
   let readOnlyNoticeShown = false;
 
   function isReadOnlyUser() {
@@ -101,16 +102,17 @@ document.addEventListener('DOMContentLoaded', function () {
       if (data?.success && data?.user) {
         currentUserRole = data.user.role;
         window.currentUser = data.user;
-        readOnlyUser = currentUserRole === 'viewer';
+        readOnlyUser = !(currentUserRole === 'admin' || data.user.isSuperAdmin);
       }
     } catch (_) {
-      readOnlyUser = false;
+      readOnlyUser = true; // si no se pudo verificar la sesión, NO se habilitan acciones de escritura
     } finally {
       disableReadOnlyActions();
     }
   }
 
-  hydrateCurrentUserRole();
+  // Las vistas se montan DESPUÉS de conocer el rol (ver más abajo: sesionLista.finally(fetchData))
+  const sesionLista = hydrateCurrentUserRole();
 
 
 
@@ -1801,13 +1803,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-    // Wire up events for cluster detail view if active
-
-    if (virtualState.mode === 'clusterDetail') {
-
-      wireClusterDetailEvents();
-
-    }
+    // Los eventos del detalle de cluster se conectan UNA vez, al final de renderVirtualView().
+    // (Antes también se llamaba aquí y cada acción se ejecutaba dos veces.)
 
 
 
@@ -4121,6 +4118,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     route();
 
+    // Re-aplicar el modo solo lectura a los botones recién renderizados
+    disableReadOnlyActions();
+
     if (!isVirtuales) {
 
       // Overview stats (simulado en cliente)
@@ -4138,6 +4138,9 @@ document.addEventListener('DOMContentLoaded', function () {
     if (document.getElementById('app')) {
 
       const ev = new EventSource('/events');
+
+      // Referencia global para cerrarla al hacer logout (ver nav.js / auth.js)
+      window.__eventosServidor = ev;
 
       ev.addEventListener('data', async (msg) => {
 
@@ -4187,7 +4190,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
   window.addEventListener('hashchange', route);
 
-  fetchData();
+  // Primero se confirma el rol (fail-closed) y luego se renderizan las vistas
+  sesionLista.finally(() => fetchData());
 
 
 
@@ -4211,11 +4215,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // ========= FÍSICOS: Interactividad UX ========= //
 
+  // Los listeners GLOBALES (document, modal, buscador) se registran UNA sola vez.
+  // Antes se volvían a registrar en cada render/evento SSE y se acumulaban cientos.
+  let wirePhysicalUXGlobalesListos = false;
+
   const wirePhysicalUX = function () {
 
     const isPhys = !window.location.pathname.includes('virtuales');
 
     if (!isPhys) return;
+
+    const registrarGlobales = !wirePhysicalUXGlobalesListos;
+    wirePhysicalUXGlobalesListos = true;
 
     const tooltip = document.getElementById('slotTooltip');
 
@@ -4271,7 +4282,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Tooltip sobre unidades (usamos delegación si tuvieran data)
 
-    document.addEventListener('mousemove', (e) => {
+    if (registrarGlobales) document.addEventListener('mousemove', (e) => {
 
       const unit = e.target.closest('.rack-unit');
 
@@ -4313,6 +4324,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.querySelectorAll('.rack').forEach(rackEl => {
 
+      // Cada rack se conecta una sola vez aunque se vuelva a renderizar
+      if (rackEl.dataset.uxBound === '1') return;
+      rackEl.dataset.uxBound = '1';
+
       rackEl.addEventListener('click', () => {
 
         if (isReadOnlyUser()) {
@@ -4334,15 +4349,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Cierre modal (compatibilidad)
 
-    modalClose?.addEventListener('click', () => modal.classList.remove('show'));
+    if (registrarGlobales) modalClose?.addEventListener('click', () => modal.classList.remove('show'));
 
-    modal?.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('show'); });
+    if (registrarGlobales) modal?.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('show'); });
 
 
 
     // Navegación al hacer click en etiqueta (server-label)
 
-    document.addEventListener('click', (e) => {
+    if (registrarGlobales) document.addEventListener('click', (e) => {
 
       const lbl = e.target.closest('.server-label');
 
@@ -4368,7 +4383,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // Edición de host virtual sin onclick inline
-    document.addEventListener('click', (e) => {
+    if (registrarGlobales) document.addEventListener('click', (e) => {
       const btn = e.target.closest('.btn-edit-host');
       if (!btn) return;
 
@@ -4439,9 +4454,9 @@ document.addEventListener('DOMContentLoaded', function () {
     renderOverview();
     applySearchFilter();
 
-    search?.addEventListener('input', applySearchFilter);
+    if (registrarGlobales) search?.addEventListener('input', applySearchFilter);
 
-    filter?.addEventListener('change', applySearchFilter);
+    if (registrarGlobales) filter?.addEventListener('change', applySearchFilter);
 
 
 
@@ -4451,7 +4466,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
       const grid = document.querySelector('.rack-grid');
 
-      if (grid) {
+      if (grid && grid.dataset.wheelUxBound !== '1') {
+
+        grid.dataset.wheelUxBound = '1';
 
         grid.addEventListener('wheel', (ev) => {
 

@@ -1344,7 +1344,28 @@ function switchTab(tabName) {
 }
 
 // Initialize
+/**
+ * RBAC de la pantalla en modo "fail-closed": los controles de escritura están
+ * ocultos por CSS (body:not(.rol-admin)) y solo se muestran si se confirma que el
+ * usuario es admin/superadmin. Si la consulta falla, siguen ocultos.
+ * (El backend igual responde 403 a un viewer.)
+ */
+async function aplicarRolEnPantalla() {
+  try {
+    const res = await fetch('/api/auth/user');
+    const data = await res.json();
+    const usuario = data?.success ? data.user : null;
+    const esAdmin = !!usuario && (usuario.role === 'admin' || usuario.isSuperAdmin);
+    window.currentUser = usuario;
+    document.body.classList.toggle('rol-admin', esAdmin);
+  } catch (_) {
+    document.body.classList.remove('rol-admin');
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  aplicarRolEnPantalla();
+
   // Tab clicks
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
