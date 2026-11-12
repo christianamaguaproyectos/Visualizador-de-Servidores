@@ -1,513 +1,493 @@
 /**
- * MÃ³dulo para gestionar servidores (CRUD)
+ * Módulo ÚNICO y autoritativo para gestionar servidores (CRUD) en index.html y virtual.html.
+ *
+ * Antes app.js definía su propio window.serverManager y su propio listener "submit"
+ * sobre #serverForm, y este módulo los sobrescribía: el botón "Editar" fallaba
+ * (openServerModalForEdit no existía aquí) y cada guardado enviaba DOS peticiones,
+ * una de ellas sin 16 campos de seguridad/storage. Ahora todo vive aquí.
  */
+
+import { confirmAction } from '/js/dominios/ui-system/modalConfirm.js';
+
+const $ = (id) => document.getElementById(id);
+
+/** Asigna un valor a un campo del formulario si existe en la página */
+function setVal(id, value) {
+  const el = $(id);
+  if (el) el.value = value ?? '';
+}
+
+/** Lee el valor (sin espacios) de un campo o null si está vacío / no existe */
+function getVal(id) {
+  const valor = $(id)?.value;
+  if (valor === undefined || valor === null) return null;
+  const limpio = String(valor).trim();
+  return limpio === '' ? null : limpio;
+}
+
+/** Fecha en formato YYYY-MM-DD para inputs type="date" */
+function formatDateForInput(dateVal) {
+  if (!dateVal) return '';
+  const d = new Date(dateVal);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toISOString().split('T')[0];
+}
+
+/** Normaliza el estado al valor del <select>: CRITICO | NO_CRITICO | MANTENIMIENTO */
+function normalizarEstado(estado) {
+  const valor = (estado || 'NO_CRITICO').toString().toUpperCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (valor.includes('NO_CRITICO') || valor.includes('NO CRITICO')) return 'NO_CRITICO';
+  if (valor.includes('CRIT')) return 'CRITICO';
+  if (valor.includes('MANT')) return 'MANTENIMIENTO';
+  return 'NO_CRITICO';
+}
+
+function notificar(mensaje, tipo = 'info') {
+  if (typeof window.showToast === 'function') window.showToast(mensaje, tipo);
+}
 
 class ServerManager {
   constructor() {
     this.currentType = window.location.pathname.includes('virtual') ? 'virtuales' : 'fisicos';
     this.racks = [];
-    this.editingServerId = null;
-  }
-
-  isReadOnlyUser() {
-    return window.currentUser?.role === 'viewer';
-  }
-
-  notifyReadOnly() {
-    if (typeof showToast === 'function') {
-      showToast('Modo solo lectura.', 'warning');
-    }
+    this.guardando = false;
   }
 
   /**
-   * Inicializa los event listeners
+   * RBAC del cliente en modo "fail-closed": mientras no se confirme que el usuario
+   * es admin/superadmin, se trata como solo lectura. (El backend igual valida.)
    */
+  isReadOnlyUser() {
+    const usuario = window.currentUser;
+    return !(usuario && (usuario.role === 'admin' || usuario.isSuperAdmin));
+  }
+
+  notifyReadOnly() {
+    notificar('Modo solo lectura.', 'warning');
+  }
+
+  /** Recarga los datos de la vista actual (función expuesta por app.js) */
+  async recargarVista() {
+    if (typeof window.recargarDatosServidores === 'function') {
+      await window.recargarDatosServidores();
+    } else {
+      window.location.reload();
+    }
+  }
+
   init() {
-    // BotÃ³n agregar servidor
-    const btnAddServer = document.getElementById('btnAddServer');
-    if (btnAddServer) {
-      btnAddServer.addEventListener('click', () => this.openServerModal());
-    }
+    $('btnAddServer')?.addEventListener('click', () => this.openServerModal());
+    $('btnAddRack')?.addEventListener('click', () => this.openRackModal());
 
-    // BotÃ³n agregar rack
-    const btnAddRack = document.getElementById('btnAddRack');
-    if (btnAddRack) {
-      btnAddRack.addEventListener('click', () => this.openRackModal());
-    }
+    $('serverModalClose')?.addEventListener('click', () => this.closeServerModal());
+    $('serverFormCancel')?.addEventListener('click', () => this.closeServerModal());
 
-    // Modal servidor
-    const serverModalClose = document.getElementById('serverModalClose');
-    if (serverModalClose) {
-      serverModalClose.addEventListener('click', () => this.closeServerModal());
-    }
+    // ÚNICO listener de envío del formulario de servidor
+    $('serverForm')?.addEventListener('submit', (e) => this.handleServerSubmit(e));
 
-    const serverFormCancel = document.getElementById('serverFormCancel');
-    if (serverFormCancel) {
-      serverFormCancel.addEventListener('click', () => this.closeServerModal());
-    }
+    $('rackAddModalClose')?.addEventListener('click', () => this.closeRackModal());
+    $('rackFormCancel')?.addEventListener('click', () => this.closeRackModal());
 
-    const serverForm = document.getElementById('serverForm');
-    if (serverForm) {
-      serverForm.addEventListener('submit', (e) => this.handleServerSubmit(e));
-    }
-
-    // Modal rack
-    const rackAddModalClose = document.getElementById('rackAddModalClose');
-    if (rackAddModalClose) {
-      rackAddModalClose.addEventListener('click', () => this.closeRackModal());
-    }
-
-    const rackFormCancel = document.getElementById('rackFormCancel');
-    if (rackFormCancel) {
-      rackFormCancel.addEventListener('click', () => this.closeRackModal());
-    }
-
-    const rackForm = document.getElementById('rackForm');
+    const rackForm = $('rackForm');
     if (rackForm && this.currentType !== 'virtuales') {
       rackForm.addEventListener('submit', (e) => this.handleRackSubmit(e));
     }
 
-    // Cargar racks al inicio
     this.loadRacks();
   }
 
-  /**
-   * Carga la lista de racks para el selector
-   */
   async loadRacks() {
     try {
       const response = await fetch(`/api/racks?type=${this.currentType}`);
       const racks = await response.json();
-      this.racks = racks;
+      this.racks = Array.isArray(racks) ? racks : [];
     } catch (error) {
       console.error('Error cargando racks:', error);
     }
   }
 
   /**
-   * Abre el modal para agregar/editar servidor
+   * Llena el selector de rack/host
+   * @param {string} [rackPreseleccionado] - Si viene, se fija y se oculta el selector
    */
-  async openServerModal(serverId = null) {
-    if (this.isReadOnlyUser()) {
-      this.notifyReadOnly();
-      return;
-    }
+  async llenarSelectorRacks(rackPreseleccionado) {
+    const rackSelect = $('serverRack');
+    if (!rackSelect) return;
 
-    this.editingServerId = serverId;
-
-    const modal = document.getElementById('serverModal');
-    const title = document.getElementById('serverModalTitle');
-    const rackSelect = document.getElementById('serverRack');
-
-    // Actualizar tÃ­tulo
-    title.textContent = serverId ? 'Editar Servidor' : (this.currentType === 'virtuales' ? 'Agregar VM' : 'Agregar Servidor');
-
-    // Cargar racks en el selector
     await this.loadRacks();
-    rackSelect.innerHTML = '<option value="">Seleccionar rack/host...</option>';
-    this.racks.forEach(rack => {
+    rackSelect.replaceChildren();
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Seleccionar rack/host...';
+    rackSelect.appendChild(placeholder);
+
+    this.racks.forEach((rack) => {
       const option = document.createElement('option');
       option.value = rack.name;
       option.textContent = rack.name;
       rackSelect.appendChild(option);
     });
 
-    // Si es ediciÃ³n, cargar datos del servidor
-    if (serverId) {
-      await this.loadServerData(serverId);
+    const contenedor = rackSelect.closest('div[style*="gap"]');
+    if (rackPreseleccionado) {
+      rackSelect.value = rackPreseleccionado;
+      rackSelect.disabled = true;
+      if (contenedor) contenedor.style.display = 'none';
     } else {
-      this.clearServerForm();
-    }
-
-    modal.style.display = 'flex';
-  }
-
-  /**
-   * Carga datos de un servidor para ediciÃ³n
-   */
-  async loadServerData(serverId) {
-    try {
-      const response = await fetch(`/api/servers?type=${this.currentType}`);
-      const servers = await response.json();
-      const server = servers.find(s => s.id == serverId);
-
-      if (server) {
-        document.getElementById('serverId').value = server.id;
-        document.getElementById('serverNombre').value = server.nombre || '';
-        if (document.getElementById('serverLabel')) document.getElementById('serverLabel').value = server.serverLabel || '';
-        document.getElementById('serverRack').value = server.rack_norm || server.rack || '';
-        document.getElementById('serverUnits').value = server.rack_units || server.rackUnits || 2;
-        document.getElementById('serverPosition').value = server.rack_position || server.rackPosition || '';
-        document.getElementById('serverIP').value = server.ip || '';
-        document.getElementById('serverHostname').value = server.hostname || '';
-        document.getElementById('serverUsuario').value = server.usuario || '';
-        if (document.getElementById('serverMarca')) document.getElementById('serverMarca').value = server.marca || '';
-        if (document.getElementById('serverModelo')) document.getElementById('serverModelo').value = server.modelo || '';
-        if (document.getElementById('serverTipo')) document.getElementById('serverTipo').value = server.tipo || '';
-        if (document.getElementById('serverSerie')) document.getElementById('serverSerie').value = server.serie || '';
-        document.getElementById('serverRAM').value = server.ram_gb || server.ramGb || '';
-        if (document.getElementById('serverSocket')) document.getElementById('serverSocket').value = server.socket || '';
-        if (document.getElementById('serverNoPorSocket')) document.getElementById('serverNoPorSocket').value = server.no_por_socket || server.noPorSocket || '';
-        if (document.getElementById('serverProcLogicos')) document.getElementById('serverProcLogicos').value = server.procesadores_logicos || server.procesadoresLogicos || '';
-        // Poblar discos dinÃ¡micos usando la funciÃ³n de app.js
-        if (window.populateDiscos) {
-          window.populateDiscos(server.discos);
-        } else {
-          const container = document.getElementById('discosContainer');
-          if (container && server.discos) {
-            // Texto, nunca HTML: el valor viene de la base de datos (anti-XSS)
-            const aviso = document.createElement('div');
-            aviso.style.cssText = 'padding:8px;color:#666';
-            aviso.textContent = String(server.discos);
-            container.replaceChildren(aviso);
-          }
-        }
-        if (document.getElementById('serverDatastore')) document.getElementById('serverDatastore').value = server.datastore || '';
-        if (document.getElementById('serverConexion')) document.getElementById('serverConexion').value = server.conexion || '';
-        document.getElementById('serverSO').value = server.so || '';
-        document.getElementById('serverSoftware').value = server.software || '';
-        document.getElementById('serverEstado').value = server.estado || 'NO_CRITICO';
-        if (document.getElementById('serverActivo')) document.getElementById('serverActivo').value = server.activo || 'SI';
-        if (document.getElementById('serverOperativo')) document.getElementById('serverOperativo').value = server.activo || 'SI';
-        if (document.getElementById('serverFechaInstalacion')) document.getElementById('serverFechaInstalacion').value = server.fecha_instalacion || server.fechaInstalacion || '';
-        if (document.getElementById('serverFechaMantenimiento')) document.getElementById('serverFechaMantenimiento').value = server.fecha_mantenimiento || server.fechaMantenimiento || '';
-        document.getElementById('serverBackup').value = server.backup || '';
-        if (document.getElementById('serverFechaBackup')) document.getElementById('serverFechaBackup').value = server.fecha_backup || server.fechaBackup || '';
-        // Campos fÃ­sicos
-        if (document.getElementById('serverStorage')) document.getElementById('serverStorage').value = server.storage || '';
-        if (document.getElementById('serverOcsInventario')) document.getElementById('serverOcsInventario').value = server.ocsInventario || '';
-        if (document.getElementById('serverDatastoreVirtuales')) document.getElementById('serverDatastoreVirtuales').value = server.datastoreVirtuales || '';
-        if (document.getElementById('serverConexionStorage')) document.getElementById('serverConexionStorage').value = server.conexionStorage || '';
-        // Campos virtuales (seguridad)
-        if (document.getElementById('serverMtm')) document.getElementById('serverMtm').value = server.mtm || '';
-        if (document.getElementById('serverConfigBackup')) document.getElementById('serverConfigBackup').value = server.configBackup || '';
-        if (document.getElementById('serverSophosEp')) document.getElementById('serverSophosEp').value = server.sophosEp || '';
-        if (document.getElementById('serverVicarius')) document.getElementById('serverVicarius').value = server.vicarius || '';
-        if (document.getElementById('serverAcronis')) document.getElementById('serverAcronis').value = server.acronis || '';
-        if (document.getElementById('serverVeeam')) document.getElementById('serverVeeam').value = server.veeam || '';
-        if (document.getElementById('serverManual')) document.getElementById('serverManual').value = server.manual || '';
-        if (document.getElementById('serverZabbix')) document.getElementById('serverZabbix').value = server.zabbix || '';
-        if (document.getElementById('serverWazuh')) document.getElementById('serverWazuh').value = server.wazuh || '';
-        if (document.getElementById('serverBluelevel')) document.getElementById('serverBluelevel').value = server.bluelevel || '';
-        if (document.getElementById('serverPam')) document.getElementById('serverPam').value = server.pam || '';
-        if (document.getElementById('serverUsuarioPam')) document.getElementById('serverUsuarioPam').value = server.usuarioPam || '';
-      }
-    } catch (error) {
-      console.error('Error cargando datos del servidor:', error);
+      rackSelect.disabled = false;
+      if (contenedor) contenedor.style.display = 'grid';
     }
   }
 
-  /**
-   * Limpia el formulario de servidor
-   */
-  clearServerForm() {
-    document.getElementById('serverId').value = '';
-    document.getElementById('serverNombre').value = '';
-    if (document.getElementById('serverLabel')) document.getElementById('serverLabel').value = '';
-    document.getElementById('serverRack').value = '';
-    document.getElementById('serverUnits').value = '2';
-    document.getElementById('serverPosition').value = '';
-    document.getElementById('serverIP').value = '';
-    document.getElementById('serverHostname').value = '';
-    document.getElementById('serverUsuario').value = '';
-    if (document.getElementById('serverMarca')) document.getElementById('serverMarca').value = '';
-    if (document.getElementById('serverModelo')) document.getElementById('serverModelo').value = '';
-    if (document.getElementById('serverTipo')) document.getElementById('serverTipo').value = '';
-    if (document.getElementById('serverSerie')) document.getElementById('serverSerie').value = '';
-    document.getElementById('serverRAM').value = '';
-    if (document.getElementById('serverSocket')) document.getElementById('serverSocket').value = '';
-    if (document.getElementById('serverNoPorSocket')) document.getElementById('serverNoPorSocket').value = '';
-    if (document.getElementById('serverProcLogicos')) document.getElementById('serverProcLogicos').value = '';
-    // Limpiar contenedor de discos dinÃ¡micos
-    const discosContainer = document.getElementById('discosContainer');
-    if (discosContainer) discosContainer.innerHTML = '';
-    if (document.getElementById('serverDatastore')) document.getElementById('serverDatastore').value = '';
-    if (document.getElementById('serverConexion')) document.getElementById('serverConexion').value = '';
-    document.getElementById('serverSO').value = '';
-    document.getElementById('serverSoftware').value = '';
-    document.getElementById('serverEstado').value = 'NO_CRITICO';
-    if (document.getElementById('serverActivo')) document.getElementById('serverActivo').value = 'SI';
-    if (document.getElementById('serverOperativo')) document.getElementById('serverOperativo').value = 'SI';
-    if (document.getElementById('serverFechaInstalacion')) document.getElementById('serverFechaInstalacion').value = '';
-    if (document.getElementById('serverFechaMantenimiento')) document.getElementById('serverFechaMantenimiento').value = '';
-    document.getElementById('serverBackup').value = '';
-    if (document.getElementById('serverFechaBackup')) document.getElementById('serverFechaBackup').value = '';
-    // Campos fÃ­sicos
-    if (document.getElementById('serverStorage')) document.getElementById('serverStorage').value = '';
-    if (document.getElementById('serverOcsInventario')) document.getElementById('serverOcsInventario').value = '';
-    if (document.getElementById('serverDatastoreVirtuales')) document.getElementById('serverDatastoreVirtuales').value = '';
-    if (document.getElementById('serverConexionStorage')) document.getElementById('serverConexionStorage').value = '';
-    // Campos virtuales (seguridad)
-    if (document.getElementById('serverMtm')) document.getElementById('serverMtm').value = '';
-    if (document.getElementById('serverConfigBackup')) document.getElementById('serverConfigBackup').value = '';
-    if (document.getElementById('serverSophosEp')) document.getElementById('serverSophosEp').value = '';
-    if (document.getElementById('serverVicarius')) document.getElementById('serverVicarius').value = '';
-    if (document.getElementById('serverAcronis')) document.getElementById('serverAcronis').value = '';
-    if (document.getElementById('serverVeeam')) document.getElementById('serverVeeam').value = '';
-    if (document.getElementById('serverManual')) document.getElementById('serverManual').value = '';
-    if (document.getElementById('serverZabbix')) document.getElementById('serverZabbix').value = '';
-    if (document.getElementById('serverWazuh')) document.getElementById('serverWazuh').value = '';
-    if (document.getElementById('serverBluelevel')) document.getElementById('serverBluelevel').value = '';
-    if (document.getElementById('serverPam')) document.getElementById('serverPam').value = '';
-    if (document.getElementById('serverUsuarioPam')) document.getElementById('serverUsuarioPam').value = '';
+  /** Muestra el modal y avisa a app.js para que reinicie la marca de "cambios sin guardar" */
+  mostrarModal() {
+    const modal = $('serverModal');
+    if (modal) modal.style.display = 'flex';
+    $('serverForm')?.dispatchEvent(new CustomEvent('serverform:abierto'));
   }
 
   /**
-   * Cierra el modal de servidor
+   * Abre el modal para CREAR un servidor/VM.
+   * Compatibilidad: si recibe un ID numérico, abre en modo edición.
+   * @param {string|number} [rackOId] - Nombre del rack/host a preseleccionar, o ID a editar
    */
-  closeServerModal() {
-    document.getElementById('serverModal').style.display = 'none';
-    this.editingServerId = null;
-  }
-
-  /**
-   * Maneja el envÃ­o del formulario de servidor
-   */
-  async handleServerSubmit(e) {
+  async openServerModal(rackOId) {
     if (this.isReadOnlyUser()) {
-      if (e) e.preventDefault();
       this.notifyReadOnly();
       return;
     }
 
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
+    if (rackOId !== undefined && rackOId !== null && /^\d+$/.test(String(rackOId))) {
+      return this.openServerModalForEdit(rackOId);
     }
+    const rackPreseleccionado = typeof rackOId === 'string' ? rackOId : undefined;
 
-    const serverId = document.getElementById('serverId')?.value || '';
-    const data = {
-      type: this.currentType,
-      nombre: document.getElementById('serverNombre')?.value || '',
-      server_label: document.getElementById('serverLabel')?.value || null,
-      rack_norm: document.getElementById('serverRack')?.value || '',
-      rack_raw: document.getElementById('serverRack')?.value || '',
-      rack_units: parseInt(document.getElementById('serverUnits')?.value) || 2,
-      rack_position: document.getElementById('serverPosition')?.value ? parseInt(document.getElementById('serverPosition').value) : null,
-      ip: document.getElementById('serverIP')?.value || null,
-      hostname: document.getElementById('serverHostname')?.value || null,
-      usuario: document.getElementById('serverUsuario')?.value || null,
-      marca: document.getElementById('serverMarca')?.value || null,
-      modelo: document.getElementById('serverModelo')?.value || null,
-      tipo: document.getElementById('serverTipo')?.value || null,
-      serie: document.getElementById('serverSerie')?.value || null,
-      ram_gb: document.getElementById('serverRAM')?.value || null,
-      socket: document.getElementById('serverSocket')?.value || null,
-      no_por_socket: document.getElementById('serverNoPorSocket')?.value || null,
-      procesadores_logicos: document.getElementById('serverProcLogicos')?.value || null,
-      discos: window.getDiscosJSON ? window.getDiscosJSON() : (document.getElementById('serverDiscos')?.value || null),
-      datastore: document.getElementById('serverDatastore')?.value || null,
-      conexion: document.getElementById('serverConexion')?.value || null,
-      so: document.getElementById('serverSO')?.value || null,
-      software: document.getElementById('serverSoftware')?.value || null,
-      estado: document.getElementById('serverEstado')?.value || 'NO_CRITICO',
-      activo: document.getElementById('serverActivo')?.value || document.getElementById('serverOperativo')?.value || 'SI',
-      fecha_instalacion: document.getElementById('serverFechaInstalacion')?.value || null,
-      fecha_mantenimiento: document.getElementById('serverFechaMantenimiento')?.value || null,
-      backup: document.getElementById('serverBackup')?.value || null,
-      fecha_backup: document.getElementById('serverFechaBackup')?.value || null,
-      // Campos fÃ­sicos
-      storage: document.getElementById('serverStorage')?.value || null,
-      ocs_inventario: document.getElementById('serverOcsInventario')?.value || null,
-      datastore_virtuales: document.getElementById('serverDatastoreVirtuales')?.value || null,
-      conexion_storage: document.getElementById('serverConexionStorage')?.value || null,
-      // Campos virtuales (seguridad)
-      mtm: document.getElementById('serverMtm')?.value || null,
-      config_backup: document.getElementById('serverConfigBackup')?.value || null,
-      sophos_ep: document.getElementById('serverSophosEp')?.value || null,
-      vicarius: document.getElementById('serverVicarius')?.value || null,
-      acronis: document.getElementById('serverAcronis')?.value || null,
-      veeam: document.getElementById('serverVeeam')?.value || null,
-      manual: document.getElementById('serverManual')?.value || null,
-      zabbix: document.getElementById('serverZabbix')?.value || null,
-      wazuh: document.getElementById('serverWazuh')?.value || null,
-      bluelevel: document.getElementById('serverBluelevel')?.value || null,
-      pam: document.getElementById('serverPam')?.value || null,
-      usuario_pam: document.getElementById('serverUsuarioPam')?.value || null
-    };
+    const form = $('serverForm');
+    if (!form) return;
+    form.reset();
+    setVal('serverId', '');
+    const discos = $('discosContainer');
+    if (discos) discos.replaceChildren();
 
-    try {
-      const url = serverId ? `/api/servers/${serverId}` : '/api/servers';
-      const method = serverId ? 'PUT' : 'POST';
-
-      const response = await fetch(url, {
-        method: method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        showToast(serverId ? 'Servidor actualizado exitosamente' : 'Servidor creado exitosamente', 'success');
-        this.closeServerModal();
-
-        // Recargar datos
-        if (window.loadAllData) {
-          window.loadAllData();
-        } else if (window.location.reload) {
-          window.location.reload();
-        }
+    const titulo = $('serverModalTitle');
+    if (titulo) {
+      if (this.currentType === 'virtuales') {
+        titulo.textContent = rackPreseleccionado ? `Agregar VM a ${rackPreseleccionado}` : 'Agregar Servidor Virtual';
       } else {
-        showToast('Error: ' + (result.error || 'No se pudo guardar el servidor'), 'error');
+        titulo.textContent = 'Agregar Servidor Físico';
       }
-    } catch (error) {
-      console.error('Error guardando servidor:', error);
-      alert('Error de conexiÃ³n al guardar el servidor');
     }
+
+    await this.llenarSelectorRacks(rackPreseleccionado);
+    this.mostrarModal();
   }
 
   /**
-   * Abre el modal para agregar rack
+   * Abre el modal para EDITAR un servidor.
+   * @param {Object|number|string} serverOId - Objeto servidor (desde la vista) o su ID
    */
+  async openServerModalForEdit(serverOId) {
+    if (this.isReadOnlyUser()) {
+      this.notifyReadOnly();
+      return;
+    }
+
+    let server = serverOId;
+    if (!server || typeof server !== 'object') {
+      server = await this.buscarServidor(serverOId);
+      if (!server) {
+        notificar('No se encontró el servidor a editar', 'error');
+        return;
+      }
+    }
+
+    const form = $('serverForm');
+    if (!form) {
+      notificar('Error: no se encontró el formulario de edición', 'error');
+      return;
+    }
+    form.reset();
+
+    const titulo = $('serverModalTitle');
+    if (titulo) titulo.textContent = this.currentType === 'virtuales' ? 'Editar Servidor Virtual' : 'Editar Servidor Físico';
+
+    await this.llenarSelectorRacks();
+
+    // Campos comunes
+    setVal('serverId', server.id);
+    setVal('serverNombre', server.nombre);
+    setVal('serverRack', server.rack || server.rack_norm || server.rackNorm);
+    setVal('serverUnits', server.rack_units || server.rackUnits || 2);
+    setVal('serverPosition', server.rack_position ?? server.rackPosition);
+    setVal('serverIP', server.ip);
+    setVal('serverHostname', server.hostname);
+    setVal('serverUsuario', server.usuario);
+    setVal('serverRAM', server.ram_gb || server.ramGb);
+    setVal('serverSO', server.so);
+    setVal('serverSoftware', server.software);
+    setVal('serverDatastore', server.datastore);
+    setVal('serverConexion', server.conexion);
+    setVal('serverBackup', server.backup);
+    setVal('serverFechaInstalacion', formatDateForInput(server.fecha_instalacion || server.fechaInstalacion));
+    setVal('serverFechaMantenimiento', formatDateForInput(server.fecha_mantenimiento || server.fechaMantenimiento));
+    setVal('serverFechaBackup', formatDateForInput(server.fecha_backup || server.fechaBackup));
+    setVal('serverEstado', normalizarEstado(server.estado));
+    setVal('serverActivo', server.activo || 'SI');
+    setVal('serverOperativo', server.activo || 'SI');
+
+    if (typeof window.populateDiscos === 'function') {
+      window.populateDiscos(server.discos);
+    } else {
+      const contenedor = $('discosContainer');
+      if (contenedor && server.discos) {
+        // Texto, nunca HTML: el valor viene de la base de datos (anti-XSS)
+        const aviso = document.createElement('div');
+        aviso.style.cssText = 'padding:8px;color:#666';
+        aviso.textContent = String(server.discos);
+        contenedor.replaceChildren(aviso);
+      }
+    }
+
+    // Físicos
+    setVal('serverLabel', server.server_label || server.serverLabel);
+    setVal('serverMarca', server.marca);
+    setVal('serverModelo', server.modelo);
+    setVal('serverTipo', server.tipo);
+    setVal('serverSerie', server.serie);
+    setVal('serverSocket', server.socket);
+    setVal('serverNoPorSocket', server.no_por_socket || server.noPorSocket);
+    setVal('serverProcLogicos', server.procesadores_logicos || server.procesadoresLogicos);
+
+    // Storage (físicos)
+    setVal('serverStorage', server.storage);
+    setVal('serverOcsInventario', server.ocs_inventario || server.ocsInventario);
+    setVal('serverDatastoreVirtuales', server.datastore_virtuales || server.datastoreVirtuales);
+    setVal('serverConexionStorage', server.conexion_storage || server.conexionStorage);
+
+    // Seguridad y monitoreo (virtuales)
+    setVal('serverMtm', server.mtm);
+    setVal('serverConfigBackup', server.config_backup || server.configBackup);
+    setVal('serverSophosEp', server.sophos_ep || server.sophosEp);
+    setVal('serverVicarius', server.vicarius);
+    setVal('serverAcronis', server.acronis);
+    setVal('serverVeeam', server.veeam);
+    setVal('serverManual', server.manual);
+    setVal('serverZabbix', server.zabbix);
+    setVal('serverWazuh', server.wazuh);
+    setVal('serverBluelevel', server.bluelevel);
+    setVal('serverPam', server.pam);
+    setVal('serverUsuarioPam', server.usuario_pam || server.usuarioPam);
+
+    this.mostrarModal();
+  }
+
+  /** Busca un servidor por ID en la API */
+  async buscarServidor(serverId) {
+    try {
+      const response = await fetch(`/api/servers?type=${this.currentType}`);
+      const servers = await response.json();
+      return (Array.isArray(servers) ? servers : []).find((s) => String(s.id) === String(serverId)) || null;
+    } catch (error) {
+      console.error('Error cargando datos del servidor:', error);
+      return null;
+    }
+  }
+
+  closeServerModal() {
+    const modal = $('serverModal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  /** Construye el cuerpo COMPLETO de la petición (incluye los campos de seguridad/storage) */
+  construirPayload() {
+    const posicion = getVal('serverPosition');
+    return {
+      type: this.currentType,
+      nombre: getVal('serverNombre') || '',
+      server_label: getVal('serverLabel'),
+      rack_norm: getVal('serverRack') || '',
+      rack_raw: getVal('serverRack') || '',
+      rack_units: parseInt(getVal('serverUnits'), 10) || 2,
+      rack_position: posicion ? parseInt(posicion, 10) : null,
+      ip: getVal('serverIP'),
+      hostname: getVal('serverHostname'),
+      usuario: getVal('serverUsuario'),
+      marca: getVal('serverMarca'),
+      modelo: getVal('serverModelo'),
+      tipo: getVal('serverTipo'),
+      serie: getVal('serverSerie'),
+      ram_gb: getVal('serverRAM'),
+      socket: getVal('serverSocket'),
+      no_por_socket: getVal('serverNoPorSocket'),
+      procesadores_logicos: getVal('serverProcLogicos'),
+      discos: typeof window.getDiscosJSON === 'function' ? window.getDiscosJSON() : getVal('serverDiscos'),
+      datastore: getVal('serverDatastore'),
+      conexion: getVal('serverConexion'),
+      so: getVal('serverSO'),
+      software: getVal('serverSoftware'),
+      estado: getVal('serverEstado') || 'NO_CRITICO',
+      activo: getVal('serverActivo') || getVal('serverOperativo') || 'SI',
+      fecha_instalacion: getVal('serverFechaInstalacion'),
+      fecha_mantenimiento: getVal('serverFechaMantenimiento'),
+      backup: getVal('serverBackup'),
+      fecha_backup: getVal('serverFechaBackup'),
+      // Físicos (storage)
+      storage: getVal('serverStorage'),
+      ocs_inventario: getVal('serverOcsInventario'),
+      datastore_virtuales: getVal('serverDatastoreVirtuales'),
+      conexion_storage: getVal('serverConexionStorage'),
+      // Virtuales (seguridad)
+      mtm: getVal('serverMtm'),
+      config_backup: getVal('serverConfigBackup'),
+      sophos_ep: getVal('serverSophosEp'),
+      vicarius: getVal('serverVicarius'),
+      acronis: getVal('serverAcronis'),
+      veeam: getVal('serverVeeam'),
+      manual: getVal('serverManual'),
+      zabbix: getVal('serverZabbix'),
+      wazuh: getVal('serverWazuh'),
+      bluelevel: getVal('serverBluelevel'),
+      pam: getVal('serverPam'),
+      usuario_pam: getVal('serverUsuarioPam')
+    };
+  }
+
+  async handleServerSubmit(e) {
+    if (e) e.preventDefault();
+
+    if (this.isReadOnlyUser()) {
+      this.notifyReadOnly();
+      return;
+    }
+    // Evita doble envío por doble clic
+    if (this.guardando) return;
+
+    const serverId = getVal('serverId');
+    const esEdicion = !!serverId;
+    const data = this.construirPayload();
+
+    if (!data.nombre || !data.rack_norm) {
+      notificar('Nombre y rack/host son obligatorios', 'warning');
+      return;
+    }
+
+    this.guardando = true;
+    try {
+      const response = await fetch(esEdicion ? `/api/servers/${encodeURIComponent(serverId)}` : '/api/servers', {
+        method: esEdicion ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        notificar(result.error || (esEdicion ? 'Error actualizando servidor' : 'Error creando servidor'), 'error');
+        return;
+      }
+
+      this.closeServerModal();
+      await this.recargarVista();
+      notificar(esEdicion ? 'Servidor actualizado correctamente' : 'Servidor creado correctamente', 'success');
+      if (esEdicion) {
+        window.location.hash = `view=server&id=${encodeURIComponent(serverId)}`;
+      }
+    } catch (error) {
+      console.error('Error guardando servidor:', error);
+      notificar('Error de red guardando servidor', 'error');
+    } finally {
+      this.guardando = false;
+    }
+  }
+
   openRackModal() {
     if (this.isReadOnlyUser()) {
       this.notifyReadOnly();
       return;
     }
-
-    document.getElementById('rackName').value = '';
-    document.getElementById('rackAddModal').style.display = 'flex';
+    // En virtuales el modal de host lo gestiona app.js
+    if (this.currentType === 'virtuales') return;
+    setVal('rackName', '');
+    const modal = $('rackAddModal');
+    if (modal) modal.style.display = 'flex';
   }
 
-  /**
-   * Cierra el modal de rack
-   */
   closeRackModal() {
-    document.getElementById('rackAddModal').style.display = 'none';
+    const modal = $('rackAddModal');
+    if (modal) modal.style.display = 'none';
   }
 
-  /**
-   * Maneja el envÃ­o del formulario de rack
-   */
   async handleRackSubmit(e) {
+    e.preventDefault();
     if (this.isReadOnlyUser()) {
-      e.preventDefault();
       this.notifyReadOnly();
       return;
     }
 
-    e.preventDefault();
-
-    const data = {
-      name: document.getElementById('rackName').value,
-      raw_name: document.getElementById('rackName').value
-    };
-
+    const nombre = getVal('rackName') || '';
     try {
       const response = await fetch('/api/racks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        body: JSON.stringify({ name: nombre, raw_name: nombre })
       });
-
-      const result = await response.json();
+      const result = await response.json().catch(() => ({}));
 
       if (response.ok) {
-        showToast('Rack/Host creado exitosamente', 'success');
+        notificar('Rack/Host creado exitosamente', 'success');
         this.closeRackModal();
-
-        // Recargar datos
-        if (window.loadAllData) {
-          window.loadAllData();
-        } else if (window.location.reload) {
-          window.location.reload();
-        }
+        await this.recargarVista();
       } else {
-        showToast('Error: ' + (result.error || 'No se pudo crear el rack'), 'error');
+        notificar('Error: ' + (result.error || 'No se pudo crear el rack'), 'error');
       }
     } catch (error) {
       console.error('Error creando rack:', error);
-      alert('Error de conexiÃ³n al crear el rack');
+      notificar('Error de conexión al crear el rack', 'error');
     }
   }
 
-  /**
-   * Elimina un servidor
-   */
   async deleteServer(serverId, serverName) {
     if (this.isReadOnlyUser()) {
       this.notifyReadOnly();
       return;
     }
 
-    if (!confirm(`Â¿EstÃ¡s seguro de eliminar el servidor "${serverName}"?`)) {
-      return;
-    }
+    const aceptado = await confirmAction({
+      title: 'Eliminar servidor',
+      message: `¿Eliminar el servidor "${serverName}"? Esta accion no se puede deshacer.`,
+      confirmText: 'Eliminar servidor',
+      tone: 'danger'
+    });
+    if (!aceptado) return;
 
     try {
-      const response = await fetch(`/api/servers/${serverId}`, {
-        method: 'DELETE'
-      });
-
-      const result = await response.json();
+      const response = await fetch(`/api/servers/${encodeURIComponent(serverId)}`, { method: 'DELETE' });
+      const result = await response.json().catch(() => ({}));
 
       if (response.ok) {
-        showToast('Servidor eliminado exitosamente', 'success');
-
-        // Recargar datos
-        if (window.loadAllData) {
-          window.loadAllData();
-        } else if (window.location.reload) {
-          window.location.reload();
-        }
+        notificar('Servidor eliminado correctamente', 'success');
+        await this.recargarVista();
+        window.location.hash = '';
       } else {
-        showToast('Error: ' + (result.error || 'No se pudo eliminar el servidor'), 'error');
+        notificar(result.error || 'Error eliminando servidor', 'error');
       }
     } catch (error) {
       console.error('Error eliminando servidor:', error);
-      alert('Error de conexiÃ³n al eliminar el servidor');
-    }
-  }
-
-  /**
-   * Mueve un servidor a otro rack
-   */
-  async moveServer(serverId, serverName) {
-    await this.loadRacks();
-
-    const newRack = prompt(`Mover "${serverName}" a rack:\n\nRacks disponibles:\n${this.racks.map(r => r.name).join('\n')}\n\nIngrese el nombre del rack:`);
-
-    if (!newRack) return;
-
-    try {
-      const response = await fetch(`/api/servers/${serverId}/move`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rack_norm: newRack, rack_raw: newRack })
-      });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        alert(`Servidor movido a ${newRack} exitosamente`);
-
-        // Recargar datos
-        if (window.loadAllData) {
-          window.loadAllData();
-        } else if (window.location.reload) {
-          window.location.reload();
-        }
-      } else {
-        alert('Error: ' + (result.error || 'No se pudo mover el servidor'));
-      }
-    } catch (error) {
-      console.error('Error moviendo servidor:', error);
-      alert('Error de conexiÃ³n al mover el servidor');
+      notificar('Error de conexión al eliminar', 'error');
     }
   }
 }
 
-// Inicializar cuando el DOM estÃ© listo
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    window.serverManager = new ServerManager();
-    window.serverManager.init();
-  });
-} else {
+// Una sola instancia global
+function iniciar() {
   window.serverManager = new ServerManager();
   window.serverManager.init();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', iniciar);
+} else {
+  iniciar();
 }
 
 export default ServerManager;
