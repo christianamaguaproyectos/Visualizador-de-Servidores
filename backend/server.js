@@ -114,7 +114,9 @@ class Application {
     }));
     
     // Protección CSRF para POST/PUT/PATCH/DELETE (origen + token X-CSRF-Token)
-    this.app.use(createCsrfProtection({ allowedOrigins: env.CORS_ORIGINS }));
+    // APP_URL incluida: detrás de un proxy que no reenvía el Host original, el navegador
+    // manda Origin = APP_URL mientras req.get('host') es interno (ej. localhost:3000)
+    this.app.use(createCsrfProtection({ allowedOrigins: [env.APP_URL, ...env.CORS_ORIGINS] }));
 
     // Inyectar información de usuario en todas las vistas
     this.app.use(injectUser);
