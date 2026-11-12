@@ -53,6 +53,11 @@ function fmt(val) {
   return formatearTextoSeguro(val);
 }
 
+/** Deja solo letras, números, guion y guion bajo para usar un valor como clase CSS */
+function claseSegura(val) {
+  return String(val ?? '').replace(/[^a-zA-Z0-9_-]/g, '');
+}
+
 function safeErrorMessage(error) {
   return fmt(error?.message || 'Error desconocido');
 }
@@ -85,12 +90,13 @@ const statusBadge = badgeEstadoHost;
 const severityBadge = badgeSeveridadIncidente;
 const incidentStateBadge = badgeEstadoIncidente;
 
-// Toast
-function showToast(message, type = 'info') {
-  const toast = document.getElementById('toast');
-  toast.textContent = message;
-  toast.className = `toast show toast-${type}`;
-  setTimeout(() => toast.classList.remove('show'), 3000);
+// Toast: se usa SIEMPRE el toast global de /toast.js (texto seguro + tipos en lista blanca)
+function showToast(message, type = 'info', duration) {
+  if (typeof window.showToast === 'function') {
+    return window.showToast(message, type, duration);
+  }
+  console.log(message);
+  return null;
 }
 
 async function confirmActionTracked(eventName, options, data = {}) {
@@ -439,7 +445,7 @@ function renderHosts(hosts) {
         <div class="host-card-ip">${fmt(h.ip)}</div>
         <div class="host-card-meta">
           <span>${fmt(h.type)}</span>
-          ${h.rack ? `<span>Rack: ${h.rack}</span>` : ''}
+          ${h.rack ? `<span>Rack: ${fmt(h.rack)}</span>` : ''}
         </div>
       </div>
       <div class="host-card-footer">
@@ -557,7 +563,7 @@ function renderChecks(checks) {
               <strong>${fmt(c.host_name)}</strong><br>
               <span class="muted">${fmt(c.host_ip)}</span>
             </td>
-            <td><span class="badge">${c.kind.toUpperCase()}</span></td>
+            <td><span class="badge">${fmt(String(c.kind || '').toUpperCase())}</span></td>
             <td class="config-cell">${formatCheckConfig(c)}</td>
             <td>${c.frequency_sec}s</td>
             <td>${statusBadge(c.host_estado)}</td>
@@ -577,13 +583,13 @@ function formatCheckConfig(check) {
   const config = check.config || {};
   switch (check.kind) {
     case 'icmp':
-      return `Ping a ${config.ip || config.host || 'host'}`;
+      return `Ping a ${fmt(config.ip || config.host || 'host')}`;
     case 'tcp':
-      return `Puerto ${config.port || '?'}`;
+      return `Puerto ${fmt(config.port || '?')}`;
     case 'http':
-      return `${config.url || 'URL'} (espera ${config.expectCode || 200})`;
+      return `${fmt(config.url || 'URL')} (espera ${fmt(config.expectCode || 200)})`;
     default:
-      return JSON.stringify(config);
+      return fmt(JSON.stringify(config));
   }
 }
 
@@ -617,8 +623,8 @@ async function showHostModal(hostId) {
         <div class="host-detail-header">
           ${statusBadge(host.estado_actual)}
           ${host.critical ? '<span class="badge badge-critical">CRÍTICO</span>' : ''}
-          <span class="muted">Tipo: ${host.type}</span>
-          ${host.rack ? `<span class="muted">Rack: ${host.rack}</span>` : ''}
+          <span class="muted">Tipo: ${fmt(host.type)}</span>
+          ${host.rack ? `<span class="muted">Rack: ${fmt(host.rack)}</span>` : ''}
         </div>
         
         <div class="host-detail-stats">
@@ -642,7 +648,7 @@ async function showHostModal(hostId) {
             <ul class="check-list">
               ${checks.map(c => `
                 <li>
-                  <span class="badge">${c.kind.toUpperCase()}</span>
+                  <span class="badge">${fmt(String(c.kind || '').toUpperCase())}</span>
                   ${formatCheckConfig(c)}
                   <span class="muted">(cada ${c.frequency_sec}s)</span>
                   ${c.enabled ? '✅' : '❌'}
@@ -663,8 +669,8 @@ async function showHostModal(hostId) {
                 ${recentRuns.slice(0, 10).map(r => `
                   <tr>
                     <td>${formatDate(r.time)}</td>
-                    <td>${r.kind?.toUpperCase() || '?'}</td>
-                    <td><span class="badge badge-${r.status}">${r.status}</span></td>
+                    <td>${fmt(r.kind?.toUpperCase() || '?')}</td>
+                    <td><span class="badge badge-${claseSegura(r.status)}">${fmt(r.status)}</span></td>
                     <td>${r.latency_ms ? r.latency_ms + 'ms' : '—'}</td>
                   </tr>
                 `).join('')}
@@ -682,7 +688,7 @@ async function showHostModal(hostId) {
                   ${incidentStateBadge(inc.state)}
                   ${severityBadge(inc.severity)}
                   <span>${formatDate(inc.opened_at)}</span>
-                  <span class="muted">${inc.summary || ''}</span>
+                  <span class="muted">${fmt(inc.summary)}</span>
                 </li>
               `).join('')}
             </ul>
@@ -812,10 +818,10 @@ async function showHostModal(hostId) {
           ${hData.history.map(r => `
             <tr style="display: table; width: 100%; table-layout: fixed;">
               <td style="width: 25%">${formatDate(r.time)}</td>
-              <td style="width: 15%">${r.kind?.toUpperCase() || 'ICMP'}</td>
-              <td style="width: 15%"><span class="badge badge-${r.status}">${r.status}</span></td>
+              <td style="width: 15%">${fmt(r.kind?.toUpperCase() || 'ICMP')}</td>
+              <td style="width: 15%"><span class="badge badge-${claseSegura(r.status)}">${fmt(r.status)}</span></td>
               <td style="width: 15%">${r.latency_ms ? r.latency_ms + 'ms' : '—'}</td>
-              <td style="width: 30%; font-size: 0.85em; color: #d32f2f;">${r.error || ''}</td>
+              <td style="width: 30%; font-size: 0.85em; color: #d32f2f;">${fmt(r.error)}</td>
             </tr>
           `).join('')}
         </tbody>
@@ -867,8 +873,8 @@ async function showIncidentModal(incidentId) {
             <div class="timeline-item">
               <div class="timeline-time">${formatDate(e.at)}</div>
               <div class="timeline-content">
-                <span class="badge">${e.type}</span>
-                ${e.payload?.note || e.payload?.resolution || e.payload?.user || ''}
+                <span class="badge">${fmt(e.type)}</span>
+                ${fmt(e.payload?.note || e.payload?.resolution || e.payload?.user || '')}
               </div>
             </div>
           `).join('')}
@@ -931,9 +937,9 @@ async function handleIncidentAction(action, id) {
     if (action === 'add-note') {
       const note = prompt('Ingrese la nota:');
       if (!note) return;
-      body = { note, user: 'admin' };
+      body = { note }; // el autor lo toma el backend de la sesión
     } else {
-      body = { user: 'admin' };
+      body = {};
     }
 
     const res = await fetch(endpoint, {
@@ -1187,8 +1193,8 @@ async function loadMaintenanceStats() {
           <tbody>
             ${tableSizes.map(t => `
               <tr>
-                <td>${t.table}</td>
-                <td>${t.size}</td>
+                <td>${fmt(t.table)}</td>
+                <td>${fmt(t.size)}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -1912,8 +1918,8 @@ async function simulateAlert(action) {
       const icon = action === 'down' ? '🔴' : '🟢';
       result.innerHTML = `
         <div class="alert alert-success">
-          ${icon} <strong>${data.host}</strong> (${data.ip})<br>
-          Estado: ${data.previousState} → ${data.newState}<br>
+          ${icon} <strong>${fmt(data.host)}</strong> (${fmt(data.ip)})<br>
+          Estado: ${fmt(data.previousState)} → ${fmt(data.newState)}<br>
           ✅ Alerta enviada a todos los destinatarios activos
         </div>
       `;

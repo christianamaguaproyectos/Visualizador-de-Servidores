@@ -132,28 +132,43 @@
         info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>'
     };
 
+    /** Tipos permitidos (lista blanca): cualquier otro valor se trata como 'info' */
+    const TIPOS_VALIDOS = ['success', 'error', 'warning', 'info'];
+
     function showToast(message, type = 'info', duration = 4000) {
         const c = getContainer();
 
+        // Compatibilidad: algunas llamadas antiguas pasaban la duración como 2.º argumento
+        if (typeof type === 'number') {
+            duration = type;
+            type = 'info';
+        }
+        const tipo = TIPOS_VALIDOS.includes(type) ? type : 'info';
+        const duracion = Number.isFinite(Number(duration)) ? Number(duration) : 4000;
+
         const toast = document.createElement('div');
-        toast.className = `toast toast--${type}`;
+        toast.className = `toast toast--${tipo}`;
+        // Solo los íconos (fijos, nuestros) van como HTML
         toast.innerHTML = `
-      <span class="toast__icon">${ICONS[type] || ICONS.info}</span>
-      <span class="toast__message">${message}</span>
+      <span class="toast__icon">${ICONS[tipo]}</span>
+      <span class="toast__message"></span>
       <button class="toast__close" aria-label="Cerrar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
         </svg>
       </button>
     `;
+        // El mensaje SIEMPRE como texto: nombres de servidores o errores de la API
+        // nunca se interpretan como HTML (anti-XSS)
+        toast.querySelector('.toast__message').textContent = String(message ?? '');
 
         const close = toast.querySelector('.toast__close');
         close.addEventListener('click', () => removeToast(toast));
 
         c.appendChild(toast);
 
-        if (duration > 0) {
-            setTimeout(() => removeToast(toast), duration);
+        if (duracion > 0) {
+            setTimeout(() => removeToast(toast), duracion);
         }
 
         return toast;

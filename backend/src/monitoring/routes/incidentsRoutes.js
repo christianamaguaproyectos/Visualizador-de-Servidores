@@ -224,8 +224,9 @@ router.post('/:id/ack', requireAdmin, incidentesAccionRateLimiter, async (req, r
     if (!id) {
       return res.status(400).json({ error: 'id invalido' });
     }
-    const { user = 'system', note = '' } = req.body;
-    const usuarioSeguro = sanitizeTextInput(user, 120);
+    const { note = '' } = req.body;
+    // El autor SIEMPRE sale de la sesión (no se confía en req.body.user)
+    const usuarioSeguro = sanitizeTextInput(req.session?.user?.username || 'system', 120);
     const notaSegura = sanitizeTextInput(note, 2000);
 
     await withClient(async (client) => {
@@ -274,8 +275,9 @@ router.post('/:id/resolve', requireAdmin, incidentesAccionRateLimiter, async (re
     if (!id) {
       return res.status(400).json({ error: 'id invalido' });
     }
-    const { user = 'system', resolution = '' } = req.body;
-    const usuarioSeguro = sanitizeTextInput(user, 120);
+    const { resolution = '' } = req.body;
+    // El autor SIEMPRE sale de la sesión (no se confía en req.body.user)
+    const usuarioSeguro = sanitizeTextInput(req.session?.user?.username || 'system', 120);
     const resolucionSegura = sanitizeTextInput(resolution, 2000);
 
     await withClient(async (client) => {
@@ -321,8 +323,9 @@ router.post('/:id/close', requireAdmin, incidentesAccionRateLimiter, async (req,
     if (!id) {
       return res.status(400).json({ error: 'id invalido' });
     }
-    const { user = 'system', note = '' } = req.body;
-    const usuarioSeguro = sanitizeTextInput(user, 120);
+    const { note = '' } = req.body;
+    // El autor SIEMPRE sale de la sesión (no se confía en req.body.user)
+    const usuarioSeguro = sanitizeTextInput(req.session?.user?.username || 'system', 120);
     const notaSegura = sanitizeTextInput(note, 2000);
 
     const incident = await withClient(async (client) => {
@@ -380,12 +383,13 @@ router.post('/:id/note', requireAdmin, incidentesAccionRateLimiter, async (req, 
     if (!id) {
       return res.status(400).json({ error: 'id invalido' });
     }
-    const { user = 'system', note } = req.body;
+    const { note } = req.body;
 
     if (!note) {
       return res.status(400).json({ error: 'note es requerida' });
     }
-    const usuarioSeguro = sanitizeTextInput(user, 120);
+    // El autor SIEMPRE sale de la sesión (no se confía en req.body.user)
+    const usuarioSeguro = sanitizeTextInput(req.session?.user?.username || 'system', 120);
     const notaSegura = sanitizeTextInput(note, 4000);
 
     const result = await withClient(async (client) => {

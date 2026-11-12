@@ -2,6 +2,7 @@ import { inicializarGestorDiscos } from '/js/dominios/hosts/gestorDiscos.js';
 import { construirResumenRacksHtml } from '/js/dominios/hosts/resumenRacks.js';
 import { confirmAction } from '/js/dominios/ui-system/modalConfirm.js';
 import { trackUIEvent } from '/js/dominios/ui-system/uxTelemetry.js';
+import { escapeHtml, textoSeguro } from '/js/dominios/ui-system/seguridadHtml.js';
 
 // Esperar a que el DOM esté listo y verificar que estamos en una página correcta
 
@@ -1247,55 +1248,22 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-  // Toast simple para notificar actualizaciones
-
-  let toastEl = null;
-
-  function ensureToast() {
-
-    if (!toastEl) {
-
-      toastEl = document.createElement('div');
-
-      toastEl.className = 'update-toast';
-
-      toastEl.setAttribute('aria-live', 'polite');
-
-      document.body.appendChild(toastEl);
-
+  // Notificaciones: se usa SIEMPRE el toast global de /toast.js (seguro contra XSS).
+  // Antes había una copia local showToast(message, duration) que sombreaba la global:
+  // las llamadas showToast('...', 'error') daban setTimeout(NaN) y el error desaparecía al instante.
+  function showToast(message, type = 'info', duration) {
+    if (typeof window.showToast === 'function') {
+      return window.showToast(message, type, duration);
     }
-
-  }
-
-  function showToast(message, duration = 3000) {
-
-    ensureToast();
-
-    toastEl.textContent = message;
-
-    toastEl.classList.add('show');
-
-    clearTimeout(showToast._t);
-
-    showToast._t = setTimeout(() => toastEl.classList.remove('show'), duration);
-
+    console.log(message);
+    return null;
   }
 
 
 
-  function escapeHtml(value) {
-    const str = (value ?? '').toString();
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/\"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
+  // escapeHtml viene del módulo compartido /js/dominios/ui-system/seguridadHtml.js
   function fmt(val) {
-    const limpio = (val ?? '').toString().trim();
-    return limpio ? escapeHtml(limpio) : '—';
+    return textoSeguro(val);
   }
 
   function renderErrorBlock(mensaje) {
@@ -2894,9 +2862,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
       <button class="virtual-option" data-cluster-key="${encodeURIComponent(v.key || '')}" data-virtual-mode="clusterDetail">
 
-        <span class="virtual-option__label">${v.name}</span>
+        <span class="virtual-option__label">${fmt(v.name)}</span>
 
-        <span class="virtual-option__desc">${v.description || 'Vista personalizada de hosts'}</span>
+        <span class="virtual-option__desc">${fmt(v.description || 'Vista personalizada de hosts')}</span>
 
       </button>
 
@@ -3000,9 +2968,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
           <div style="flex:1">
 
-            <h2>${group.name}</h2>
+            <h2>${fmt(group.name)}</h2>
 
-            <p class="muted">${hosts.map(h => h.name).join(', ') || 'Sin hosts asignados'}</p>
+            <p class="muted">${fmt(hosts.map(h => h.name).join(', ') || 'Sin hosts asignados')}</p>
 
           </div>
 
@@ -3088,7 +3056,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             <h3>Hosts asignados</h3>
 
-            <p class="muted">${hostList.map(h => h.name).join(', ') || 'Sin hosts asignados'}</p>
+            <p class="muted">${fmt(hostList.map(h => h.name).join(', ') || 'Sin hosts asignados')}</p>
 
           </div>
 
@@ -3140,13 +3108,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
     ${renderVirtualSubnav(cluster.name, backMode)}
 
-    <section class="cluster-detail" data-source="${cluster.source}" data-cluster="${encodeURIComponent(cluster.key || '')}">
+    <section class="cluster-detail" data-source="${escapeHtml(cluster.source)}" data-cluster="${encodeURIComponent(cluster.key || '')}">
 
       <header class="cluster-detail__header">
 
         <div>
 
-          <p class="muted">Hosts: ${hosts.map(h => h.name).join(', ') || 'Sin hosts asignados'}</p>
+          <p class="muted">Hosts: ${fmt(hosts.map(h => h.name).join(', ') || 'Sin hosts asignados')}</p>
 
           <span class="cluster-detail__stats">${hosts.length} hosts · ${totalVMs} VMs</span>
 
@@ -3462,7 +3430,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             </div>
 
-            <button class="btn-edit-host" data-host-id="${host.id}" data-host-name="${encodeURIComponent(host.name)}" title="Editar nombre del host" style="padding:4px 8px;background:#3b82f6;color:white;border:none;border-radius:6px;cursor:pointer;font-size:12px;margin-right:8px">✏️ Editar</button>
+            <button class="btn-edit-host" data-host-id="${encodeURIComponent(String(host.id ?? ''))}" data-host-name="${encodeURIComponent(host.name)}" title="Editar nombre del host" style="padding:4px 8px;background:#3b82f6;color:white;border:none;border-radius:6px;cursor:pointer;font-size:12px;margin-right:8px">✏️ Editar</button>
 
             <span class="host-card__count">${vmCount} VMs</span>
 
@@ -4263,7 +4231,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         <div>RAM</div><div>${fmt(s.ramGb)}</div>
 
-        <div>Discos</div><div style="white-space:pre-wrap">${formatDiscosDisplay(s.discos)}</div>
+        <div>Discos</div><div style="white-space:pre-wrap">${fmt(formatDiscosDisplay(s.discos))}</div>
 
         <div>Datastore</div><div style="white-space:pre-wrap">${fmt(s.datastore)}</div>
 

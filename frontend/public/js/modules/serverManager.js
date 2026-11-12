@@ -154,7 +154,13 @@ class ServerManager {
           window.populateDiscos(server.discos);
         } else {
           const container = document.getElementById('discosContainer');
-          if (container && server.discos) container.innerHTML = '<div style="padding:8px;color:#666">' + server.discos + '</div>';
+          if (container && server.discos) {
+            // Texto, nunca HTML: el valor viene de la base de datos (anti-XSS)
+            const aviso = document.createElement('div');
+            aviso.style.cssText = 'padding:8px;color:#666';
+            aviso.textContent = String(server.discos);
+            container.replaceChildren(aviso);
+          }
         }
         if (document.getElementById('serverDatastore')) document.getElementById('serverDatastore').value = server.datastore || '';
         if (document.getElementById('serverConexion')) document.getElementById('serverConexion').value = server.conexion || '';
