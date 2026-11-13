@@ -8,6 +8,9 @@
   "scripts": {
     "start": "node backend/server.js",
     "dev": "nodemon backend/server.js",
+    "lint": "eslint .",
+    "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\"",
+    "test:unit": "node --test \"tests/unit/*.test.js\"",
     "prisma:generate": "npx prisma generate --schema=backend/prisma/schema.prisma",
     "prisma:migrate": "npx prisma migrate dev --schema=backend/prisma/schema.prisma",
     "prisma:studio": "npx prisma studio --schema=backend/prisma/schema.prisma"
@@ -27,6 +30,9 @@
     "undici": "^6.29.1"
   },
   "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "eslint": "9.39.5",
+    "globals": "16.5.0",
     "nodemon": "^3.1.0",
     "prisma": "7.10.1"
   },
