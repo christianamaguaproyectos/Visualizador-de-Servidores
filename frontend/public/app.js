@@ -2,6 +2,7 @@ import { inicializarGestorDiscos } from '/js/dominios/hosts/gestorDiscos.js';
 import { construirResumenRacksHtml } from '/js/dominios/hosts/resumenRacks.js';
 import { confirmAction } from '/js/dominios/ui-system/modalConfirm.js';
 import { trackUIEvent } from '/js/dominios/ui-system/uxTelemetry.js';
+import { escapeHtml, textoSeguro } from '/js/dominios/ui-system/seguridadHtml.js';
 
 // Esperar a que el DOM esté listo y verificar que estamos en una página correcta
 
@@ -46,7 +47,8 @@ document.addEventListener('DOMContentLoaded', function () {
   const isVirtuales = serverType === 'virtuales';
 
   let currentUserRole = null;
-  let readOnlyUser = false;
+  // RBAC del cliente "fail-closed": solo lectura hasta confirmar que el usuario es admin
+  let readOnlyUser = true;
   let readOnlyNoticeShown = false;
 
   function isReadOnlyUser() {
@@ -100,16 +102,17 @@ document.addEventListener('DOMContentLoaded', function () {
       if (data?.success && data?.user) {
         currentUserRole = data.user.role;
         window.currentUser = data.user;
-        readOnlyUser = currentUserRole === 'viewer';
+        readOnlyUser = !(currentUserRole === 'admin' || data.user.isSuperAdmin);
       }
     } catch (_) {
-      readOnlyUser = false;
+      readOnlyUser = true; // si no se pudo verificar la sesión, NO se habilitan acciones de escritura
     } finally {
       disableReadOnlyActions();
     }
   }
 
-  hydrateCurrentUserRole();
+  // Las vistas se montan DESPUÉS de conocer el rol (ver más abajo: sesionLista.finally(fetchData))
+  const sesionLista = hydrateCurrentUserRole();
 
 
 
@@ -157,6 +160,8 @@ document.addEventListener('DOMContentLoaded', function () {
   window.addDiscoRow = addDiscoRow;
   window.getDiscosJSON = getDiscosJSON;
   window.populateDiscos = populateDiscos;
+  // serverManager.js la usa para refrescar la vista después de guardar o eliminar
+  window.recargarDatosServidores = () => fetchData();
 
 
 
@@ -373,93 +378,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
+  // El alta/edición de servidores la gestiona SOLO /js/modules/serverManager.js
+  // (antes había dos implementaciones que se pisaban). Aquí solo se delega.
   function openServerModal(initialRackName) {
-
     if (isReadOnlyUser()) {
       showReadOnlyToast();
       return;
     }
-
-    if (!serverModal || !serverForm) return;
-
-    const titleEl = document.getElementById('serverModalTitle');
-
-    if (titleEl) {
-
-      titleEl.textContent = initialRackName
-
-        ? `Agregar VM a ${initialRackName}`
-
-        : 'Agregar Servidor Virtual';
-
-    }
-
-    serverForm.reset();
-
-    const serverIdEl = document.getElementById('serverId');
-
-    if (serverIdEl) serverIdEl.value = '';
-
-    // Limpiar contenedor de discos dinámicos
-
-    const discosContainer = document.getElementById('discosContainer');
-
-    if (discosContainer) discosContainer.innerHTML = '';
-
-
-
-    const rackSelect = document.getElementById('serverRack');
-
-    const rackSelectContainer = rackSelect?.closest('div[style*="gap"]');
-
-
-
-    if (rackSelect) {
-
-      rackSelect.innerHTML = '';
-
-      const racks = DATA.racks || [];
-
-      racks.forEach(r => {
-
-        const opt = document.createElement('option');
-
-        opt.value = r.name;
-
-        opt.textContent = r.name;
-
-        rackSelect.appendChild(opt);
-
-      });
-
-
-
-      if (initialRackName) {
-
-        // Host específico: preseleccionar y ocultar selector
-
-        rackSelect.value = initialRackName;
-
-        rackSelect.disabled = true;
-
-        if (rackSelectContainer) rackSelectContainer.style.display = 'none';
-
-      } else {
-
-        // Sin host específico: mostrar selector
-
-        rackSelect.disabled = false;
-
-        if (rackSelectContainer) rackSelectContainer.style.display = 'grid';
-
-      }
-
-    }
-
-    serverModal.style.display = 'flex';
-
-    serverFormDirty = false;
-
+    window.serverManager?.openServerModal(initialRackName);
   }
 
 
@@ -511,276 +437,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-  // Función para editar servidor
-
-  function openServerModalForEdit(server) {
-
-    if (isReadOnlyUser()) {
-      showReadOnlyToast();
-      return;
-    }
-
-    // Obtener elementos directamente para evitar problemas de timing
-
-    const modal = document.getElementById('serverModal');
-
-    const form = document.getElementById('serverForm');
-
-    console.log('openServerModalForEdit called', server);
-
-    if (!modal || !form) {
-
-      console.error('Modal or form not found', { modal, form });
-
-      showToast('Error: No se encontró el formulario de edición', 'error');
-
-      return;
-
-    }
-
-    const titleEl = document.getElementById('serverModalTitle');
-
-    if (titleEl) titleEl.textContent = isVirtuales ? 'Editar Servidor Virtual' : 'Editar Servidor Físico';
-
-
-
-    // Populate rack select first
-
-    const rackSelect = document.getElementById('serverRack');
-
-    if (rackSelect) {
-
-      rackSelect.innerHTML = '';
-
-      const racks = DATA.racks || [];
-
-      racks.forEach(r => {
-
-        const opt = document.createElement('option');
-
-        opt.value = r.name;
-
-        opt.textContent = r.name;
-
-        rackSelect.appendChild(opt);
-
-      });
-
-    }
-
-
-
-    // Helper para establecer valor si el elemento existe
-
-    const setVal = (id, value) => {
-
-      const el = document.getElementById(id);
-
-      if (el) el.value = value ?? '';
-
-    };
-
-
-
-    // Fill form with server data - campos comunes
-
-    setVal('serverId', server.id);
-
-    setVal('serverNombre', server.nombre);
-
-    setVal('serverRack', server.rack || server.rack_norm || server.rackNorm);
-
-    setVal('serverUnits', server.rack_units || server.rackUnits || 2);
-
-    setVal('serverPosition', server.rack_position || server.rackPosition);
-
-    setVal('serverIP', server.ip);
-
-    setVal('serverHostname', server.hostname);
-
-    setVal('serverRAM', server.ram_gb || server.ramGb);
-
-    setVal('serverSO', server.so);
-
-    setVal('serverUsuario', server.usuario);
-
-    setVal('serverSoftware', server.software);
-
-    populateDiscos(server.discos);
-
-    setVal('serverDatastore', server.datastore);
-
-    setVal('serverConexion', server.conexion);
-
-    setVal('serverBackup', server.backup);
-
-    setVal('serverFechaInstalacion', formatDateForInput(server.fecha_instalacion || server.fechaInstalacion));
-
-    setVal('serverFechaMantenimiento', formatDateForInput(server.fecha_mantenimiento || server.fechaMantenimiento));
-
-    setVal('serverFechaBackup', formatDateForInput(server.fecha_backup || server.fechaBackup));
-
-
-
-    // Campos específicos de físicos
-
-    setVal('serverLabel', server.server_label || server.serverLabel);
-
-    setVal('serverMarca', server.marca);
-
-    setVal('serverModelo', server.modelo);
-
-    setVal('serverTipo', server.tipo);
-
-    setVal('serverSerie', server.serie);
-
-    setVal('serverSocket', server.socket);
-
-    setVal('serverNoPorSocket', server.no_por_socket || server.noPorSocket);
-
-    setVal('serverProcLogicos', server.procesadores_logicos || server.procesadoresLogicos);
-
-
-
-    // Normalizar estado para el select (CRITICO, NO_CRITICO, MANTENIMIENTO)
-
-    const estadoVal = (server.estado || 'NO_CRITICO').toString().toUpperCase()
-
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-
-    let normalizedEstado = 'NO_CRITICO';
-
-    if (estadoVal.includes('CRITICO') || estadoVal.includes('CRIT')) normalizedEstado = 'CRITICO';
-
-    else if (estadoVal.includes('MANT')) normalizedEstado = 'MANTENIMIENTO';
-
-    setVal('serverEstado', normalizedEstado);
-
-
-
-    // Campo activo/operativo (diferente entre páginas)
-
-    setVal('serverActivo', server.activo || 'SI');
-
-    setVal('serverOperativo', server.activo || 'SI');
-
-
-
-    // Campos específicos de virtuales - Seguridad y Monitoreo
-
-    setVal('serverMtm', server.mtm);
-
-    setVal('serverConfigBackup', server.config_backup || server.configBackup);
-
-    setVal('serverSophosEp', server.sophos_ep || server.sophosEp);
-
-    setVal('serverVicarius', server.vicarius);
-
-    setVal('serverAcronis', server.acronis);
-
-    setVal('serverVeeam', server.veeam);
-
-    setVal('serverManual', server.manual);
-
-    setVal('serverZabbix', server.zabbix);
-
-    setVal('serverWazuh', server.wazuh);
-
-    setVal('serverBluelevel', server.bluelevel);
-
-    setVal('serverPam', server.pam);
-
-    setVal('serverUsuarioPam', server.usuario_pam || server.usuarioPam);
-
-
-
-    // Campos de Storage (físicos)
-
-    setVal('serverStorage', server.storage);
-
-    setVal('serverOcsInventario', server.ocs_inventario || server.ocsInventario);
-
-    setVal('serverDatastoreVirtuales', server.datastore_virtuales || server.datastoreVirtuales);
-
-    setVal('serverConexionStorage', server.conexion_storage || server.conexionStorage);
-
-
-
-    modal.style.display = 'flex';
-
-    serverFormDirty = false;
-
-  }
-
-
-
-  // Helper para formatear fechas para input type="date"
-
-  function formatDateForInput(dateVal) {
-
-    if (!dateVal) return '';
-
-    const d = new Date(dateVal);
-
-    if (isNaN(d.getTime())) return '';
-
-    return d.toISOString().split('T')[0];
-
-  }
-
-
-
-  // Exponer funciones globalmente para que renderServer pueda accederlas
-
-  window.serverManager = {
-
-    openServerModal,
-
-    openServerModalForEdit,
-
-    closeServerModal,
-
-    deleteServer: async (serverId, serverName) => {
-
-      const accepted = await confirmAction({
-        title: 'Eliminar servidor',
-        message: `¿Eliminar el servidor "${serverName}"? Esta accion no se puede deshacer.`,
-        confirmText: 'Eliminar servidor',
-        tone: 'danger'
-      });
-      if (!accepted) return;
-
-      try {
-
-        const res = await fetch(`/api/servers/${serverId}`, { method: 'DELETE' });
-
-        const result = await res.json();
-
-        if (res.ok) {
-
-          showToast('Servidor eliminado correctamente');
-
-          await fetchData();
-
-          location.hash = '';
-
-        } else {
-
-          showToast(result.error || 'Error eliminando servidor', 'error');
-
-        }
-
-      } catch (err) {
-
-        console.error('Error eliminando servidor:', err);
-
-        showToast('Error de conexión al eliminar', 'error');
-
-      }
-
-    }
-
-  };
+  // openServerModalForEdit y deleteServer viven en /js/modules/serverManager.js
+  // (window.serverManager). No se redefine window.serverManager aquí.
 
 
 
@@ -829,213 +487,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-  // Submit del formulario de servidor - disponible en ambas páginas
-
-  serverForm?.addEventListener('submit', async (e) => {
-
-    e.preventDefault();
-
-    try {
-
-      const serverId = document.getElementById('serverId')?.value?.trim();
-
-      const isEdit = !!serverId;
-
-      const nombre = document.getElementById('serverNombre')?.value?.trim();
-
-      const rackNorm = document.getElementById('serverRack')?.value?.trim();
-
-      const rackUnits = Number(document.getElementById('serverUnits')?.value || 2);
-
-      const rackPositionVal = document.getElementById('serverPosition')?.value;
-
-      const ip = document.getElementById('serverIP')?.value?.trim();
-
-      const hostname = document.getElementById('serverHostname')?.value?.trim();
-
-      const ram = document.getElementById('serverRAM')?.value?.trim();
-
-      const so = document.getElementById('serverSO')?.value?.trim();
-
-      const estado = document.getElementById('serverEstado')?.value || 'NO_CRITICO';
-
-      const usuario = document.getElementById('serverUsuario')?.value?.trim();
-
-      const software = document.getElementById('serverSoftware')?.value?.trim();
-
-      const discos = getDiscosJSON();
-
-      console.log('DEBUG discos value:', discos);
-
-      const datastore = document.getElementById('serverDatastore')?.value?.trim();
-
-      const conexion = document.getElementById('serverConexion')?.value?.trim();
-
-      const backup = document.getElementById('serverBackup')?.value?.trim();
-
-      const fechaInstalacion = document.getElementById('serverFechaInstalacion')?.value || null;
-
-      const fechaMantenimiento = document.getElementById('serverFechaMantenimiento')?.value || null;
-
-      const fechaBackup = document.getElementById('serverFechaBackup')?.value || null;
-
-      // Campo activo puede ser serverActivo (físicos) o serverOperativo (virtuales)
-
-      const activo = document.getElementById('serverActivo')?.value || document.getElementById('serverOperativo')?.value || 'SI';
-
-
-
-      // Campos adicionales solo para físicos
-
-      const serverLabel = document.getElementById('serverLabel')?.value?.trim();
-
-      const marca = document.getElementById('serverMarca')?.value?.trim();
-
-      const modelo = document.getElementById('serverModelo')?.value?.trim();
-
-      const tipo = document.getElementById('serverTipo')?.value?.trim();
-
-      const serie = document.getElementById('serverSerie')?.value?.trim();
-
-      const socket = document.getElementById('serverSocket')?.value?.trim();
-
-      const noPorSocket = document.getElementById('serverNoPorSocket')?.value?.trim();
-
-      const procLogicos = document.getElementById('serverProcLogicos')?.value?.trim();
-
-
-
-      if (!nombre || !rackNorm) {
-
-        showToast('Nombre y rack/host son obligatorios', 'warning'); return;
-
-        return;
-
-      }
-
-
-
-      // Detectar tipo según la página
-
-      const serverType = isVirtuales ? 'virtuales' : 'fisicos';
-
-
-
-      const body = {
-
-        type: serverType,
-
-        nombre,
-
-        rack_norm: rackNorm,
-
-        rack_raw: rackNorm,
-
-        rack_units: rackUnits,
-
-        rack_position: rackPositionVal ? Number(rackPositionVal) : null,
-
-        ip,
-
-        hostname,
-
-        usuario,
-
-        ram_gb: ram,
-
-        so,
-
-        estado,
-
-        software,
-
-        discos,
-
-        datastore,
-
-        conexion,
-
-        backup,
-
-        fecha_instalacion: fechaInstalacion,
-
-        fecha_mantenimiento: fechaMantenimiento,
-
-        fecha_backup: fechaBackup,
-
-        activo,
-
-        // Campos adicionales de físicos (el backend ignorará si no aplican)
-
-        server_label: serverLabel,
-
-        marca,
-
-        modelo,
-
-        tipo: tipo,
-
-        serie,
-
-        socket,
-
-        no_por_socket: noPorSocket,
-
-        procesadores_logicos: procLogicos
-
-      };
-
-
-
-      const url = isEdit ? `/api/servers/${serverId}` : '/api/servers';
-
-      const method = isEdit ? 'PUT' : 'POST';
-
-
-
-      const res = await fetch(url, {
-
-        method,
-
-        headers: { 'Content-Type': 'application/json' },
-
-        body: JSON.stringify(body)
-
-      });
-
-      const result = await res.json();
-
-      if (!res.ok) {
-
-        showToast(result.error || (isEdit ? 'Error actualizando servidor' : 'Error creando servidor'), 'error');
-
-        return;
-
-      }
-
-      closeServerModal();
-
-      await fetchData();
-
-      showToast(isEdit ? 'Servidor actualizado correctamente' : 'Servidor creado correctamente');
-
-      if (isEdit) {
-
-        // Re-render the server detail view after update
-
-        location.hash = `view=server&id=${serverId}`;
-
-      }
-
-    } catch (err) {
-
-      console.error('Error guardando servidor:', err);
-
-      showToast('Error de red guardando servidor', 'error');
-
-    }
-
-  });
+  // El envío de #serverForm lo maneja SOLO serverManager.js (un único listener "submit"):
+  // así cada guardado hace UNA sola petición y conserva todos los campos.
+  // Al abrir el modal, serverManager.js emite "serverform:abierto" para reiniciar la marca de cambios.
+  serverForm?.addEventListener('serverform:abierto', () => { serverFormDirty = false; });
 
 
 
@@ -1043,7 +498,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   if (isVirtuales) {
 
-    btnAddServer?.addEventListener('click', () => openServerModal());
+    // btnAddServer lo registra serverManager.js (evita abrir el modal dos veces)
 
     btnAddRack?.addEventListener('click', () => openRackModal());
 
@@ -1247,55 +702,22 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-  // Toast simple para notificar actualizaciones
-
-  let toastEl = null;
-
-  function ensureToast() {
-
-    if (!toastEl) {
-
-      toastEl = document.createElement('div');
-
-      toastEl.className = 'update-toast';
-
-      toastEl.setAttribute('aria-live', 'polite');
-
-      document.body.appendChild(toastEl);
-
+  // Notificaciones: se usa SIEMPRE el toast global de /toast.js (seguro contra XSS).
+  // Antes había una copia local showToast(message, duration) que sombreaba la global:
+  // las llamadas showToast('...', 'error') daban setTimeout(NaN) y el error desaparecía al instante.
+  function showToast(message, type = 'info', duration) {
+    if (typeof window.showToast === 'function') {
+      return window.showToast(message, type, duration);
     }
-
-  }
-
-  function showToast(message, duration = 3000) {
-
-    ensureToast();
-
-    toastEl.textContent = message;
-
-    toastEl.classList.add('show');
-
-    clearTimeout(showToast._t);
-
-    showToast._t = setTimeout(() => toastEl.classList.remove('show'), duration);
-
+    console.log(message);
+    return null;
   }
 
 
 
-  function escapeHtml(value) {
-    const str = (value ?? '').toString();
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/\"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
+  // escapeHtml viene del módulo compartido /js/dominios/ui-system/seguridadHtml.js
   function fmt(val) {
-    const limpio = (val ?? '').toString().trim();
-    return limpio ? escapeHtml(limpio) : '—';
+    return textoSeguro(val);
   }
 
   function renderErrorBlock(mensaje) {
@@ -2381,13 +1803,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-    // Wire up events for cluster detail view if active
-
-    if (virtualState.mode === 'clusterDetail') {
-
-      wireClusterDetailEvents();
-
-    }
+    // Los eventos del detalle de cluster se conectan UNA vez, al final de renderVirtualView().
+    // (Antes también se llamaba aquí y cada acción se ejecutaba dos veces.)
 
 
 
@@ -2894,9 +2311,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
       <button class="virtual-option" data-cluster-key="${encodeURIComponent(v.key || '')}" data-virtual-mode="clusterDetail">
 
-        <span class="virtual-option__label">${v.name}</span>
+        <span class="virtual-option__label">${fmt(v.name)}</span>
 
-        <span class="virtual-option__desc">${v.description || 'Vista personalizada de hosts'}</span>
+        <span class="virtual-option__desc">${fmt(v.description || 'Vista personalizada de hosts')}</span>
 
       </button>
 
@@ -3000,9 +2417,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
           <div style="flex:1">
 
-            <h2>${group.name}</h2>
+            <h2>${fmt(group.name)}</h2>
 
-            <p class="muted">${hosts.map(h => h.name).join(', ') || 'Sin hosts asignados'}</p>
+            <p class="muted">${fmt(hosts.map(h => h.name).join(', ') || 'Sin hosts asignados')}</p>
 
           </div>
 
@@ -3088,7 +2505,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             <h3>Hosts asignados</h3>
 
-            <p class="muted">${hostList.map(h => h.name).join(', ') || 'Sin hosts asignados'}</p>
+            <p class="muted">${fmt(hostList.map(h => h.name).join(', ') || 'Sin hosts asignados')}</p>
 
           </div>
 
@@ -3140,13 +2557,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
     ${renderVirtualSubnav(cluster.name, backMode)}
 
-    <section class="cluster-detail" data-source="${cluster.source}" data-cluster="${encodeURIComponent(cluster.key || '')}">
+    <section class="cluster-detail" data-source="${escapeHtml(cluster.source)}" data-cluster="${encodeURIComponent(cluster.key || '')}">
 
       <header class="cluster-detail__header">
 
         <div>
 
-          <p class="muted">Hosts: ${hosts.map(h => h.name).join(', ') || 'Sin hosts asignados'}</p>
+          <p class="muted">Hosts: ${fmt(hosts.map(h => h.name).join(', ') || 'Sin hosts asignados')}</p>
 
           <span class="cluster-detail__stats">${hosts.length} hosts · ${totalVMs} VMs</span>
 
@@ -3462,7 +2879,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             </div>
 
-            <button class="btn-edit-host" data-host-id="${host.id}" data-host-name="${encodeURIComponent(host.name)}" title="Editar nombre del host" style="padding:4px 8px;background:#3b82f6;color:white;border:none;border-radius:6px;cursor:pointer;font-size:12px;margin-right:8px">✏️ Editar</button>
+            <button class="btn-edit-host" data-host-id="${encodeURIComponent(String(host.id ?? ''))}" data-host-name="${encodeURIComponent(host.name)}" title="Editar nombre del host" style="padding:4px 8px;background:#3b82f6;color:white;border:none;border-radius:6px;cursor:pointer;font-size:12px;margin-right:8px">✏️ Editar</button>
 
             <span class="host-card__count">${vmCount} VMs</span>
 
@@ -4263,7 +3680,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         <div>RAM</div><div>${fmt(s.ramGb)}</div>
 
-        <div>Discos</div><div style="white-space:pre-wrap">${formatDiscosDisplay(s.discos)}</div>
+        <div>Discos</div><div style="white-space:pre-wrap">${fmt(formatDiscosDisplay(s.discos))}</div>
 
         <div>Datastore</div><div style="white-space:pre-wrap">${fmt(s.datastore)}</div>
 
@@ -4701,6 +4118,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     route();
 
+    // Re-aplicar el modo solo lectura a los botones recién renderizados
+    disableReadOnlyActions();
+
     if (!isVirtuales) {
 
       // Overview stats (simulado en cliente)
@@ -4718,6 +4138,9 @@ document.addEventListener('DOMContentLoaded', function () {
     if (document.getElementById('app')) {
 
       const ev = new EventSource('/events');
+
+      // Referencia global para cerrarla al hacer logout (ver nav.js / auth.js)
+      window.__eventosServidor = ev;
 
       ev.addEventListener('data', async (msg) => {
 
@@ -4767,7 +4190,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
   window.addEventListener('hashchange', route);
 
-  fetchData();
+  // Primero se confirma el rol (fail-closed) y luego se renderizan las vistas
+  sesionLista.finally(() => fetchData());
 
 
 
@@ -4791,11 +4215,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // ========= FÍSICOS: Interactividad UX ========= //
 
+  // Los listeners GLOBALES (document, modal, buscador) se registran UNA sola vez.
+  // Antes se volvían a registrar en cada render/evento SSE y se acumulaban cientos.
+  let wirePhysicalUXGlobalesListos = false;
+
   const wirePhysicalUX = function () {
 
     const isPhys = !window.location.pathname.includes('virtuales');
 
     if (!isPhys) return;
+
+    const registrarGlobales = !wirePhysicalUXGlobalesListos;
+    wirePhysicalUXGlobalesListos = true;
 
     const tooltip = document.getElementById('slotTooltip');
 
@@ -4851,7 +4282,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Tooltip sobre unidades (usamos delegación si tuvieran data)
 
-    document.addEventListener('mousemove', (e) => {
+    if (registrarGlobales) document.addEventListener('mousemove', (e) => {
 
       const unit = e.target.closest('.rack-unit');
 
@@ -4893,6 +4324,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.querySelectorAll('.rack').forEach(rackEl => {
 
+      // Cada rack se conecta una sola vez aunque se vuelva a renderizar
+      if (rackEl.dataset.uxBound === '1') return;
+      rackEl.dataset.uxBound = '1';
+
       rackEl.addEventListener('click', () => {
 
         if (isReadOnlyUser()) {
@@ -4914,15 +4349,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Cierre modal (compatibilidad)
 
-    modalClose?.addEventListener('click', () => modal.classList.remove('show'));
+    if (registrarGlobales) modalClose?.addEventListener('click', () => modal.classList.remove('show'));
 
-    modal?.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('show'); });
+    if (registrarGlobales) modal?.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('show'); });
 
 
 
     // Navegación al hacer click en etiqueta (server-label)
 
-    document.addEventListener('click', (e) => {
+    if (registrarGlobales) document.addEventListener('click', (e) => {
 
       const lbl = e.target.closest('.server-label');
 
@@ -4948,7 +4383,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // Edición de host virtual sin onclick inline
-    document.addEventListener('click', (e) => {
+    if (registrarGlobales) document.addEventListener('click', (e) => {
       const btn = e.target.closest('.btn-edit-host');
       if (!btn) return;
 
@@ -5019,9 +4454,9 @@ document.addEventListener('DOMContentLoaded', function () {
     renderOverview();
     applySearchFilter();
 
-    search?.addEventListener('input', applySearchFilter);
+    if (registrarGlobales) search?.addEventListener('input', applySearchFilter);
 
-    filter?.addEventListener('change', applySearchFilter);
+    if (registrarGlobales) filter?.addEventListener('change', applySearchFilter);
 
 
 
@@ -5031,7 +4466,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
       const grid = document.querySelector('.rack-grid');
 
-      if (grid) {
+      if (grid && grid.dataset.wheelUxBound !== '1') {
+
+        grid.dataset.wheelUxBound = '1';
 
         grid.addEventListener('wheel', (ev) => {
 

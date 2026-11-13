@@ -1,19 +1,15 @@
-export function escapeHtml(value) {
-  const str = (value ?? '').toString();
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+import { escapeHtml } from '/js/dominios/ui-system/seguridadHtml.js';
+
+// Se re-exporta para no romper a quien la importaba desde aquí
+export { escapeHtml };
 
 export function formatearUsuarioFila(user) {
   const id = Number(user.id) || 0;
   const username = escapeHtml(user.username || '');
   const nombre = escapeHtml(user.name || '');
   const email = escapeHtml(user.email || '');
-  const role = escapeHtml(user.role || 'viewer');
+  // Lista blanca: el rol se usa también como clase CSS
+  const role = ['admin', 'viewer', 'superadmin'].includes(user.role) ? user.role : 'viewer';
   const estado = user.active ? 'Activo' : 'Inactivo';
   const ultimoLogin = user.last_login
     ? new Date(user.last_login).toLocaleString('es-ES')

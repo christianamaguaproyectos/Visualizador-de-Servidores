@@ -41,6 +41,8 @@ function hideAdminElements() {
 // Manejar logout
 async function handleLogout() {
   try {
+    // Cerrar conexión en vivo y olvidar al usuario antes de salir (definida en nav.js)
+    if (typeof window.limpiarEstadoCliente === 'function') window.limpiarEstadoCliente();
     const response = await fetch('/api/auth/logout', {
       method: 'POST'
     });

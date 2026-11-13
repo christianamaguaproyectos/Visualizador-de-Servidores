@@ -318,9 +318,9 @@ flowchart LR
   - Corregir comparación exacta de IP loopback en `networkSecurityService.js:180`.
 
 ### Fase 2 — Seguridad Frontend (Anti-XSS, RBAC UI) y Bugs Críticos (P0/P1)
-- [ ] **2.1 (`SEC-CRIT-07`)**: Sanitizar todas las interpolaciones `innerHTML` en `toast.js`, `monitoring.js`, `app.js` (`formatDiscosDisplay`, vistas y clusters virtuales), `serverManager.js` y `presentacionUsuarios.js`.
-- [ ] **2.2 (`BUG-CRIT-09`)**: Unificar la gestión de `#serverModal` y `#serverForm` entre `app.js` y `js/modules/serverManager.js` para reparar el botón **Editar** (`openServerModalForEdit`) y eliminar el doble envío `POST`/`PUT` preservando los 16 campos de seguridad/almacenamiento.
-- [ ] **2.3 (`FE-HIGH-10`)**:
+- [x] **2.1 (`SEC-CRIT-07`)**: Sanitizar todas las interpolaciones `innerHTML` en `toast.js`, `monitoring.js`, `app.js` (`formatDiscosDisplay`, vistas y clusters virtuales), `serverManager.js` y `presentacionUsuarios.js`.
+- [x] **2.2 (`BUG-CRIT-09`)**: Unificar la gestión de `#serverModal` y `#serverForm` entre `app.js` y `js/modules/serverManager.js` para reparar el botón **Editar** (`openServerModalForEdit`) y eliminar el doble envío `POST`/`PUT` preservando los 16 campos de seguridad/almacenamiento.
+- [x] **2.3 (`FE-HIGH-10`)**:
   - En `users.js:213-217`, ejecutar `passwordForm.reset()` **antes** de asignar `passwordUserId.value = userId` y alinear `minlength="8"` en `users.html`.
   - Eliminar las funciones `showToast` duplicadas en `app.js` y `monitoring.js` para usar globalmente `toast.js` (corrigiendo los toasts de error que desaparecían en `0ms`).
   - En `login.html`, limpiar `?resetToken=` de inmediato con `history.replaceState`, agregar `<meta name="referrer" content="no-referrer">` y sustituir `window.prompt` por un formulario modal con campos `<input type="password">`.

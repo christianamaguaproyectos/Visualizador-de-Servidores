@@ -1,16 +1,7 @@
-function escapeHtml(value) {
-  const str = (value ?? '').toString();
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+import { textoSeguro } from '/js/dominios/ui-system/seguridadHtml.js';
 
 export function formatearTextoSeguro(value) {
-  const limpio = (value ?? '').toString().trim();
-  return limpio ? escapeHtml(limpio) : '—';
+  return textoSeguro(value);
 }
 
 export function badgeEstadoHost(estado) {

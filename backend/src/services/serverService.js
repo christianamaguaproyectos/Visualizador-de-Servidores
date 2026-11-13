@@ -153,6 +153,24 @@ class ServerService {
       activo: body.activo || 'SI',
       rackUnits: body.rack_units ? parseInt(body.rack_units) : 2,
       rackPosition: body.rack_position ? parseInt(body.rack_position) : null,
+      // Campos de storage (físicos) y de seguridad/monitoreo (virtuales).
+      // Antes no se copiaban al crear y se perdían (BUG-CRIT-09).
+      storage: normalized.storage ?? null,
+      ocsInventario: normalized.ocsInventario ?? null,
+      datastoreVirtuales: normalized.datastoreVirtuales ?? null,
+      conexionStorage: normalized.conexionStorage ?? null,
+      mtm: normalized.mtm ?? null,
+      configBackup: normalized.configBackup ?? null,
+      sophosEp: normalized.sophosEp ?? null,
+      vicarius: normalized.vicarius ?? null,
+      acronis: normalized.acronis ?? null,
+      veeam: normalized.veeam ?? null,
+      manual: normalized.manual ?? null,
+      zabbix: normalized.zabbix ?? null,
+      wazuh: normalized.wazuh ?? null,
+      bluelevel: normalized.bluelevel ?? null,
+      pam: normalized.pam ?? null,
+      usuarioPam: normalized.usuarioPam ?? null,
     };
 
     const server = await serverRepository.create(serverData);
