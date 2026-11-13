@@ -1954,7 +1954,8 @@ async function simulateAlert(action) {
           ❌ Error: ${mensajeError}
         </div>
       `;
-      showToast(fmt(data.error || 'Error simulando alerta'), 'error');
+      // Sin fmt(): toast.js ya inserta el mensaje como texto (fmt mostraría &amp; o &#39;)
+      showToast(data.error || 'Error simulando alerta', 'error');
     }
   } catch (err) {
     result.innerHTML = `<div class="alert alert-error">❌ Error de conexión</div>`;
