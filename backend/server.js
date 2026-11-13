@@ -72,7 +72,8 @@ class Application {
       Logger.info('Monitoreo habilitado, iniciando scheduler y worker...');
       try {
         const { default: scheduler } = await import('./src/monitoring/scheduler/scheduler.js');
-        scheduler.start();
+        this.scheduler = scheduler; // referencia para detenerlo en el apagado limpio
+        scheduler.start().catch((e) => Logger.error('Error iniciando scheduler:', e.message));
       } catch (e) { Logger.error('Error iniciando scheduler:', e.message); }
       try {
         const { startCheckWorker } = await import('./src/monitoring/workers/checkWorker.js');
@@ -288,7 +289,8 @@ class Application {
     // Mostrar información de seguridad
     networkSecurityService.logSecurityStatus();
 
-    this.app.listen(this.port, bindAddress, () => {
+    // Guardar la referencia del servidor HTTP para cerrarlo en el apagado limpio
+    this.httpServer = this.app.listen(this.port, bindAddress, () => {
       Logger.success(`✅ Servidor iniciado en http://localhost:${this.port}`);
       
       if (bindAddress === '0.0.0.0') {
@@ -310,18 +312,50 @@ class Application {
    * Manejo de cierre graceful
    */
   setupGracefulShutdown() {
-    const shutdown = () => {
-      Logger.info('Cerrando aplicación...');
-      
-      // Desconectar clientes SSE
-      sseService.disconnectAll();
-      
-      Logger.success('Aplicación cerrada correctamente');
-      process.exit(0);
+    let cerrando = false;
+
+    const shutdown = async (senal) => {
+      if (cerrando) return;
+      cerrando = true;
+      Logger.info(`Cerrando aplicación (${senal})...`);
+
+      // Si algo se cuelga, forzar la salida a los 10 s
+      const forzar = setTimeout(() => {
+        Logger.error('Apagado forzado: algún recurso no se cerró a tiempo');
+        process.exit(1);
+      }, 10000);
+      forzar.unref();
+
+      try {
+        // 1) Desconectar clientes SSE primero: son conexiones abiertas que
+        //    impedirían que el servidor HTTP termine de cerrar
+        sseService.disconnectAll();
+        // 2) Dejar de aceptar conexiones HTTP nuevas y cerrar las inactivas
+        if (this.httpServer) {
+          const cerrado = new Promise((resolve) => this.httpServer.close(() => resolve()));
+          this.httpServer.closeIdleConnections?.();
+          await cerrado;
+        }
+        // 3) Detener el scheduler esperando el tick en curso
+        if (this.scheduler) await this.scheduler.stop();
+        // 4) Cerrar Prisma y el pool de PostgreSQL compartido
+        const [{ default: prisma }, { closePool }] = await Promise.all([
+          import('./src/config/prisma.js'),
+          import('./src/config/db.js'),
+        ]);
+        await prisma.$disconnect().catch(() => { });
+        await closePool();
+
+        Logger.success('Aplicación cerrada correctamente');
+        process.exit(0);
+      } catch (e) {
+        Logger.error('Error durante el apagado:', e.message);
+        process.exit(1);
+      }
     };
 
-    process.on('SIGTERM', shutdown);
-    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
   }
 }
 

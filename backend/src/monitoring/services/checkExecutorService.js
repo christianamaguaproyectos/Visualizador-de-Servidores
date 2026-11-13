@@ -167,18 +167,21 @@ class CheckExecutorService {
       return { status: EstadosChequeo.FALLA, error: validacion.error };
     }
 
-    const timeoutMs = check?.timeout_ms || config.timeoutMs || monitoringConfig.defaults.pingTimeoutMs;
+    // timeout del check: el scheduler lo envía como timeoutMs (columna timeout_ms).
+    // Antes solo ICMP lo usaba; TCP/HTTP ignoraban el timeout configurado del check.
+    const timeoutDelCheck = Number(check?.timeoutMs ?? check?.timeout_ms ?? config.timeoutMs) || null;
+    const defaults = monitoringConfig.defaults;
 
     try {
       if (kind === TiposChequeo.ICMP) {
         const host = config.host || config.ip;
-        return await this.runICMP(host, timeoutMs);
+        return await this.runICMP(host, timeoutDelCheck || defaults.pingTimeoutMs);
       }
       if (kind === TiposChequeo.TCP) {
-        return await this.runTCP({ host: config.host || config.ip, port: config.port, timeoutMs: config.timeoutMs || monitoringConfig.defaults.tcpTimeoutMs });
+        return await this.runTCP({ host: config.host || config.ip, port: config.port, timeoutMs: timeoutDelCheck || defaults.tcpTimeoutMs });
       }
       if (kind === TiposChequeo.HTTP) {
-        return await this.runHTTP({ url: config.url, timeoutMs: config.timeoutMs || monitoringConfig.defaults.httpTimeoutMs, expectCode: config.expectCode || 200 });
+        return await this.runHTTP({ url: config.url, timeoutMs: timeoutDelCheck || defaults.httpTimeoutMs, expectCode: config.expectCode || 200 });
       }
       logAdvertencia('check.tipo_no_soportado', 'Se recibio un tipo de check no soportado', 'monitoreo', {
         tipoChequeo: kind

@@ -8,14 +8,14 @@ let pool = null;
  * Obtiene o crea el pool de conexiones
  * @returns {Pool} Pool de conexiones PostgreSQL
  */
-function getPool() {
+export function getPool() {
   if (!pool) {
     const url = process.env.POSTGRES_URL;
     if (!url) throw new Error('POSTGRES_URL no definido');
 
     pool = new Pool({
       connectionString: url,
-      max: 10,                    // Máximo de conexiones en el pool
+      max: 20,                    // Máximo de conexiones (pool ÚNICO compartido con monitoreo)
       min: 2,                     // Mínimo de conexiones mantenidas
       idleTimeoutMillis: 30000,   // Cerrar conexiones inactivas después de 30s
       connectionTimeoutMillis: 5000, // Timeout para obtener conexión
@@ -30,7 +30,7 @@ function getPool() {
       Logger.debug('📊 Nueva conexión establecida en el pool');
     });
 
-    Logger.info('🐘 Pool de conexiones PostgreSQL inicializado (max: 10)');
+    Logger.info('🐘 Pool de conexiones PostgreSQL inicializado (max: 20)');
   }
   return pool;
 }
