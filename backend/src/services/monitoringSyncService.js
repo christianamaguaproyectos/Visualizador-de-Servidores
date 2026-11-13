@@ -159,7 +159,7 @@ class MonitoringSyncService {
           INSERT INTO monitoring.hosts (name, ip, type, rack, estado_actual, enabled, group_tags)
           VALUES ($1, $2::inet, $3::monitoring.host_type_enum, $4, 'UNKNOWN', $5, $6)
           RETURNING id
-        `, [nombre, finalIP, hostType, rack_norm, isActive, JSON.stringify([])]);
+        `, [nombre, finalIP, hostType, rack_norm, isActive, []]); // group_tags es TEXT[] (antes se enviaba el texto '[]' y fallaba)
 
         const hostId = result.rows[0].id;
 

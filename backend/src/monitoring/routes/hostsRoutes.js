@@ -26,7 +26,22 @@ async function withClient(fn) {
     return fn(client);
   });
 }
-// Igual que withClient, pero dentro de una TRANSACCIÓN: en operaciones de varios// pasos (actualizar + registrar evento, borrar en cascada...) no queda nada a mediasasync function withTransaction(fn) {  return withClient(async (client) => {    await client.query('BEGIN');    try {      const resultado = await fn(client);      await client.query('COMMIT');      return resultado;    } catch (err) {      await client.query('ROLLBACK').catch(() => { });      throw err;    }  });}
+
+// Igual que withClient, pero dentro de una TRANSACCIÓN: en operaciones de varios
+// pasos (actualizar + registrar evento, borrar en cascada...) no queda nada a medias
+async function withTransaction(fn) {
+  return withClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      const resultado = await fn(client);
+      await client.query('COMMIT');
+      return resultado;
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => { });
+      throw err;
+    }
+  });
+}
 
 
 /**
