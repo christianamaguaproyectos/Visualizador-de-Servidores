@@ -1,4 +1,4 @@
-# Script PowerShell para iniciar PM2 automáticamente
+﻿# Script PowerShell para iniciar PM2 automáticamente
 # Este script debe ejecutarse al inicio del sistema
 
 Write-Host "Iniciando PM2 DiagramaServers..." -ForegroundColor Green

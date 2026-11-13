@@ -16,15 +16,20 @@ class StateEvaluatorService {
     return 'UP';
   }
 
-  evaluateAndTransition(hostRecord, newRun, recentRuns, persistCallback, incidentCallback) {
+  /**
+   * Evalúa el estado y, si cambió, ESPERA (await) a que se guarde y a que se
+   * procesen incidentes/notificaciones. Antes los callbacks async no se esperaban:
+   * los errores quedaban sin manejar y el siguiente tick leía un estado viejo.
+   */
+  async evaluateAndTransition(hostRecord, newRun, recentRuns, persistCallback, incidentCallback) {
     const newState = this.deriveState({ recentRuns });
     if (newState !== hostRecord.estado_actual) {
       const prev = hostRecord.estado_actual;
       hostRecord.estado_actual = newState;
       hostRecord.estado_changed_at = new Date().toISOString();
       Logger.info(`Host ${hostRecord.name} cambia de ${prev} -> ${newState}`);
-      persistCallback?.(hostRecord);
-      incidentCallback?.({ host: hostRecord, prev, next: newState });
+      if (persistCallback) await persistCallback(hostRecord);
+      if (incidentCallback) await incidentCallback({ host: hostRecord, prev, next: newState });
     }
   }
 }

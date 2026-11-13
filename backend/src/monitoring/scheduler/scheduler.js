@@ -1,20 +1,60 @@
 import monitoringConfig from '../config/monitoringConfig.js';
 import Logger from '../../utils/logger.js';
-import { Client } from 'pg';
+import { withMonitoringClient } from '../config/monitoringDb.js';
 import checkExecutorService from '../services/checkExecutorService.js';
 import stateEvaluatorService from '../services/stateEvaluatorService.js';
 import notificationService from '../services/notificationService.js';
 import { EstadosChequeo, EstadosHost, SeveridadesIncidente } from '../domain/glosario/terminosDominio.js';
 import { logAdvertencia, logError, logInfo } from '../../utils/structuredLogger.js';
 
-// Scheduler lee checks desde Postgres y los ejecuta directamente según frequency_sec.
+// Scheduler: lee los checks desde Postgres y los ejecuta según frequency_sec.
+//
+// Cambios de la Fase 3 (ARCH-HIGH-09 / MON-MED-01 / MON-MED-02):
+//  - Usa el POOL compartido (withMonitoringClient) en vez de un pg.Client único sin
+//    reconexión ni manejador de 'error' (si Postgres cortaba la conexión, caía el proceso).
+//  - Bandera tickRunning: un tick nunca se solapa con el anterior.
+//  - Concurrencia controlada: hasta CONCURRENCIA hosts en paralelo; los checks de un
+//    mismo host se ejecutan en orden para no pisar la evaluación de su estado.
+//  - Respeta el modo MAINTENANCE y las ventanas activas de maintenance_windows.
+//  - No abre incidentes duplicados; al recuperarse cierra los 'open' y los 'ack'.
+
+/** Máximo de hosts que se chequean en paralelo por tick */
+const CONCURRENCIA = 10;
+
+/** Estados de incidente que se consideran "activos" */
+const ESTADOS_INCIDENTE_ACTIVOS = ['open', 'ack'];
+
+/**
+ * Ejecuta fn sobre cada elemento con un límite de tareas en paralelo
+ * @param {Array} items
+ * @param {number} limite
+ * @param {Function} fn
+ */
+async function ejecutarConConcurrencia(items, limite, fn) {
+  let siguiente = 0;
+  const trabajadores = Array.from({ length: Math.min(limite, items.length) }, async () => {
+    while (siguiente < items.length) {
+      const item = items[siguiente++];
+      await fn(item);
+    }
+  });
+  await Promise.all(trabajadores);
+}
+
+/** Atajo: ejecuta una consulta con una conexión del pool */
+function query(sql, params) {
+  return withMonitoringClient((client) => client.query(sql, params));
+}
 
 class Scheduler {
   constructor() {
     this.intervalMs = 5000; // cada 5s revisa si toca ejecutar algo
     this.timer = null;
-    this.pg = null;
+    this.iniciado = false;
+    this.tickRunning = false;
+    this.tickActual = null; // promesa del tick en curso (para el apagado limpio)
     this.cache = new Map(); // id -> { lastRun }
+    this.checks = [];
     this.loading = false;
     this.reloadIntervalMs = 30000; // refrescar lista cada 30s
     this.lastReload = 0;
@@ -31,9 +71,8 @@ class Scheduler {
       return;
     }
     try {
-      this.pg = new Client({ connectionString: monitoringConfig.postgresUrl });
-      await this.pg.connect();
-      await this.pg.query('SET search_path TO monitoring, public');
+      // Verifica la conexión usando el pool (que reconecta solo si Postgres se reinicia)
+      await query('SELECT 1');
       Logger.success('Scheduler conectado a Postgres');
       logInfo('scheduler.conectado', 'Scheduler conectado a la base de datos de monitoreo', 'monitoreo');
     } catch (e) {
@@ -41,20 +80,30 @@ class Scheduler {
       logError('scheduler.error_conexion', 'No se pudo conectar a Postgres para scheduler', 'monitoreo', {}, e);
       return;
     }
+    this.iniciado = true;
     await this.reloadChecks();
     // Tick inmediato para no esperar intervalMs
     await this.tick();
-    this.timer = setInterval(() => this.tick(), this.intervalMs);
+    this.timer = setInterval(() => { this.tick(); }, this.intervalMs);
     Logger.success('Scheduler monitoreo iniciado (ejecución directa)');
     logInfo('scheduler.iniciado', 'Scheduler de monitoreo iniciado en modo ejecucion directa', 'monitoreo', {
       intervaloMs: this.intervalMs,
-      recargaMs: this.reloadIntervalMs
+      recargaMs: this.reloadIntervalMs,
+      concurrencia: CONCURRENCIA
     });
   }
 
-  stop() {
+  /**
+   * Detiene el scheduler y espera a que termine el tick en curso (apagado limpio)
+   */
+  async stop() {
     if (this.timer) clearInterval(this.timer);
-    if (this.pg) this.pg.end().catch(() => { });
+    this.timer = null;
+    this.iniciado = false;
+    if (this.tickActual) {
+      await this.tickActual.catch(() => { });
+    }
+    Logger.info('Scheduler de monitoreo detenido');
   }
 
   /**
@@ -72,12 +121,11 @@ class Scheduler {
     if (this.loading) return;
     this.loading = true;
     try {
-      // Incluir IP del host en la consulta para que los checks ICMP funcionen
-      // Usar host(ip) para obtener solo la IP sin la máscara CIDR
-      const { rows } = await this.pg.query(`
+      // host(ip) devuelve la IP sin la máscara CIDR
+      const { rows } = await query(`
         SELECT c.id, c.kind, c.config, c.frequency_sec, c.timeout_ms, c.host_id, host(h.ip)::text as host_ip, h.name as host_name
-        FROM checks c 
-        JOIN hosts h ON c.host_id = h.id 
+        FROM checks c
+        JOIN hosts h ON c.host_id = h.id
         WHERE c.enabled = true AND h.enabled = true
       `);
       this.checks = rows.map(r => ({
@@ -102,28 +150,52 @@ class Scheduler {
     }
   }
 
-  async tick() {
-    if (!this.pg) return;
+  tick() {
+    // Guarda: si el tick anterior sigue corriendo, no se inicia otro encima
+    if (!this.iniciado || this.tickRunning) return this.tickActual;
+    this.tickRunning = true;
+    this.tickActual = this._ejecutarTick()
+      .catch((e) => {
+        Logger.error('Error en tick del scheduler:', e.message);
+        logError('scheduler.error_tick', 'Error en tick del scheduler', 'monitoreo', {}, e);
+      })
+      .finally(() => {
+        this.tickRunning = false;
+        this.tickActual = null;
+      });
+    return this.tickActual;
+  }
+
+  async _ejecutarTick() {
     const now = Date.now();
     if (now - this.lastReload > this.reloadIntervalMs) {
       await this.reloadChecks();
     }
     if (!this.checks || this.checks.length === 0) return;
 
+    // Checks vencidos, agrupados por host
+    const porHost = new Map();
     for (const c of this.checks) {
       const meta = this.cache.get(c.id) || { lastRun: 0 };
-      const due = meta.lastRun + c.frequency_sec * 1000;
-      if (now >= due) {
+      if (now >= meta.lastRun + c.frequency_sec * 1000) {
         meta.lastRun = now;
         this.cache.set(c.id, meta);
-        // Ejecutar directamente
-        await this.executeAndPersist(c);
+        if (!porHost.has(c.host_id)) porHost.set(c.host_id, []);
+        porHost.get(c.host_id).push(c);
       }
     }
+
+    // Hosts en paralelo (límite CONCURRENCIA); checks del mismo host en orden
+    await ejecutarConConcurrencia([...porHost.values()], CONCURRENCIA, async (checksDelHost) => {
+      for (const c of checksDelHost) {
+        await this.executeAndPersist(c);
+      }
+    });
   }
 
   async executeAndPersist(c) {
     try {
+      // timeoutMs del check (antes no llegaba al ejecutor en TCP/HTTP)
       const result = await checkExecutorService.execute({ kind: c.kind, config: c.config, timeoutMs: c.timeout_ms });
       await this.persistRun(c, result);
     } catch (e) {
@@ -137,7 +209,6 @@ class Scheduler {
   }
 
   async persistRun(c, result) {
-    // Usar host_id que ya viene del check
     const hostId = c.host_id;
     if (!hostId) return;
 
@@ -148,7 +219,7 @@ class Scheduler {
     const error = result.error || null;
     const sample = result.sample ? JSON.stringify(result.sample) : null;
     try {
-      await this.pg.query(
+      await query(
         'INSERT INTO check_runs(time, check_id, host_id, status, latency_ms, code, error, sample) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',
         [time, c.id, hostId, status, latency, code, error, sample]
       );
@@ -162,36 +233,58 @@ class Scheduler {
 
     // Evaluar y actualizar estado del host (últimos 5 runs de cualquiera de sus checks)
     try {
-      const { rows: recent } = await this.pg.query(
+      const { rows: hostRows } = await query(`
+        SELECT h.id, h.name, h.estado_actual, host(h.ip)::text AS ip, h.type, h.rack,
+               EXISTS (
+                 SELECT 1 FROM maintenance_windows mw
+                 WHERE mw.starts_at <= NOW() AND mw.ends_at > NOW()
+                   AND (
+                     mw.scope_type = 'all'
+                     OR (mw.scope_type = 'host' AND h.id::text = ANY(mw.target_ids))
+                     OR (mw.scope_type = 'group' AND mw.target_ids && h.group_tags)
+                   )
+               ) AS en_mantenimiento
+        FROM hosts h WHERE h.id = $1
+      `, [hostId]);
+      if (!hostRows.length) return;
+
+      const hostRecord = hostRows[0];
+
+      // MANTENIMIENTO: mientras haya una ventana activa, el estado NO se recalcula
+      // (antes se sobrescribía con UP/DOWN en el siguiente tick y se disparaban alertas)
+      if (hostRecord.en_mantenimiento) {
+        if (hostRecord.estado_actual !== EstadosHost.MANTENIMIENTO) {
+          await query('UPDATE hosts SET estado_actual=$1, estado_changed_at=NOW() WHERE id=$2', [EstadosHost.MANTENIMIENTO, hostId]);
+        }
+        return;
+      }
+
+      const { rows: recent } = await query(
         'SELECT status FROM check_runs WHERE host_id=$1 ORDER BY time DESC LIMIT 5',
         [hostId]
       );
-      const { rows: hostRows } = await this.pg.query('SELECT id, name, estado_actual, host(ip)::text as ip, type, rack FROM hosts WHERE id=$1', [hostId]);
-      if (hostRows.length) {
-        const hostRecord = hostRows[0];
-        const prevState = hostRecord.estado_actual;
+      delete hostRecord.en_mantenimiento;
 
-        stateEvaluatorService.evaluateAndTransition(
-          hostRecord,
-          { status },
-          recent,
-          async (updated) => {
-            try {
-              await this.pg.query('UPDATE hosts SET estado_actual=$1, estado_changed_at=NOW() WHERE id=$2', [updated.estado_actual, updated.id]);
-            } catch (e) {
-              Logger.error('Error actualizando estado host', updated.id, e.message);
-              logError('scheduler.error_actualizando_estado_host', 'Error actualizando estado del host', 'monitoreo', {
-                hostId: updated.id,
-                estado: updated.estado_actual
-              }, e);
-            }
-          },
-          async ({ host, prev, next }) => {
-            // Callback para manejar cambios de estado - crear/cerrar incidentes y notificar
-            await this.handleStateChange(host, prev, next);
+      await stateEvaluatorService.evaluateAndTransition(
+        hostRecord,
+        { status },
+        recent,
+        async (updated) => {
+          try {
+            await query('UPDATE hosts SET estado_actual=$1, estado_changed_at=NOW() WHERE id=$2', [updated.estado_actual, updated.id]);
+          } catch (e) {
+            Logger.error('Error actualizando estado host', updated.id, e.message);
+            logError('scheduler.error_actualizando_estado_host', 'Error actualizando estado del host', 'monitoreo', {
+              hostId: updated.id,
+              estado: updated.estado_actual
+            }, e);
           }
-        );
-      }
+        },
+        async ({ host, prev, next }) => {
+          // Cambios de estado: crear/cerrar incidentes y notificar
+          await this.handleStateChange(host, prev, next);
+        }
+      );
     } catch (e) {
       Logger.error('Error evaluando estado host', e.message);
       logError('scheduler.error_evaluando_estado_host', 'Error evaluando estado de host', 'monitoreo', {
@@ -205,41 +298,24 @@ class Scheduler {
    */
   async handleStateChange(host, prevState, newState) {
     try {
-      // Si pasó a DOWN, crear incidente
-      if (newState === EstadosHost.CAIDO && prevState !== EstadosHost.CAIDO) {
-        const incident = await this.createIncident(host, SeveridadesIncidente.CRITICA);
+      // Pasó a DOWN o DEGRADED: abrir incidente (o reutilizar el que ya esté activo)
+      if (
+        (newState === EstadosHost.CAIDO && prevState !== EstadosHost.CAIDO)
+        || (newState === EstadosHost.DEGRADADO && prevState !== EstadosHost.DEGRADADO)
+      ) {
+        const severidad = newState === EstadosHost.CAIDO ? SeveridadesIncidente.CRITICA : SeveridadesIncidente.ADVERTENCIA;
+        const incident = await this.abrirOReutilizarIncidente(host, severidad);
 
-        // Enviar notificación
-        await notificationService.notifyStateChange({
-          host,
-          prevState,
-          newState,
-          incident
-        });
+        await notificationService.notifyStateChange({ host, prevState, newState, incident });
       }
-      // Si pasó a DEGRADED, crear incidente warning
-      else if (newState === EstadosHost.DEGRADADO && prevState !== EstadosHost.DEGRADADO) {
-        const incident = await this.createIncident(host, SeveridadesIncidente.ADVERTENCIA);
-
-        await notificationService.notifyStateChange({
-          host,
-          prevState,
-          newState,
-          incident
-        });
-      }
-      // Si se recuperó (UP), cerrar incidentes abiertos
+      // Se recuperó (UP): cerrar incidentes activos ('open' y 'ack')
       else if (
         newState === EstadosHost.ARRIBA
         && (prevState === EstadosHost.CAIDO || prevState === EstadosHost.DEGRADADO)
       ) {
         await this.closeIncidents(host.id);
 
-        await notificationService.notifyStateChange({
-          host,
-          prevState,
-          newState
-        });
+        await notificationService.notifyStateChange({ host, prevState, newState });
       }
     } catch (e) {
       Logger.error('Error manejando cambio de estado:', e.message);
@@ -252,27 +328,60 @@ class Scheduler {
   }
 
   /**
-   * Crea un incidente para un host
+   * Si el host ya tiene un incidente activo (open/ack) no se crea otro:
+   * se reutiliza y, si el nuevo estado es más grave (DEGRADED -> DOWN), se escala a 'critical'.
+   * (Antes cada transición DOWN <-> DEGRADED abría un incidente duplicado.)
    */
-  async createIncident(host, severity) {
+  async abrirOReutilizarIncidente(host, severity) {
     try {
-      const { rows } = await this.pg.query(`
-        INSERT INTO incidents (host_id, severity, state, summary, opened_at)
-        VALUES ($1, $2, 'open', $3, NOW())
-        RETURNING *
-      `, [
-        host.id,
-        severity,
-        `${host.name} (${host.ip}) - ${severity === 'critical' ? 'Host caído' : 'Host degradado'}`
-      ]);
+      return await withMonitoringClient(async (client) => {
+        await client.query('BEGIN');
+        try {
+          const { rows: activos } = await client.query(`
+            SELECT * FROM incidents
+            WHERE host_id = $1 AND state = ANY($2)
+            ORDER BY opened_at DESC
+            LIMIT 1
+            FOR UPDATE
+          `, [host.id, ESTADOS_INCIDENTE_ACTIVOS]);
 
-      Logger.warn(`⚠️ Incidente creado: ${host.name} - Severidad: ${severity}`);
-      logAdvertencia('incidente.creado', 'Incidente creado para host monitoreado', 'monitoreo', {
-        hostId: host.id,
-        hostNombre: host.name,
-        severidad: severity
+          let incidente;
+          if (activos.length) {
+            incidente = activos[0];
+            if (severity === SeveridadesIncidente.CRITICA && incidente.severity !== SeveridadesIncidente.CRITICA) {
+              const { rows } = await client.query(
+                `UPDATE incidents SET severity = $1, summary = $2 WHERE id = $3 RETURNING *`,
+                [severity, `${host.name} (${host.ip}) - Host caído`, incidente.id]
+              );
+              incidente = rows[0];
+              Logger.warn(`⚠️ Incidente ${incidente.id} escalado a crítico: ${host.name}`);
+            }
+          } else {
+            const { rows } = await client.query(`
+              INSERT INTO incidents (host_id, severity, state, summary, opened_at)
+              VALUES ($1, $2, 'open', $3, NOW())
+              RETURNING *
+            `, [
+              host.id,
+              severity,
+              `${host.name} (${host.ip}) - ${severity === SeveridadesIncidente.CRITICA ? 'Host caído' : 'Host degradado'}`
+            ]);
+            incidente = rows[0];
+            Logger.warn(`⚠️ Incidente creado: ${host.name} - Severidad: ${severity}`);
+            logAdvertencia('incidente.creado', 'Incidente creado para host monitoreado', 'monitoreo', {
+              hostId: host.id,
+              hostNombre: host.name,
+              severidad: severity
+            });
+          }
+
+          await client.query('COMMIT');
+          return incidente;
+        } catch (e) {
+          await client.query('ROLLBACK').catch(() => { });
+          throw e;
+        }
       });
-      return rows[0];
     } catch (e) {
       Logger.error('Error creando incidente:', e.message);
       logError('incidente.error_creacion', 'Error creando incidente', 'monitoreo', {
@@ -284,19 +393,20 @@ class Scheduler {
   }
 
   /**
-   * Cierra incidentes abiertos de un host
+   * Cierra los incidentes ACTIVOS ('open' y 'ack') de un host al recuperarse
+   * (antes solo cerraba los 'open' y los reconocidos quedaban abiertos para siempre)
    */
   async closeIncidents(hostId) {
     try {
-      const { rowCount } = await this.pg.query(`
-        UPDATE incidents 
+      const { rowCount } = await query(`
+        UPDATE incidents
         SET state = 'resolved', closed_at = NOW()
-        WHERE host_id = $1 AND state = 'open'
-      `, [hostId]);
+        WHERE host_id = $1 AND state = ANY($2)
+      `, [hostId, ESTADOS_INCIDENTE_ACTIVOS]);
 
       if (rowCount > 0) {
         Logger.success(`✅ ${rowCount} incidente(s) cerrado(s) para host ${hostId}`);
-        logInfo('incidente.cierre_masivo', 'Incidentes abiertos cerrados por recuperacion del host', 'monitoreo', {
+        logInfo('incidente.cierre_masivo', 'Incidentes activos cerrados por recuperacion del host', 'monitoreo', {
           hostId,
           totalCerrados: rowCount
         });
@@ -313,16 +423,15 @@ class Scheduler {
    * @returns {object} Resultado de la ejecución
    */
   async executeCheckNow(checkId) {
-    if (!this.pg) {
+    if (!this.iniciado) {
       throw new Error('Scheduler no inicializado');
     }
 
-    // Obtener el check con info del host
-    const { rows } = await this.pg.query(`
-      SELECT c.id, c.kind, c.config, c.frequency_sec, c.timeout_ms, c.host_id, 
+    const { rows } = await query(`
+      SELECT c.id, c.kind, c.config, c.frequency_sec, c.timeout_ms, c.host_id,
              host(h.ip)::text as host_ip, h.name as host_name
-      FROM checks c 
-      JOIN hosts h ON c.host_id = h.id 
+      FROM checks c
+      JOIN hosts h ON c.host_id = h.id
       WHERE c.id = $1 AND c.enabled = true
     `, [checkId]);
 
@@ -339,7 +448,6 @@ class Scheduler {
 
     Logger.info(`▶️ Ejecutando check ${checkId} (${check.kind}) para ${check.host_name} inmediatamente...`);
 
-    // Ejecutar el check
     let result;
     try {
       result = await checkExecutorService.execute({
@@ -348,7 +456,7 @@ class Scheduler {
         timeoutMs: check.timeout_ms
       });
     } catch (e) {
-      result = { status: 'fail', error: e.message };
+      result = { status: EstadosChequeo.FALLA, error: e.message };
     }
 
     // Persistir resultado (esto también evalúa el estado del host)

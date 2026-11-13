@@ -1,4 +1,4 @@
-Param(
+﻿Param(
   [string]$PostgresUrl = $env:POSTGRES_URL,
   [string]$SchemaFile,
   [switch]$ImportHosts,
@@ -11,21 +11,26 @@ Write-Host "== Setup Monitoreo DB ==" -ForegroundColor Cyan
 
 # Resolver ruta del schema por defecto relative al script
 if (-not $SchemaFile) {
-  $SchemaFile = Join-Path $PSScriptRoot '..\\..\\scripts\\sql\\schema.monitoring.sql'
+  # (antes apuntaba a "schema.monitoring.sql", que no existe)
+  $SchemaFile = Join-Path $PSScriptRoot '..\\..\\scripts\\sql\\02-schema.monitoring.sql'
   $SchemaFile = Resolve-Path $SchemaFile
 }
 
 if ($ApplyInventory -and -not $InventorySchemaFile) {
-  $InventorySchemaFile = Join-Path $PSScriptRoot '..\\..\\scripts\\sql\\schema.inventory.sql'
+  $InventorySchemaFile = Join-Path $PSScriptRoot '..\\..\\scripts\\sql\\01-schema.inventory.sql'
   $InventorySchemaFile = Resolve-Path $InventorySchemaFile
 }
 
 if (-not $PostgresUrl) { Write-Error "POSTGRES_URL no definido"; exit 1 }
 
-# Parse simple postgres://user:pass@host:port/db
-if ($PostgresUrl -notmatch "postgres://([^:]+):([^@]+)@([^:]+):(\d+)/(.*)") { Write-Error "Formato POSTGRES_URL inválido"; exit 1 }
+# Parse simple postgres(ql)://user:pass@host:port/db  (antes rechazaba "postgresql://",
+# que es el formato que usan .env.docker.example y docker-compose.yml)
+if ($PostgresUrl -notmatch "postgres(?:ql)?://([^:]+):([^@]+)@([^:]+):(\d+)/([^?]*)") { Write-Error "Formato POSTGRES_URL inválido"; exit 1 }
 $pgUser = $Matches[1]; $pgPass = $Matches[2]; $pgHost = $Matches[3]; $pgPort = $Matches[4]; $pgDb = $Matches[5];
 $targetUser = if ($GrantToUser) { $GrantToUser } else { $pgUser }
+
+# El nombre se concatena en sentencias GRANT: solo identificadores simples (evita inyección SQL)
+if ($targetUser -notmatch "^[a-zA-Z_][a-zA-Z0-9_]{0,62}$") { Write-Error "Usuario inválido para GRANT: $targetUser"; exit 1 }
 
 Write-Host "Usuario: $pgUser Host: $pgHost Puerto: $pgPort DB: $pgDb" -ForegroundColor Yellow
 
@@ -78,12 +83,18 @@ if (-not (Get-Command psql -ErrorAction SilentlyContinue)) {
 
 if ($ImportHosts) {
   Write-Host "Importando hosts desde cache..." -ForegroundColor Cyan
-  node ..\import\importHostsFromCache.js
+  # Ruta relativa al script (antes dependía de la carpeta desde donde se ejecutaba)
+  node "$PSScriptRoot/../import/importHostsFromCache.js"
   if ($LASTEXITCODE -ne 0) { Write-Error "Error importando hosts"; exit 1 }
   Write-Host "Hosts importados." -ForegroundColor Green
 }
 
 Write-Host "Verificando conteo de hosts..." -ForegroundColor Cyan
-psql -h $host -p $port -U $user -d $db -c "SELECT count(*) FROM monitoring.hosts;"
+if (Get-Command psql -ErrorAction SilentlyContinue) {
+  $env:PGPASSWORD = $pgPass
+  psql -h $pgHost -p $pgPort -U $pgUser -d $pgDb -c "SELECT count(*) FROM monitoring.hosts;"
+} else {
+  node "$PSScriptRoot/../monitoring/verifyHostsCount.js"
+}
 
 Write-Host "Listo." -ForegroundColor Green

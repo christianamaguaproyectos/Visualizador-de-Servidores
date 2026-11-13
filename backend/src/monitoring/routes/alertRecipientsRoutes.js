@@ -5,6 +5,7 @@
 import express from 'express';
 import { withMonitoringClient } from '../config/monitoringDb.js';
 import Logger from '../../utils/logger.js';
+import { responderErrorInterno } from '../../utils/respuestaError.js';
 import { requireAdmin } from '../../middleware/authMiddleware.js';
 import { createRateLimiter } from '../../middleware/rateLimitMiddleware.js';
 import { escapeHtml, esEmailValido } from '../../utils/htmlEscape.js';
@@ -63,7 +64,7 @@ router.get('/', requireAdmin, async (req, res) => {
     res.json(result);
   } catch (err) {
     Logger.error('Error listando destinatarios:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -95,7 +96,7 @@ router.post('/', requireAdmin, async (req, res) => {
       return res.status(409).json({ error: 'Este email ya está registrado' });
     }
     Logger.error('Error creando destinatario:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -176,7 +177,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
       return res.status(err.status).json({ error: err.message });
     }
     Logger.error('Error actualizando destinatario:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -209,7 +210,7 @@ router.delete('/:id', requireAdmin, async (req, res) => {
       return res.status(err.status).json({ error: err.message });
     }
     Logger.error('Error eliminando destinatario:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -245,7 +246,7 @@ router.post('/:id/toggle', requireAdmin, async (req, res) => {
       return res.status(err.status).json({ error: err.message });
     }
     Logger.error('Error toggling destinatario:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -301,7 +302,7 @@ router.post('/test', requireAdmin, alertasOperacionRateLimiter, async (req, res)
     });
   } catch (err) {
     Logger.error('Error enviando test:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -414,7 +415,7 @@ router.post('/simulate', requireAdmin, alertasOperacionRateLimiter, async (req, 
       return res.status(err.status).json({ error: err.message });
     }
     Logger.error('Error simulando alerta:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -437,7 +438,7 @@ router.get('/hosts', requireAdmin, async (req, res) => {
     res.json(result);
   } catch (err) {
     Logger.error('Error listando hosts:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 

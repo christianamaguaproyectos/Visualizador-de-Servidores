@@ -1,7 +1,7 @@
 import { config } from 'dotenv';
 config();
 
-import { withClient } from '../backend/src/config/db.js';
+import { withClient, closePool } from '../backend/src/config/db.js';
 import Logger from '../backend/src/utils/logger.js';
 import fs from 'fs';
 import path from 'path';
@@ -15,19 +15,29 @@ async function migrateUsersToPostgres() {
   try {
     Logger.info('🔄 Iniciando migración de usuarios a PostgreSQL...\n');
 
+    // 0. Verificar que exista el archivo a migrar
+    const usersJsonPath = path.join(__dirname, '..', 'backend', 'config', 'users.json');
+    if (!fs.existsSync(usersJsonPath)) {
+      Logger.error(`❌ No existe ${usersJsonPath}: no hay usuarios para migrar`);
+      process.exit(1);
+    }
+
     await withClient(async (client) => {
-      // 1. Crear schema de usuarios
+      // 1. Crear schema de usuarios (el archivo real es 03-schema.users.sql;
+      //    antes se buscaba "schema.users.sql", que no existe)
       Logger.info('📋 Creando schema de usuarios...');
       const schemaSQL = fs.readFileSync(
-        path.join(__dirname, 'sql', 'schema.users.sql'),
+        path.join(__dirname, 'sql', '03-schema.users.sql'),
         'utf8'
       );
       await client.query(schemaSQL);
       Logger.success('✅ Schema de usuarios creado\n');
 
       // 2. Leer usuarios actuales del JSON
-      const usersJsonPath = path.join(__dirname, '..', 'backend', 'config', 'users.json');
       const usersData = JSON.parse(fs.readFileSync(usersJsonPath, 'utf8'));
+
+      // Toda la migración en una transacción: si un usuario falla, no queda a medias
+      await client.query('BEGIN');
       
       Logger.info(`📥 Encontrados ${usersData.users.length} usuarios en users.json`);
       
@@ -58,6 +68,8 @@ async function migrateUsersToPostgres() {
         Logger.success(`  ✅ ${user.username} (${user.role}) - ${user.name}`);
       }
 
+      await client.query('COMMIT');
+
       // 4. Verificar migración
       const { rows: allUsers } = await client.query(
         'SELECT username, role, name, created_at FROM users.users ORDER BY id'
@@ -78,4 +90,6 @@ async function migrateUsersToPostgres() {
   }
 }
 
-migrateUsersToPostgres();
+// Si algo falla después de BEGIN, process.exit cierra la conexión y PostgreSQL
+// descarta la transacción (ROLLBACK automático). Al terminar se cierra el pool.
+migrateUsersToPostgres().then(() => closePool());

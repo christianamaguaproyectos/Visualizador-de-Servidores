@@ -5,10 +5,20 @@ import express from 'express';
 import { withMonitoringClient } from '../config/monitoringDb.js';
 import notificationService from '../services/notificationService.js';
 import Logger from '../../utils/logger.js';
+import { responderErrorInterno } from '../../utils/respuestaError.js';
 import { requireAdmin } from '../../middleware/authMiddleware.js';
 import { createRateLimiter } from '../../middleware/rateLimitMiddleware.js';
 
 const router = express.Router();
+
+// Todo :id de este router debe ser un entero positivo (antes un id no numérico
+// llegaba a PostgreSQL y provocaba un error 500 de tipo bigint)
+router.param('id', (req, res, next, id) => {
+  if (!/^[1-9][0-9]{0,18}$/.test(String(id))) {
+    return res.status(400).json({ error: 'id invalido' });
+  }
+  return next();
+});
 const incidentesAccionRateLimiter = createRateLimiter({
   windowMs: 60 * 1000,
   maxRequests: 20,
@@ -29,6 +39,22 @@ async function withClient(fn) {
   return withMonitoringClient(async (client) => {
     await client.query('SET search_path TO monitoring, public');
     return fn(client);
+  });
+}
+
+// Igual que withClient, pero dentro de una TRANSACCIÓN: en operaciones de varios
+// pasos (actualizar + registrar evento, borrar en cascada...) no queda nada a medias
+async function withTransaction(fn) {
+  return withClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      const resultado = await fn(client);
+      await client.query('COMMIT');
+      return resultado;
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => { });
+      throw err;
+    }
   });
 }
 
@@ -109,7 +135,7 @@ router.get('/', async (req, res) => {
     res.json(result);
   } catch (err) {
     Logger.error('Error listando incidentes:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -142,7 +168,7 @@ router.get('/active', async (req, res) => {
     res.json(result);
   } catch (err) {
     Logger.error('Error listando incidentes activos:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -210,7 +236,7 @@ router.get('/:id', async (req, res) => {
       return res.status(err.status).json({ error: err.message });
     }
     Logger.error('Error obteniendo incidente:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -229,10 +255,10 @@ router.post('/:id/ack', requireAdmin, incidentesAccionRateLimiter, async (req, r
     const usuarioSeguro = sanitizeTextInput(req.session?.user?.username || 'system', 120);
     const notaSegura = sanitizeTextInput(note, 2000);
 
-    await withClient(async (client) => {
+    await withTransaction(async (client) => {
       // Verificar que existe y está open
       const { rows: existing } = await client.query(
-        'SELECT * FROM incidents WHERE id = $1',
+        'SELECT * FROM incidents WHERE id = $1 FOR UPDATE',
         [id]
       );
       if (existing.length === 0) {
@@ -261,7 +287,7 @@ router.post('/:id/ack', requireAdmin, incidentesAccionRateLimiter, async (req, r
       return res.status(err.status).json({ error: err.message });
     }
     Logger.error('Error en ACK:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -280,7 +306,7 @@ router.post('/:id/resolve', requireAdmin, incidentesAccionRateLimiter, async (re
     const usuarioSeguro = sanitizeTextInput(req.session?.user?.username || 'system', 120);
     const resolucionSegura = sanitizeTextInput(resolution, 2000);
 
-    await withClient(async (client) => {
+    await withTransaction(async (client) => {
       const { rows: existing } = await client.query(
         'SELECT i.*, h.name AS host_name, h.ip AS host_ip FROM incidents i JOIN hosts h ON i.host_id = h.id WHERE i.id = $1',
         [id]
@@ -293,7 +319,7 @@ router.post('/:id/resolve', requireAdmin, incidentesAccionRateLimiter, async (re
       }
 
       await client.query(`
-        UPDATE incidents SET state = 'resolved', last_event_at = NOW() WHERE id = $1
+        UPDATE incidents SET state = 'resolved', closed_at = COALESCE(closed_at, NOW()), last_event_at = NOW() WHERE id = $1
       `, [id]);
 
       await client.query(`
@@ -309,7 +335,7 @@ router.post('/:id/resolve', requireAdmin, incidentesAccionRateLimiter, async (re
       return res.status(err.status).json({ error: err.message });
     }
     Logger.error('Error resolviendo:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -328,7 +354,7 @@ router.post('/:id/close', requireAdmin, incidentesAccionRateLimiter, async (req,
     const usuarioSeguro = sanitizeTextInput(req.session?.user?.username || 'system', 120);
     const notaSegura = sanitizeTextInput(note, 2000);
 
-    const incident = await withClient(async (client) => {
+    const incident = await withTransaction(async (client) => {
       const { rows: existing } = await client.query(
         'SELECT i.*, h.name AS host_name, h.ip AS host_ip, h.type AS host_type, h.rack AS host_rack FROM incidents i JOIN hosts h ON i.host_id = h.id WHERE i.id = $1',
         [id]
@@ -369,7 +395,7 @@ router.post('/:id/close', requireAdmin, incidentesAccionRateLimiter, async (req,
       return res.status(err.status).json({ error: err.message });
     }
     Logger.error('Error cerrando:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -392,7 +418,7 @@ router.post('/:id/note', requireAdmin, incidentesAccionRateLimiter, async (req, 
     const usuarioSeguro = sanitizeTextInput(req.session?.user?.username || 'system', 120);
     const notaSegura = sanitizeTextInput(note, 4000);
 
-    const result = await withClient(async (client) => {
+    const result = await withTransaction(async (client) => {
       const { rowCount } = await client.query('SELECT 1 FROM incidents WHERE id = $1', [id]);
       if (rowCount === 0) {
         throw { status: 404, message: 'Incidente no encontrado' };
@@ -416,7 +442,7 @@ router.post('/:id/note', requireAdmin, incidentesAccionRateLimiter, async (req, 
       return res.status(err.status).json({ error: err.message });
     }
     Logger.error('Error añadiendo nota:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -483,7 +509,7 @@ router.get('/stats/summary', async (req, res) => {
     res.json(result);
   } catch (err) {
     Logger.error('Error en stats:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 

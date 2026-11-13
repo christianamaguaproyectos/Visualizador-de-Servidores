@@ -7,6 +7,7 @@ import monitoringConfig from '../config/monitoringConfig.js';
 import { withMonitoringClient } from '../config/monitoringDb.js';
 import { requireAdmin } from '../../middleware/authMiddleware.js';
 import { createRateLimiter } from '../../middleware/rateLimitMiddleware.js';
+import { responderErrorInterno } from '../../utils/respuestaError.js';
 
 
 // Importar sub-routers
@@ -146,7 +147,7 @@ router.get('/dashboard', async (req, res) => {
     });
     res.json(result);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -188,7 +189,7 @@ router.get('/hosts/status', async (req, res) => {
     });
     res.json({ hosts: data });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -206,7 +207,7 @@ router.post('/sync', requireAdmin, syncRateLimiter, async (req, res) => {
       stats
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 

@@ -1,79 +1,55 @@
 /**
- * Pool de conexiones centralizado para el módulo de monitoreo
- * Evita el error "too many clients already" reutilizando conexiones
+ * Acceso a PostgreSQL para el módulo de monitoreo.
+ *
+ * Usa el MISMO pool que el resto de la app (config/db.js). Antes había un pool
+ * propio de monitoreo, otro en db.js, el de Prisma y uno nuevo por cada llamada
+ * en monitoringSyncService: demasiadas conexiones abiertas a la vez.
  */
-import { Pool, Client } from 'pg';
-import monitoringConfig from './monitoringConfig.js';
-
-// Pool de conexiones compartido - SINGLETON
-let pool = null;
+import { getPool, withClient, closePool } from '../../config/db.js';
 
 /**
- * Obtiene o crea el pool de conexiones para monitoreo
- * @returns {Pool} Pool de conexiones PostgreSQL
+ * Devuelve el pool compartido
+ * @returns {import('pg').Pool}
  */
 export function getMonitoringPool() {
-    if (!pool) {
-        const url = monitoringConfig.postgresUrl;
-        if (!url) throw new Error('POSTGRES_URL no configurado para monitoreo');
-
-        pool = new Pool({
-            connectionString: url,
-            max: 15,                    // Máximo de conexiones en el pool
-            min: 2,                     // Mínimo de conexiones mantenidas
-            idleTimeoutMillis: 30000,   // Cerrar conexiones inactivas después de 30s
-            connectionTimeoutMillis: 5000, // Timeout para obtener conexión
-        });
-
-        // Manejadores de eventos del pool
-        pool.on('error', (err) => {
-            console.error('❌ Error inesperado en pool de monitoreo:', err.message);
-        });
-
-        pool.on('connect', () => {
-            // Log silencioso para no saturar
-        });
-
-        console.log('🐘 Pool de conexiones de MONITOREO inicializado (max: 15)');
-    }
-    return pool;
+  return getPool();
 }
 
 /**
- * Ejecuta una función con una conexión del pool de monitoreo
+ * Ejecuta una función con una conexión del pool compartido
+ * (con search_path inventory, monitoring, public)
  * @param {Function} fn - Función que recibe el cliente como parámetro
  * @returns {Promise<any>} Resultado de la función
  */
 export async function withMonitoringClient(fn) {
-    const client = await getMonitoringPool().connect();
-    try {
-        return await fn(client);
-    } finally {
-        // Liberar la conexión de vuelta al pool (NO cerrarla)
-        client.release();
-    }
+  return withClient(fn);
 }
 
 /**
- * Crea un cliente individual (para casos especiales como scheduler que mantiene conexión)
- * @deprecated Preferir withMonitoringClient() para queries normales
+ * Ejecuta fn dentro de una TRANSACCIÓN (BEGIN / COMMIT / ROLLBACK).
+ * Para operaciones de varios pasos: si uno falla, no queda nada a medias.
+ * @param {Function} fn - Función que recibe el cliente
+ * @returns {Promise<any>}
  */
-export function createMonitoringClient() {
-    const url = monitoringConfig.postgresUrl;
-    if (!url) throw new Error('POSTGRES_URL no configurado para monitoreo');
-    return new Client({ connectionString: url });
+export async function withMonitoringTransaction(fn) {
+  return withClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      const resultado = await fn(client);
+      await client.query('COMMIT');
+      return resultado;
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => { });
+      throw err;
+    }
+  });
 }
 
 /**
- * Cierra el pool de conexiones de monitoreo (para shutdown graceful)
+ * Cierra el pool compartido (para shutdown graceful)
  */
 export async function closeMonitoringPool() {
-    if (pool) {
-        console.log('🔌 Cerrando pool de conexiones de monitoreo...');
-        await pool.end();
-        pool = null;
-        console.log('✅ Pool de monitoreo cerrado correctamente');
-    }
+  await closePool();
 }
 
-export default { getMonitoringPool, withMonitoringClient, createMonitoringClient, closeMonitoringPool };
+export default { getMonitoringPool, withMonitoringClient, withMonitoringTransaction, closeMonitoringPool };

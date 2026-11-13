@@ -5,6 +5,7 @@
 import express from 'express';
 import { withMonitoringClient } from '../config/monitoringDb.js';
 import Logger from '../../utils/logger.js';
+import { responderErrorInterno } from '../../utils/respuestaError.js';
 import { createRateLimiter } from '../../middleware/rateLimitMiddleware.js';
 
 const router = express.Router();
@@ -103,7 +104,7 @@ router.get('/stats', async (req, res) => {
     res.json(result);
   } catch (err) {
     Logger.error('Error obteniendo stats de mantenimiento:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -169,7 +170,7 @@ router.post('/purge-check-runs', mantenimientoRateLimiter, async (req, res) => {
     res.json(result);
   } catch (err) {
     Logger.error('Error purgando check_runs:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -233,7 +234,7 @@ router.post('/purge-incidents', mantenimientoRateLimiter, async (req, res) => {
     res.json(result);
   } catch (err) {
     Logger.error('Error purgando incidents:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -262,7 +263,7 @@ router.post('/vacuum', mantenimientoRateLimiter, async (req, res) => {
     });
   } catch (err) {
     Logger.error('Error ejecutando VACUUM:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 

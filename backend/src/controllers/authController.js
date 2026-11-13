@@ -8,6 +8,7 @@ import passwordRecoveryService from '../services/passwordRecoveryService.js';
 import { Logger } from '../utils/logger.js';
 import env from '../config/env.js';
 import { ensureCsrfToken } from '../middleware/csrfMiddleware.js';
+import { invalidarSesionesDeUsuario } from '../services/sessionStoreService.js';
 
 /** Nombre por defecto de la cookie de express-session */
 const SESSION_COOKIE_NAME = 'connect.sid';
@@ -242,13 +243,16 @@ class AuthController {
         });
       }
 
-      const success = await authService.resetPasswordWithToken(token, newPassword);
-      if (!success) {
+      const userId = await authService.resetPasswordWithToken(token, newPassword);
+      if (!userId) {
         return res.status(400).json({
           success: false,
           message: 'El enlace de recuperación no es válido o expiró'
         });
       }
+
+      // Cerrar TODAS las sesiones abiertas de ese usuario (por si alguien más la tenía)
+      await invalidarSesionesDeUsuario(userId);
 
       res.json({
         success: true,

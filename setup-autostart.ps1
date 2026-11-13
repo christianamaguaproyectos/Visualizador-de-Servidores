@@ -1,4 +1,4 @@
-# Script de configuración automática para PM2 en Windows
+﻿# Script de configuración automática para PM2 en Windows
 # Este script configura el inicio automático de PM2 usando el Programador de Tareas de Windows
 
 param(

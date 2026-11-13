@@ -15,30 +15,33 @@ async function getScheduler() {
   return schedulerInstance;
 }
 
-class MonitoringSyncService {
-  constructor() {
-    this.postgresUrl = process.env.POSTGRES_URL;
-  }
+/** Pide al scheduler recargar hosts/checks (sin bloquear al que llama) */
+function recargarScheduler() {
+  getScheduler().then(s => s.forceReload()).catch(e => Logger.error('Error en forceReload:', e.message));
+}
 
+/**
+ * Ejecuta fn dentro de una transacción usando el POOL COMPARTIDO (config/db.js).
+ * Antes se creaba un `new Pool()` en cada llamada: fullSync() abría >150 pools.
+ */
+async function enTransaccion(fn) {
+  return dbWithClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      const resultado = await fn(client);
+      await client.query('COMMIT');
+      return resultado;
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => { });
+      throw err;
+    }
+  });
+}
+
+class MonitoringSyncService {
   // Helper que usa el pool de conexiones
   async withClient(fn) {
     return dbWithClient(fn);
-  }
-
-  /**
-   * Obtiene una conexión directa al pool
-   */
-  async getClient() {
-    const { Pool } = await import('pg');
-    const pool = new Pool({ connectionString: this.postgresUrl });
-    return pool.connect().then(client => {
-      // Wrap end to release to pool
-      client.end = async () => {
-        try { client.release(); } catch (e) { }
-        try { await pool.end(); } catch (e) { }
-      };
-      return client;
-    });
   }
 
   /**
@@ -82,18 +85,36 @@ class MonitoringSyncService {
    * Sincroniza un servidor del inventario al monitoreo
    * Se llama cuando se crea o actualiza un servidor
    */
-  async syncServerToMonitoring(serverData) {
-    const { id, nombre, ip, type, rack_norm, estado } = serverData;
+  async syncServerToMonitoring(serverData, opciones = {}) {
+    const { nombre } = serverData;
+    const { client, recargar = true } = opciones;
+
+    try {
+      // Si fullSync() pasa su propio client se usa ese (misma transacción);
+      // si no, se abre una transacción con el pool compartido
+      const resultado = client
+        ? await this._sincronizarServidor(client, serverData)
+        : await enTransaccion((c) => this._sincronizarServidor(c, serverData));
+
+      // Forzar recarga del scheduler para aplicar cambios (fullSync recarga UNA vez al final)
+      if (recargar) recargarScheduler();
+      return resultado;
+    } catch (err) {
+      Logger.error(`Error sincronizando ${nombre} a monitoreo:`, err.message);
+      return { synced: false, error: err.message };
+    }
+  }
+
+  /** Lógica de sincronización de un servidor usando el client recibido */
+  async _sincronizarServidor(client, serverData) {
+    const { nombre, ip, type, rack_norm, estado } = serverData;
 
     const cleanedIP = this.cleanIP(ip);
     // Si no hay IP válida, usar placeholder para que aparezca en monitoreo
     const finalIP = cleanedIP || '0.0.0.0';
     const hasValidIP = !!cleanedIP;
 
-    let client;
-    try {
-      client = await this.getClient();
-
+    {
       // Primero buscar por NOMBRE (más confiable para actualizaciones de IP)
       // luego buscar por IP como fallback
       let existing = await client.query(
@@ -131,9 +152,6 @@ class MonitoringSyncService {
 
         Logger.info(`📡 Sync: Host actualizado en monitoreo: ${nombre} (${finalIP})`);
 
-        // Forzar recarga del scheduler para aplicar cambios inmediatamente
-        getScheduler().then(s => s.forceReload()).catch(e => Logger.error('Error en forceReload:', e.message));
-
         return { synced: true, action: 'updated', hostId: existing.rows[0].id };
       } else {
         // Crear nuevo host
@@ -141,7 +159,7 @@ class MonitoringSyncService {
           INSERT INTO monitoring.hosts (name, ip, type, rack, estado_actual, enabled, group_tags)
           VALUES ($1, $2::inet, $3::monitoring.host_type_enum, $4, 'UNKNOWN', $5, $6)
           RETURNING id
-        `, [nombre, finalIP, hostType, rack_norm, isActive, JSON.stringify([])]);
+        `, [nombre, finalIP, hostType, rack_norm, isActive, []]); // group_tags es TEXT[] (antes se enviaba el texto '[]' y fallaba)
 
         const hostId = result.rows[0].id;
 
@@ -156,16 +174,8 @@ class MonitoringSyncService {
 
         Logger.success(`📡 Sync: Host creado en monitoreo: ${nombre} (${finalIP}) ${hasValidIP ? '+ check ICMP' : '(sin IP válida)'}`);
 
-        // Forzar recarga del scheduler para incluir nuevo host
-        getScheduler().then(s => s.forceReload()).catch(e => Logger.error('Error en forceReload:', e.message));
-
         return { synced: true, action: 'created', hostId };
       }
-    } catch (err) {
-      Logger.error(`Error sincronizando ${nombre} a monitoreo:`, err.message);
-      return { synced: false, error: err.message };
-    } finally {
-      if (client) await client.end().catch(() => { });
     }
   }
 
@@ -176,10 +186,9 @@ class MonitoringSyncService {
     const { nombre, ip } = serverData;
     const cleanedIP = this.cleanIP(ip);
 
-    let client;
     try {
-      client = await this.getClient();
-
+      // Las 3 operaciones (checks, incidentes, host) van en UNA transacción
+      const resultado = await enTransaccion(async (client) => {
       // Obtener host_id por IP o por nombre
       let hostResult;
       if (cleanedIP) {
@@ -215,11 +224,13 @@ class MonitoringSyncService {
 
       Logger.warn(`📡 Sync: Host eliminado de monitoreo: ${nombre}`);
       return { removed: true, hostId };
+      });
+      // Recargar el scheduler DESPUÉS del COMMIT
+      if (resultado.removed) recargarScheduler();
+      return resultado;
     } catch (err) {
       Logger.error(`Error eliminando ${nombre} de monitoreo:`, err.message);
       return { removed: false, error: err.message };
-    } finally {
-      if (client) await client.end().catch(() => { });
     }
   }
 
@@ -227,34 +238,40 @@ class MonitoringSyncService {
    * Sincronización completa: compara inventario con monitoreo
    */
   async fullSync() {
-    let client;
     try {
-      client = await this.getClient();
+      // UNA sola conexión y transacción para todo el lote; cada servidor usa un
+      // SAVEPOINT para que un error en uno no anule los demás.
+      const stats = await enTransaccion(async (client) => {
+        const inventoryResult = await client.query(`
+          SELECT id, nombre, ip, type, rack_norm, estado
+          FROM inventory.servers
+        `);
 
-      // Obtener todos los servidores del inventario
-      const inventoryResult = await client.query(`
-        SELECT id, nombre, ip, type, rack_norm, estado
-        FROM inventory.servers
-      `);
+        const resumen = { created: 0, updated: 0, skipped: 0, errors: 0 };
 
-      const stats = { created: 0, updated: 0, skipped: 0, errors: 0 };
-
-      for (const server of inventoryResult.rows) {
-        const result = await this.syncServerToMonitoring(server);
-        if (result.synced) {
-          stats[result.action === 'created' ? 'created' : 'updated']++;
-        } else {
-          stats.errors++;
+        for (const server of inventoryResult.rows) {
+          await client.query('SAVEPOINT sync_servidor');
+          try {
+            const result = await this._sincronizarServidor(client, server);
+            await client.query('RELEASE SAVEPOINT sync_servidor');
+            resumen[result.action === 'created' ? 'created' : 'updated']++;
+          } catch (err) {
+            await client.query('ROLLBACK TO SAVEPOINT sync_servidor');
+            Logger.error(`Error sincronizando ${server.nombre} a monitoreo:`, err.message);
+            resumen.errors++;
+          }
         }
-      }
+        return resumen;
+      });
+
+      // Una sola recarga del scheduler al final, después del COMMIT (antes era una por servidor)
+      recargarScheduler();
 
       Logger.success(`📡 Full Sync completado: ${stats.created} creados, ${stats.updated} actualizados, ${stats.errors} errores`);
       return stats;
     } catch (err) {
       Logger.error('Error en full sync:', err.message);
       throw err;
-    } finally {
-      if (client) await client.end().catch(() => { });
     }
   }
 }

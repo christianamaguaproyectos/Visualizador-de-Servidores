@@ -13,9 +13,13 @@ CREATE TABLE IF NOT EXISTS racks (
   id          BIGSERIAL PRIMARY KEY,
   name        TEXT UNIQUE NOT NULL,   -- "Rack 1", "RACK ESXI-01", etc.
   raw_name    TEXT,                   -- valor crudo opcional
+  type        TEXT,                   -- fisicos | virtuales (lo exige backend/prisma/schema.prisma)
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Bases ya existentes creadas sin la columna "type" (alineación con schema.prisma)
+ALTER TABLE racks ADD COLUMN IF NOT EXISTS type TEXT;
 
 -- Servidores (inventario principal)
 CREATE TABLE IF NOT EXISTS servers (

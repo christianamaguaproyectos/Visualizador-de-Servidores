@@ -57,6 +57,12 @@ async function addUser() {
     process.exit(1);
   }
 
+  // Misma política que la app (userController): 8 a 256 caracteres
+  if (password.length < 8 || password.length > 256) {
+    console.error('❌ Error: la contraseña debe tener entre 8 y 256 caracteres');
+    process.exit(1);
+  }
+
   const success = await authService.addUser(username, password, role, name);
   
   if (success) {
@@ -72,9 +78,19 @@ async function addUser() {
 }
 
 /**
- * Elimina un usuario
+ * Busca un usuario por username y devuelve su registro (con id) o null.
+ * authService trabaja con el ID numérico, no con el username.
+ * @param {string} username
  */
-function removeUser() {
+async function buscarUsuarioPorUsername(username) {
+  const users = await authService.getAllUsers();
+  return users.find(u => u.username === username) || null;
+}
+
+/**
+ * Desactiva un usuario (no se borra: puede reactivarse desde /users)
+ */
+async function removeUser() {
   const username = getArg('--username');
 
   if (!username) {
@@ -84,12 +100,18 @@ function removeUser() {
     process.exit(1);
   }
 
-  const success = authService.removeUser(username);
-  
-  if (success) {
-    console.log(`\n✅ Usuario '${username}' eliminado exitosamente`);
-  } else {
+  const usuario = await buscarUsuarioPorUsername(username);
+  if (!usuario) {
     console.error(`\n❌ Usuario '${username}' no encontrado`);
+    process.exit(1);
+  }
+
+  const success = await authService.removeUser(usuario.id);
+
+  if (success) {
+    console.log(`\n✅ Usuario '${username}' desactivado (puede reactivarse desde la pantalla /users)`);
+  } else {
+    console.error(`\n❌ No se pudo desactivar el usuario '${username}'`);
     process.exit(1);
   }
 }
@@ -97,8 +119,8 @@ function removeUser() {
 /**
  * Lista todos los usuarios
  */
-function listUsers() {
-  const users = authService.getAllUsers();
+async function listUsers() {
+  const users = await authService.getAllUsers();
 
   if (users.length === 0) {
     console.log('\n📋 No hay usuarios registrados');
@@ -114,6 +136,7 @@ function listUsers() {
     console.log(`${index + 1}. ${user.username}`);
     console.log(`   Nombre: ${user.name}`);
     console.log(`   Rol: ${user.role}`);
+    console.log(`   Estado: ${user.active === false ? 'Inactivo' : 'Activo'}`);
     console.log('');
   });
 
@@ -135,8 +158,21 @@ async function changePassword() {
     process.exit(1);
   }
 
-  const success = await authService.changePassword(username, password);
-  
+  // Misma política que la app (userController): 8 a 256 caracteres
+  if (password.length < 8 || password.length > 256) {
+    console.error('❌ Error: la contraseña debe tener entre 8 y 256 caracteres');
+    process.exit(1);
+  }
+
+  // authService.changePassword espera el ID numérico (antes se le pasaba el username)
+  const usuario = await buscarUsuarioPorUsername(username);
+  if (!usuario) {
+    console.error(`\n❌ Usuario '${username}' no encontrado`);
+    process.exit(1);
+  }
+
+  const success = await authService.changePassword(usuario.id, password);
+
   if (success) {
     console.log(`\n✅ Contraseña de '${username}' actualizada exitosamente`);
   } else {
@@ -240,10 +276,10 @@ async function main() {
       await addUser();
       break;
     case 'remove':
-      removeUser();
+      await removeUser();
       break;
     case 'list':
-      listUsers();
+      await listUsers();
       break;
     case 'change-password':
       await changePassword();

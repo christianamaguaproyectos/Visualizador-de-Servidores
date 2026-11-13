@@ -486,7 +486,8 @@ class AuthService {
         await client.query('UPDATE users.password_reset_tokens SET used_at = NOW() WHERE id = $1', [reset.id]);
 
         Logger.success(`✅ Contraseña restablecida con token para user_id=${reset.user_id}`);
-        return true;
+        // Devuelve el id del usuario (valor "verdadero") para poder cerrar sus sesiones
+        return reset.user_id;
       });
     } catch (error) {
       Logger.error('❌ Error aplicando reset de contraseña:', error.message);
