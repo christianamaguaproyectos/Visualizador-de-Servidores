@@ -34,10 +34,13 @@ module.exports = {
     max_restarts: 10, // Máximo 10 reinicios en 1 minuto
     min_uptime: '10s', // Considerar "iniciado" después de 10s
     
-    // Reiniciar cada hora para detectar cambios de red
-    // Si cambias de red Wi-Fi, el servidor se adaptará automáticamente
-    cron_restart: '0 * * * *', // Cada hora en punto (00:00, 01:00, etc.)
-    
+    // Sin reinicio programado: antes había cron_restart cada hora, que cerraba la sesión
+    // de todos los usuarios y disparaba una tormenta de checks al arrancar.
+    // Si el servidor cambia de red, reiniciar manualmente: pm2 restart diagrama-servidores
+
+    // Tiempo para el apagado limpio (cierra HTTP, SSE, scheduler y pool; máx. 10 s)
+    kill_timeout: 12000,
+
     // Gestión de errores
     error_file: path.join(projectPath, 'logs', 'pm2-error.log'),
     out_file: path.join(projectPath, 'logs', 'pm2-out.log'),
@@ -45,7 +48,7 @@ module.exports = {
     merge_logs: true,
     
     // Configuración de recursos
-    max_memory_restart: '200M', // Reiniciar si usa más de 200MB
+    max_memory_restart: '512M', // Reiniciar si usa más de 512MB (200MB provocaba reinicios innecesarios)
     
     // Configuración de tiempo
     restart_delay: 4000, // Esperar 4s antes de reiniciar

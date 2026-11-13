@@ -20,6 +20,14 @@ async function main() {
   if (!user) { console.error('Debe especificar --user para otorgar privilegios'); process.exit(1); }
   const targetSchema = schema || 'monitoring';
 
+  // Los nombres se concatenan en sentencias GRANT: solo se aceptan identificadores
+  // simples de PostgreSQL (evita inyección SQL a través de --user / --schema)
+  const IDENTIFICADOR = /^[a-zA-Z_][a-zA-Z0-9_]{0,62}$/;
+  if (!IDENTIFICADOR.test(user) || !IDENTIFICADOR.test(targetSchema)) {
+    console.error('--user y --schema solo pueden tener letras, números y "_" (máx. 63, sin empezar con número)');
+    process.exit(1);
+  }
+
   const client = new Client({ connectionString });
   await client.connect();
   try {

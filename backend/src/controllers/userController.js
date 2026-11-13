@@ -3,6 +3,7 @@ import passwordRecoveryService from '../services/passwordRecoveryService.js';
 import Logger from '../utils/logger.js';
 import crypto from 'crypto';
 import env from '../config/env.js';
+import { invalidarSesionesDeUsuario } from '../services/sessionStoreService.js';
 
 /** Política de contraseñas (igual que en login y en el restablecimiento) */
 const PASSWORD_MIN_LENGTH = 8;
@@ -232,6 +233,8 @@ class UserController {
       const success = await authService.changePassword(targetId, password);
 
       if (success) {
+        // Cerrar las demás sesiones del usuario; si cambia la suya propia, conserva la actual
+        await invalidarSesionesDeUsuario(targetId, targetId === requesterId ? req.sessionID : null);
         res.json({ ok: true, message: 'Contraseña actualizada exitosamente' });
       } else {
         res.status(404).json({ error: 'Usuario no encontrado' });

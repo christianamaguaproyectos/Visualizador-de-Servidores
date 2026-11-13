@@ -34,6 +34,7 @@ import { attachRequestContext, structuredApiRequestLogger } from './src/middlewa
 import { securityHeadersMiddleware } from './src/middleware/securityHeadersMiddleware.js';
 import { errorHandler } from './src/middleware/errorHandler.js';
 import { createCsrfProtection, getCsrfToken } from './src/middleware/csrfMiddleware.js';
+import { crearSessionStore } from './src/services/sessionStoreService.js';
 
 // Utilidades
 import Logger from './src/utils/logger.js';
@@ -101,6 +102,8 @@ class Application {
     
     // Middleware de sesiones
     this.app.use(session({
+      // Sesiones en PostgreSQL (sobreviven a reinicios y se pueden invalidar por usuario)
+      store: crearSessionStore(),
       secret: env.SESSION_SECRET,
       resave: false,
       saveUninitialized: false,

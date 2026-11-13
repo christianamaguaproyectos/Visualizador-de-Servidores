@@ -414,14 +414,15 @@ Esto crea `admin` y `viewer` con contraseñas aleatorias que se muestran **una s
 
 ### Problema: Sesión expira constantemente
 
-**Causas**:
-1. Servidor se reinicia frecuentemente
-2. Sesiones en memoria (MemoryStore)
+**Contexto**: desde la Fase 3 del plan de seguridad las sesiones se guardan en
+PostgreSQL (tabla `users.sessions`, con `connect-pg-simple`), así que **un reinicio del
+servidor ya no cierra la sesión** de los usuarios.
 
-**Solución temporal**:
-- Las sesiones se guardan en memoria
-- Al reiniciar servidor, se pierden
-- Esto es normal para desarrollo
+**Causas posibles hoy**:
+1. Pasaron más de 24 horas (duración máxima de la sesión)
+2. Se cambió o restableció la contraseña del usuario: por seguridad se cierran sus demás sesiones
+3. Falta la tabla `users.sessions` y el usuario de BD no tiene permiso para crearla:
+   aplicar `scripts/sql/07-schema.sessions.sql`
 
 **Solución permanente** (producción):
 - Usar session store persistente (Redis, MongoDB)
@@ -465,22 +466,9 @@ Si muestra `viewer`, cierra sesión e inicia con admin.
 
 ### Problema: Warning "MemoryStore is not designed for production"
 
-**Explicación**:
-- Es un warning normal
-- Las sesiones se guardan en memoria
-- Funciona bien para equipos pequeños
-- Para producción grande, usar Redis o MongoDB
-
-**Solución** (opcional, para producción):
-```powershell
-# Instalar connect-redis
-npm install connect-redis redis
-
-# Configurar en server.js
-# (requiere servidor Redis corriendo)
-```
-
-Para desarrollo y equipos pequeños (< 20 usuarios), **ignorar este warning**.
+**Ya no aplica**: desde la Fase 3 las sesiones usan PostgreSQL (`connect-pg-simple`,
+tabla `users.sessions`), no la memoria del proceso. Si vuelve a aparecer este aviso,
+revisar que `backend/server.js` siga configurando `store: crearSessionStore()`.
 
 ---
 

@@ -53,7 +53,7 @@ El servidor **detecta el tipo de red** y ajusta su comportamiento:
 | **1. Detección de Red** | Identifica red corporativa vs pública | ✅ Activo |
 | **2. Binding Dinámico** | `0.0.0.0` (abierto) o `localhost` (cerrado) | ✅ Activo |
 | **3. Middleware de Validación** | Bloquea IPs no autorizadas en red pública | ✅ Activo |
-| **4. Auto-Restart Horario** | Re-detecta red cada hora | ✅ Activo |
+| **4. Auto-Restart Horario** | Re-detectaba la red cada hora | ⛔ Desactivado (Fase 3: cerraba sesiones y saturaba checks). Reiniciar manualmente al cambiar de red |
 
 ---
 
@@ -115,7 +115,7 @@ graph TD
    - Logs de seguridad mejorados
 
 5. **`ecosystem.config.cjs`**
-   - Auto-restart cada hora (`cron_restart`)
+   - ~~Auto-restart cada hora (`cron_restart`)~~ → quitado en la Fase 3 del plan de seguridad
 
 6. **`README.md`**
    - Sección de seguridad agregada
@@ -219,6 +219,10 @@ cmd /c "pm2 restart diagrama-servidores"
 ```
 
 ### Cambiar Frecuencia de Re-detección
+
+> ⚠️ Desde la Fase 3 del plan de seguridad `cron_restart` está **desactivado** por defecto
+> (`ecosystem.config.cjs`). Solo reactivarlo si el servidor cambia de red con frecuencia;
+> las sesiones ya no se pierden (están en PostgreSQL), pero cada reinicio ejecuta todos los checks.
 
 Edita `ecosystem.config.cjs`:
 

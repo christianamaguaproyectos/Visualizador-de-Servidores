@@ -234,7 +234,8 @@ El archivo `ecosystem.config.cjs` en la raíz del proyecto define:
 - ✅ Nombre de la aplicación: `diagrama-servidores`
 - ✅ Script de inicio: `./backend/server.js`
 - ✅ Auto-restart: Habilitado
-- ✅ Límite de memoria: 200MB (reinicia si excede)
+- ✅ Límite de memoria: 512MB (reinicia si excede)
+- ✅ Sin reinicio programado cada hora (se quitó `cron_restart`; las sesiones viven en PostgreSQL)
 - ✅ Logs: Se guardan en `./logs/`
 - ✅ Modo: Fork (1 instancia)
 
