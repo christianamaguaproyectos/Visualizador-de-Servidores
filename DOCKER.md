@@ -27,7 +27,7 @@ docker compose up -d
 ### 3. Crear el primer administrador (solo la primera vez)
 Docker **ya no crea un usuario admin automáticamente**. Ejecuta:
 ```bash
-docker compose exec app node scripts/manage-users.js init
+docker compose run --rm tools node scripts/manage-users.js init
 ```
 Esto crea los usuarios `admin` y `viewer` con **contraseñas aleatorias** que se muestran
 **una sola vez** en pantalla: guárdalas en un lugar seguro. Si prefieres elegir la del admin,
@@ -35,7 +35,13 @@ define `INITIAL_ADMIN_PASSWORD` en `.env` antes de ejecutar el comando.
 
 ### 4. Acceder a la aplicación
 - **App**: http://localhost:3000
-- **PostgreSQL**: localhost:5432 (usuario: diagrama)
+- **PostgreSQL**: localhost:5432 (usuario: diagrama). Solo escucha en `127.0.0.1`: desde otra
+  máquina no es accesible (usa un túnel SSH si necesitas administrarla en remoto).
+
+> **Nota (Fase 4.1):** la imagen de la app **no incluye `scripts/`**. Los comandos de
+> administración (`manage-users.js`, migraciones) se ejecutan con el servicio `tools`:
+> `docker compose run --rm tools node scripts/<script>.js ...`. Construye y arranca un contenedor
+> temporal con la misma configuración de BD y lo borra al terminar.
 
 ## Comandos Útiles
 
@@ -90,7 +96,7 @@ docker-compose exec -T postgres psql -U diagrama diagrama_servers < backup.sql
 docker-compose exec app sh
 
 # Ejecutar script
-docker-compose exec app node scripts/manage-users.js list
+docker compose run --rm tools node scripts/manage-users.js list
 ```
 
 ## Estructura de Contenedores
@@ -100,7 +106,7 @@ docker-compose exec app node scripts/manage-users.js list
 │          docker-compose.yml              │
 ├────────────────┬────────────────────────┤
 │   diagrama-app │   diagrama-postgres    │
-│   (Node.js)    │   (PostgreSQL 15)      │
+│   (Node.js)    │   (PostgreSQL 17)      │
 │   Puerto 3000  │   Puerto 5432          │
 └────────────────┴────────────────────────┘
          │                │
@@ -134,6 +140,17 @@ docker-compose exec app node scripts/manage-users.js list
 2. **Red**: Usa una red Docker aislada
 3. **HTTPS**: Configura un reverse proxy (nginx/traefik) con SSL
 4. **Backups**: Programa backups automáticos de PostgreSQL
+
+### Hardening incluido (Fase 4.1)
+| Medida | Dónde |
+|---|---|
+| Imagen multi-stage: sin `python3`/`make`/`g++` ni `scripts/` en la imagen final | `Dockerfile` |
+| Código propiedad de `root` (solo lectura para `nodejs`); escribibles solo `uploads/`, `data/`, `logs/` | `Dockerfile` |
+| `read_only: true` + `/tmp` en memoria, `cap_drop: ALL`, `no-new-privileges` | `docker-compose.yml` (app) |
+| Límites de CPU/RAM (`APP_CPUS`, `APP_MEMORY`, `POSTGRES_CPUS`, `POSTGRES_MEMORY`) | `docker-compose.yml` |
+| Rotación de logs: 3 archivos de 10 MB por contenedor | `docker-compose.yml` |
+| PostgreSQL publicado solo en `127.0.0.1` | `docker-compose.yml` |
+| `x-request-id` validado y tokens/contraseñas en query ocultos (`[REDACTED]`) en logs | `requestContextMiddleware.js` |
 
 ### Reverse Proxy con Nginx
 ```nginx
@@ -180,12 +197,17 @@ docker-compose exec postgres pg_isready -U diagrama
 docker-compose logs postgres
 ```
 
-### Error de permisos en volúmenes
+### Error de permisos en volúmenes (uploads/logs)
+La app corre como el usuario `nodejs` (uid 1001) y el resto del sistema de archivos es de solo
+lectura. Si un volumen antiguo quedó con otro dueño, corrígelo **sin borrar datos**:
 ```bash
-# Recrear volúmenes
-docker-compose down -v
-docker-compose up -d
+docker compose run --rm --user root --entrypoint sh app -c "chown -R 1001:1001 /app/backend/uploads /app/logs"
 ```
+> ⚠️ No uses `docker compose down -v` para esto: **borra la base de datos**.
+
+### Los checks ICMP (ping) fallan siempre
+El ping funciona sin root gracias a `sysctls: net.ipv4.ping_group_range` en `docker-compose.yml`.
+Si tu Docker no permite ese sysctl, revisa la versión del motor (requiere Linux 3.x+ / Docker 1.12+).
 
 ### Limpiar todo y empezar de cero
 ```bash
