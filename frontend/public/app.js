@@ -619,7 +619,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (!rackName) {
 
-          showToast('Nombre del host obligatorio', 'warning'); return;
+          showToast('Nombre del host obligatorio', 'warning');
 
           return;
 
@@ -2054,7 +2054,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
           const rackId = selectHost.value;
 
-          if (!rackId) return showToast('Por favor seleccione un host', 'warning'); return;
+          if (!rackId) return showToast('Por favor seleccione un host', 'warning');
 
 
 
@@ -3378,7 +3378,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     ${renderErrorBlock(DATA.meta?.error)}
 
-    <div class=\"rack-detail\">
+    <div class="rack-detail">
 
       <div class="rack-detail-header">
 
@@ -4109,13 +4109,8 @@ document.addEventListener('DOMContentLoaded', function () {
     // Re-aplicar el modo solo lectura a los botones recién renderizados
     disableReadOnlyActions();
 
-    if (!isVirtuales) {
-
-      // Overview stats (simulado en cliente)
-
-      try { renderOverview(); } catch (_) { }
-
-    }
+    // (El resumen de racks lo dibuja wirePhysicalUX() dentro de route(); aquí había una llamada
+    // a renderOverview() fuera de su alcance que fallaba en silencio: ReferenceError.)
 
   }
 

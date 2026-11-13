@@ -59,8 +59,8 @@ router.get('/', async (req, res) => {
     }
 
     const result = await withClient(async (client) => {
-      let whereConditions = [];
-      let params = [];
+      const whereConditions = [];
+      const params = [];
       let idx = 1;
 
       if (estado) {

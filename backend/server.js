@@ -17,7 +17,6 @@ import { APP_CONFIG } from './src/config/constants.js';
 // Servicios
 import sseService from './src/services/sseService.js';
 import networkSecurityService from './src/services/networkSecurityService.js';
-import authService from './src/services/authService.js';
 
 // Controladores
 import dataController from './src/controllers/dataController.js';

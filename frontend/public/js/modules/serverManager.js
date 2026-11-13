@@ -36,7 +36,7 @@ function formatDateForInput(dateVal) {
 /** Normaliza el estado al valor del <select>: CRITICO | NO_CRITICO | MANTENIMIENTO */
 function normalizarEstado(estado) {
   const valor = (estado || 'NO_CRITICO').toString().toUpperCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '');
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   if (valor.includes('NO_CRITICO') || valor.includes('NO CRITICO')) return 'NO_CRITICO';
   if (valor.includes('CRIT')) return 'CRITICO';
   if (valor.includes('MANT')) return 'MANTENIMIENTO';
