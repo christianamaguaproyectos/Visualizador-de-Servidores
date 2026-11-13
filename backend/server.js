@@ -70,16 +70,13 @@ class Application {
 
     // Iniciar monitoreo si está habilitado
     if (monitoringConfig.enabled) {
-      Logger.info('Monitoreo habilitado, iniciando scheduler y worker...');
+      Logger.info('Monitoreo habilitado, iniciando scheduler...');
       try {
         const { default: scheduler } = await import('./src/monitoring/scheduler/scheduler.js');
         this.scheduler = scheduler; // referencia para detenerlo en el apagado limpio
+        // El scheduler ejecuta los checks directamente (el antiguo worker BullMQ ya no existe)
         scheduler.start().catch((e) => Logger.error('Error iniciando scheduler:', e.message));
       } catch (e) { Logger.error('Error iniciando scheduler:', e.message); }
-      try {
-        const { startCheckWorker } = await import('./src/monitoring/workers/checkWorker.js');
-        startCheckWorker();
-      } catch (e) { Logger.error('Error iniciando worker de checks:', e.message); }
     } else {
       Logger.info('Monitoreo deshabilitado (establece MONITORING_ENABLED=1 para activarlo).');
     }
@@ -158,6 +155,11 @@ class Application {
     // Archivos estáticos públicos (CSS, JS, imágenes)
     // Permitir acceso a archivos de login sin autenticación
     this.app.use('/login-styles.css', express.static(path.join(__dirname, '..', 'frontend', 'public', 'login-styles.css')));
+    // Lógica de login (antes inline), fuentes auto-alojadas e icono: necesarios ANTES de iniciar sesión
+    this.app.use('/js/paginas/login.js', express.static(path.join(__dirname, '..', 'frontend', 'public', 'js', 'paginas', 'login.js')));
+    this.app.use('/fonts', express.static(path.join(__dirname, '..', 'frontend', 'public', 'fonts')));
+    this.app.use('/css/estilos-sin-inline.css', express.static(path.join(__dirname, '..', 'frontend', 'public', 'css', 'estilos-sin-inline.css')));
+    this.app.use('/favicon.jpg', express.static(path.join(__dirname, '..', 'frontend', 'public', 'favicon.jpg')));
     
     // ========================================
     // MIDDLEWARE DE AUTENTICACIÓN
@@ -278,7 +280,7 @@ class Application {
     // ERROR HANDLER CENTRALIZADO (debe ir AL FINAL)
     // ========================================
     this.app.use(errorHandler);
-  }
+   }
 
   /**
    * Inicia el servidor HTTP

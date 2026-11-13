@@ -104,7 +104,7 @@ npm run dev
 ```
 Observa logs:
 - Si Redis falta: verás advertencia de cola deshabilitada.
-- Si todo está ok: "Scheduler monitoreo iniciado" y "Worker de checks iniciado".
+- Si todo está ok: "Scheduler monitoreo iniciado (ejecución directa)".
 
 ## 7. Probar endpoints
 ```powershell
@@ -112,10 +112,11 @@ Invoke-RestMethod http://localhost:3050/monitoring/health
 Invoke-RestMethod -Method POST http://localhost:3050/monitoring/enqueue-test
 ```
 
-## 8. Importar hosts desde caché existente
-```powershell
-node .\scripts\import\importHostsFromCache.js
-```
+## 8. Importar hosts desde el inventario
+> El antiguo `scripts/import/importHostsFromCache.js` se eliminó (Fase 4.2): leía un caché en
+> memoria que en un proceso nuevo siempre estaba vacío. Hoy cada servidor creado o editado se
+> sincroniza solo; para sincronizar todo el inventario de una vez usa (sesión de **admin**)
+> `POST /api/monitoring/sync`.
 Revisa en Postgres:
 ```powershell
 psql -U mon_user -d monitoring -c "SELECT id,name,ip,type,estado_actual FROM monitoring.hosts LIMIT 10;"

@@ -36,15 +36,15 @@ export function construirResumenRacksHtml(racks = []) {
     </div>
     <div class="stat-card stat-card--servers">
       <div class="stat-card__head"><span class="stat-card__icon" aria-hidden="true">🔴</span><div class="label">Críticos</div></div>
-      <div class="value" style="color:#dc2626">${resumen.criticos}</div>
+      <div class="value u-color-critico">${resumen.criticos}</div>
     </div>
     <div class="stat-card stat-card--active">
       <div class="stat-card__head"><span class="stat-card__icon" aria-hidden="true">🟢</span><div class="label">No Críticos</div></div>
-      <div class="value" style="color:#16a34a">${resumen.noCriticos}</div>
+      <div class="value u-color-ok">${resumen.noCriticos}</div>
     </div>
     <div class="stat-card stat-card--inactive">
       <div class="stat-card__head"><span class="stat-card__icon" aria-hidden="true">🛠️</span><div class="label">Mantenimiento</div></div>
-      <div class="value" style="color:#b45309">${resumen.mantenimiento}</div>
+      <div class="value u-color-mantenimiento">${resumen.mantenimiento}</div>
     </div>
   `;
 }

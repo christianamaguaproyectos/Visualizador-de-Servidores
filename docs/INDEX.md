@@ -109,7 +109,7 @@
 
 ---
 
-### 7. **SEGURIDAD-RED.md** �
+### 7. **SEGURIDAD-RED.md** 🔒
 **Para**: Administradores, DevOps  
 **Contenido**: Protección automática en redes públicas
 - Detección automática de red corporativa vs pública
@@ -139,7 +139,7 @@
 
 ---
 
-## �🗂️ Organización por Tema
+## 🗂️ Organización por Tema
 
 ### 📥 Instalación y Setup
 1. [README.md](../README.md) → Sección "Inicio Rápido"

@@ -5,12 +5,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Dashboard de Servidores Virtuales</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/fonts/fonts.css" />
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="/nav-styles.css" />
   <link rel="icon" type="image/jpeg" href="/favicon.jpg" />
+  <link rel="stylesheet" href="/css/estilos-sin-inline.css" />
 </head>
 
 <body class="virtual-page">
@@ -22,7 +21,7 @@
     <div class="header-search">
       <input id="searchVMs" type="search" placeholder="🔍 Buscar VM o host..." />
       <select id="filterVMStatus"
-        style="padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;background:white;font-size:14px">
+        class="filtro-campo-virtual">
         <option value="all">Todos los estados</option>
         <option value="critico">Críticos 🔴</option>
         <option value="no_critico">No Críticos 🟢</option>
@@ -39,7 +38,7 @@
       <button id="btnExportExcel" class="header-action btn btn-secondary" title="Exportar máquinas virtuales a Excel">
         <span class="action-label">📊 Exportar Excel</span>
       </button>
-      <button id="btnUsers" class="header-action btn btn-secondary" style="display:none" title="Gestión de usuarios">
+      <button id="btnUsers" class="header-action btn btn-secondary u-oculto" title="Gestión de usuarios">
         <span class="action-label">👥 Usuarios</span>
       </button>
 
@@ -53,14 +52,14 @@
     <h2>Cargando hosts y VMs...</h2>
   </div>
 
-  <div id="content" style="display: none">
+  <div id="content" class="u-oculto">
     <main>
       <div id="app" class="container"></div>
     </main>
   </div>
 
   <!-- Modal para agregar/editar servidor virtual -->
-  <div class="modal-overlay" id="serverModal" style="display:none">
+  <div class="modal-overlay u-oculto" id="serverModal">
     <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="serverModalTitle">
       <div class="modal-header">
         <h3 id="serverModalTitle">💻 Agregar Máquina Virtual</h3>
@@ -148,7 +147,7 @@
               <div class="form-field">
                 <label for="serverDiscos">Discos</label>
                 <div id="discosContainer"></div>
-                <button type="button" id="btnAddDisco" class="btn btn-secondary" style="margin-top:8px">
+                <button type="button" id="btnAddDisco" class="btn btn-secondary u-mt-8">
                   ➕ Agregar Disco
                 </button>
                 <input type="hidden" id="serverDiscos" />
@@ -368,7 +367,7 @@
   </div>
 
   <!-- Modal para agregar host -->
-  <div class="modal-overlay" id="rackAddModal" style="display:none">
+  <div class="modal-overlay u-oculto" id="rackAddModal">
     <div class="modal-content" role="dialog" aria-modal="true">
       <div class="modal-header">
         <h3 id="rackModalTitle">🖥️ Agregar Host</h3>
@@ -402,25 +401,7 @@
   <script src="/app.js" type="module"></script>
   <script src="/js/modules/serverManager.js" type="module"></script>
   <script src="/js/modules/rackDragDrop.js" type="module"></script>
-  <script>
-    // Mostrar botón de usuarios solo para superadmin
-    document.addEventListener('DOMContentLoaded', () => {
-      const btnUsers = document.getElementById('btnUsers');
-      if (!btnUsers) return;
-
-      fetch('/api/auth/user')
-        .then((response) => response.json())
-        .then((data) => {
-          if (data?.success && data?.user?.isSuperAdmin) {
-            btnUsers.style.display = 'inline-block';
-            btnUsers.addEventListener('click', () => location.href = '/users');
-          }
-        })
-        .catch((e) => {
-          console.error('Error checking superadmin role:', e);
-        });
-    });
-  </script>
+  <script src="/js/paginas/botonUsuarios.js"></script>
 </body>
 
 </html>

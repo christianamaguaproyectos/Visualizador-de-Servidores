@@ -11,32 +11,6 @@ import {
 import { confirmAction } from '/js/dominios/ui-system/modalConfirm.js';
 import { trackUIEvent } from '/js/dominios/ui-system/uxTelemetry.js';
 
-// Inyectar estilos para el botón de eliminar dinámicamente
-(function injectStyles() {
-  const style = document.createElement('style');
-  style.textContent = `
-    .host-card-footer {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .btn-icon-delete {
-      background: none;
-      border: none;
-      cursor: pointer;
-      font-size: 1.2em;
-      opacity: 0.6;
-      transition: opacity 0.2s;
-      padding: 4px;
-      border-radius: 4px;
-    }
-    .btn-icon-delete:hover {
-      opacity: 1;
-      background-color: rgba(239, 68, 68, 0.1);
-    }
-  `;
-  document.head.appendChild(style);
-})();
 
 // Estado global
 const state = {
@@ -382,11 +356,12 @@ function renderRecentMetrics(metrics) {
     </div>
     <div class="success-rate">
       <div class="success-rate-bar">
-        <div class="success-rate-fill" style="width: ${successRate}%"></div>
+        <div class="success-rate-fill" data-ancho-pct="${successRate}"></div>
       </div>
       <div class="success-rate-label">${successRate}% tasa de éxito</div>
     </div>
   `;
+  aplicarDimensionesPct(container);
 }
 
 function renderTrendChart(hourlyTrend) {
@@ -409,8 +384,8 @@ function renderTrendChart(hourlyTrend) {
     return `
       <div class="chart-bar-container">
         <div class="chart-bar">
-          <div class="chart-bar-fail" style="height: ${failHeight}%"></div>
-          <div class="chart-bar-ok" style="height: ${okHeight}%"></div>
+          <div class="chart-bar-fail" data-alto-pct="${failHeight}"></div>
+          <div class="chart-bar-ok" data-alto-pct="${okHeight}"></div>
         </div>
         <div class="chart-label">${hour}h</div>
       </div>
@@ -424,6 +399,18 @@ function renderTrendChart(hourlyTrend) {
     </div>
     <div class="chart-bars">${bars}</div>
   `;
+  aplicarDimensionesPct(container);
+}
+
+/**
+ * Aplica anchos/altos en % desde data-ancho-pct / data-alto-pct.
+ * La CSP estricta bloquea style="..." dentro de innerHTML; asignar element.style (CSSOM) sí está
+ * permitido. El valor se acota a 0-100 y se valida como número.
+ */
+function aplicarDimensionesPct(raiz) {
+  const pct = (v) => `${Math.min(100, Math.max(0, Number(v) || 0))}%`;
+  raiz.querySelectorAll('[data-ancho-pct]').forEach((el) => { el.style.width = pct(el.dataset.anchoPct); });
+  raiz.querySelectorAll('[data-alto-pct]').forEach((el) => { el.style.height = pct(el.dataset.altoPct); });
 }
 
 function renderHosts(hosts) {
@@ -703,9 +690,9 @@ async function showHostModal(hostId) {
     </div>
 
     <!-- Pestaña Historial -->
-    <div id="host-history" class="tab-content" style="display:none;">
-      <div class="history-controls" style="margin-bottom: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
-        <select id="historyRange" class="form-control" style="width: auto;">
+    <div id="host-history" class="tab-content u-oculto">
+      <div class="history-controls historial-controles">
+        <select id="historyRange" class="form-control u-ancho-auto">
           <option value="today">Hoy</option>
           <option value="yesterday">Ayer</option>
           <option value="6h">Últimas 6 horas</option>
@@ -716,9 +703,9 @@ async function showHostModal(hostId) {
         </select>
         <button class="btn btn-primary btn-sm" id="btnLoadHistory">Cargar</button>
       </div>
-      <div id="customDateRange" style="display: none; margin-bottom: 1rem; padding: 12px; background: #f0f4f8; border-radius: 8px;">
-        <label style="font-size: 13px;">Desde: <input type="datetime-local" id="historyFrom" class="form-control" style="width: auto; display: inline-block;"></label>
-        <label style="font-size: 13px; margin-left: 12px;">Hasta: <input type="datetime-local" id="historyTo" class="form-control" style="width: auto; display: inline-block;"></label>
+      <div id="customDateRange" class="u-oculto historial-rango">
+        <label class="u-texto-13">Desde: <input type="datetime-local" id="historyFrom" class="form-control u-ancho-auto-inline"></label>
+        <label class="u-texto-13-ml-12">Hasta: <input type="datetime-local" id="historyTo" class="form-control u-ancho-auto-inline"></label>
       </div>
       <div id="historyResults">
         <p class="muted">Seleccione un rango y haga clic en Cargar.</p>
@@ -801,10 +788,10 @@ async function showHostModal(hostId) {
     }
 
     historyResults.innerHTML = `
-      <div style="margin-bottom: 0.5rem; font-size: 0.9em; color: #666;">
+      <div class="historial-resumen">
         Mostrando ${hData.history.length} registros
       </div>
-      <table class="data-table compact" style="width: 100%;">
+      <table class="data-table compact u-ancho-100">
         <thead>
           <tr>
             <th>Hora</th>
@@ -814,14 +801,14 @@ async function showHostModal(hostId) {
             <th>Error</th>
           </tr>
         </thead>
-        <tbody style="display: block; max-height: 400px; overflow-y: auto;">
+        <tbody class="historial-cuerpo">
           ${hData.history.map(r => `
-            <tr style="display: table; width: 100%; table-layout: fixed;">
-              <td style="width: 25%">${formatDate(r.time)}</td>
-              <td style="width: 15%">${fmt(r.kind?.toUpperCase() || 'ICMP')}</td>
-              <td style="width: 15%"><span class="badge badge-${claseSegura(r.status)}">${fmt(r.status)}</span></td>
-              <td style="width: 15%">${r.latency_ms ? r.latency_ms + 'ms' : '—'}</td>
-              <td style="width: 30%; font-size: 0.85em; color: #d32f2f;">${fmt(r.error)}</td>
+            <tr class="historial-fila">
+              <td class="u-col-25">${formatDate(r.time)}</td>
+              <td class="u-col-15">${fmt(r.kind?.toUpperCase() || 'ICMP')}</td>
+              <td class="u-col-15"><span class="badge badge-${claseSegura(r.status)}">${fmt(r.status)}</span></td>
+              <td class="u-col-15">${r.latency_ms ? r.latency_ms + 'ms' : '—'}</td>
+              <td class="historial-col-error">${fmt(r.error)}</td>
             </tr>
           `).join('')}
         </tbody>
@@ -1202,7 +1189,7 @@ async function loadMaintenanceStats() {
       </div>
       
       ${checkRuns.date_range.oldest ? `
-        <div class="muted" style="margin-top:12px;font-size:0.8rem">
+        <div class="muted u-nota-pequena">
           Rango de datos: ${formatDate(checkRuns.date_range.oldest)} - ${formatDate(checkRuns.date_range.newest)}
         </div>
       ` : ''}

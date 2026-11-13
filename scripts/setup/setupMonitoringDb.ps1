@@ -82,11 +82,12 @@ if (-not (Get-Command psql -ErrorAction SilentlyContinue)) {
 }
 
 if ($ImportHosts) {
-  Write-Host "Importando hosts desde cache..." -ForegroundColor Cyan
-  # Ruta relativa al script (antes dependía de la carpeta desde donde se ejecutaba)
-  node "$PSScriptRoot/../import/importHostsFromCache.js"
-  if ($LASTEXITCODE -ne 0) { Write-Error "Error importando hosts"; exit 1 }
-  Write-Host "Hosts importados." -ForegroundColor Green
+  # El antiguo importHostsFromCache.js leía un caché en memoria que en un proceso nuevo siempre
+  # estaba vacío (importaba 0 hosts). Se eliminó en la Fase 4.2: la importación real la hace la
+  # sincronización del inventario hacia monitoreo.
+  Write-Host "La importación de hosts se hace desde la app (sincronización inventario -> monitoreo):" -ForegroundColor Yellow
+  Write-Host "  - Cada servidor creado/editado en el inventario se sincroniza solo, y" -ForegroundColor Yellow
+  Write-Host "  - para sincronizar todo: POST /api/monitoring/sync con una sesión de administrador." -ForegroundColor Yellow
 }
 
 Write-Host "Verificando conteo de hosts..." -ForegroundColor Cyan

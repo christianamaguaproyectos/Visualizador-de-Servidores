@@ -1415,3 +1415,24 @@ body:not(.rol-admin) [data-action="add-check"],
 body:not(.rol-admin) [data-recipient-action] {
   display: none !important;
 }
+
+/* Footer de tarjetas de host y botón eliminar (antes inyectado por monitoring.js; Fase 4.2 CSP) */
+.host-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.btn-icon-delete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.2em;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+  padding: 4px;
+  border-radius: 4px;
+}
+.btn-icon-delete:hover {
+  opacity: 1;
+  background-color: rgba(239, 68, 68, 0.1);
+}
