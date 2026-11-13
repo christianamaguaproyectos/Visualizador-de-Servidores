@@ -54,6 +54,14 @@ El servidor **detecta el tipo de red** y ajusta su comportamiento:
 | **2. Binding Dinámico** | `0.0.0.0` (abierto) o `localhost` (cerrado) | ✅ Activo |
 | **3. Middleware de Validación** | Bloquea IPs no autorizadas en red pública | ✅ Activo |
 | **4. Auto-Restart Horario** | Re-detectaba la red cada hora | ⛔ Desactivado (Fase 3: cerraba sesiones y saturaba checks). Reiniciar manualmente al cambiar de red |
+| **5. Content-Security-Policy** | CSP **bloqueante** sin `'unsafe-inline'` ni dominios externos: aunque se colara HTML, el navegador no ejecuta scripts ni estilos inyectados (`securityHeadersMiddleware.js`) | ✅ Activo (Fase 4.2) |
+| **6. Contenedor endurecido** | Imagen sin compiladores ni `scripts/`, sistema de archivos de solo lectura, sin capacidades extra, PostgreSQL solo en `127.0.0.1` | ✅ Activo en Docker (Fase 4.1) |
+| **7. CI en cada PR** | `npm audit`, lint, pruebas de seguridad/regresión y verificación de la imagen Docker (`.github/workflows/ci.yml`) | ✅ Activo (Fase 4.3) |
+
+> **Para quien modifique el frontend (Fase 4.2):** no uses `<script>` ni `<style>` inline, ni
+> atributos `style="..."` / `onclick="..."` en HTML o `innerHTML`: la CSP los bloquea. Usa
+> archivos `.js`/`.css`, clases (ver `css/estilos-sin-inline.css`) o `elemento.style.x = ...`
+> desde JavaScript, que sí está permitido.
 
 ---
 
