@@ -5,6 +5,7 @@
  */
 
 import prisma from '../config/prisma.js';
+import { parsePositiveBigInt } from '../utils/ids.js';
 
 class ServerRepository {
   /**
@@ -26,7 +27,7 @@ class ServerRepository {
    */
   async findById(id) {
     return prisma.server.findUnique({
-      where: { id: BigInt(id) },
+      where: { id: parsePositiveBigInt(id, 'id') },
       include: { rack: true },
     });
   }
@@ -51,7 +52,7 @@ class ServerRepository {
    */
   async update(id, data) {
     return prisma.server.update({
-      where: { id: BigInt(id) },
+      where: { id: parsePositiveBigInt(id, 'id') },
       data,
       include: { rack: true },
     });
@@ -64,7 +65,7 @@ class ServerRepository {
    */
   async delete(id) {
     return prisma.server.delete({
-      where: { id: BigInt(id) },
+      where: { id: parsePositiveBigInt(id, 'id') },
     });
   }
 
@@ -86,7 +87,7 @@ class ServerRepository {
     };
 
     if (excludeId) {
-      where.id = { not: BigInt(excludeId) };
+      where.id = { not: parsePositiveBigInt(excludeId, 'excludeId') };
     }
 
     return prisma.server.findMany({
@@ -103,7 +104,7 @@ class ServerRepository {
    */
   async updatePosition(id, positionData) {
     return prisma.server.update({
-      where: { id: BigInt(id) },
+      where: { id: parsePositiveBigInt(id, 'id') },
       data: positionData,
     });
   }

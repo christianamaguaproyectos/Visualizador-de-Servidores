@@ -45,7 +45,7 @@ class UploadController {
       }
 
       // Parsear Excel
-      const data = excelParserService.parseExcelByType(type);
+      const data = await excelParserService.parseExcelByType(type);
       const servers = data.servers || [];
       
       Logger.info(`Sincronizando ${servers.length} servidores (${type}) a PostgreSQL...`);

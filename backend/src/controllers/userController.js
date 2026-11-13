@@ -2,6 +2,24 @@ import authService from '../services/authService.js';
 import passwordRecoveryService from '../services/passwordRecoveryService.js';
 import Logger from '../utils/logger.js';
 import crypto from 'crypto';
+import env from '../config/env.js';
+
+/** Política de contraseñas (igual que en login y en el restablecimiento) */
+const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_MAX_LENGTH = 256;
+
+/**
+ * Devuelve un mensaje de error si la contraseña no cumple la política, o null si es válida
+ * @param {string} password
+ * @returns {string|null}
+ */
+function validarPassword(password) {
+  const texto = String(password ?? '');
+  if (texto.length < PASSWORD_MIN_LENGTH || texto.length > PASSWORD_MAX_LENGTH) {
+    return `La contraseña debe tener entre ${PASSWORD_MIN_LENGTH} y ${PASSWORD_MAX_LENGTH} caracteres`;
+  }
+  return null;
+}
 
 /**
  * Controlador para gestión de usuarios
@@ -61,6 +79,13 @@ class UserController {
         return res.status(400).json({ error: 'Rol debe ser admin o viewer' });
       }
 
+      if (password) {
+        const errorPassword = validarPassword(password);
+        if (errorPassword) {
+          return res.status(400).json({ error: errorPassword });
+        }
+      }
+
       // Si no se provee password, generar uno aleatorio temporal
       const finalPassword = password || crypto.randomBytes(16).toString('hex');
 
@@ -81,8 +106,8 @@ class UserController {
         const tokenResult = await authService.createPasswordResetToken(username);
 
         if (tokenResult.found && tokenResult.token) {
-          const appUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
-          const inviteLink = `${appUrl}/login?resetToken=${tokenResult.token}`;
+          // Solo APP_URL (validada al arrancar), nunca la cabecera Host
+          const inviteLink = `${env.APP_URL}/login?resetToken=${encodeURIComponent(tokenResult.token)}`;
 
           let emailResult = { sent: false, reason: 'no_email' };
 
@@ -99,8 +124,15 @@ class UserController {
               ok: true,
               message: `Usuario creado. Se envió un email de invitación a ${email}.`
             });
+          } else if (env.NODE_ENV === 'production') {
+            // En producción NUNCA se devuelve el enlace con token activo en la respuesta HTTP
+            return res.json({
+              ok: true,
+              message: 'Usuario creado, pero no se pudo enviar el email de invitación. ' +
+                'El usuario puede usar "¿Olvidaste tu contraseña?" en el login cuando el correo esté configurado.'
+            });
           } else {
-            // Fallback: devolver el enlace en la respuesta
+            // Solo en desarrollo: devolver el enlace para pruebas locales sin SMTP
             return res.json({
               ok: true,
               message: 'Usuario creado. Comparte el enlace de invitación manualmente.',
@@ -175,6 +207,11 @@ class UserController {
 
       if (!password) {
         return res.status(400).json({ error: 'Password es requerido' });
+      }
+
+      const errorPassword = validarPassword(password);
+      if (errorPassword) {
+        return res.status(400).json({ error: errorPassword });
       }
 
       if (!isSuperAdmin && targetId !== requesterId) {

@@ -177,8 +177,11 @@ class NetworkSecurityService {
         return next();
       }
 
-      // Siempre permitir localhost
-      if (this.localhostIPs.some(ip => clientIP.includes(ip))) {
+      // Siempre permitir localhost.
+      // Comparación EXACTA: con .includes('::1') una IPv6 remota como 2001:db8::1
+      // pasaba como si fuera local. Se normaliza IPv4 mapeada (::ffff:127.0.0.1).
+      const ipNormalizada = String(clientIP || '').replace(/^::ffff:/i, '');
+      if (ipNormalizada === '127.0.0.1' || ipNormalizada === '::1') {
         return next();
       }
 

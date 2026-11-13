@@ -6,6 +6,17 @@ import { Logger } from '../utils/logger.js';
 import authService from '../services/authService.js';
 
 /**
+ * Indica si la petición es a la API.
+ * Usa originalUrl (y no req.path) porque dentro de sub-routers req.path pierde
+ * el prefijo: en /api/monitoring/stats, req.path vale solo '/stats'.
+ * @param {Object} req - Request de Express
+ * @returns {boolean}
+ */
+function isApiRequest(req) {
+  return (req.originalUrl || req.url || '').startsWith('/api/');
+}
+
+/**
  * Middleware que verifica si el usuario está autenticado
  * @param {Object} req - Request de Express
  * @param {Object} res - Response de Express
@@ -18,7 +29,7 @@ export function requireAuth(req, res, next) {
   }
 
   // No autenticado - redirigir a login
-  if (req.path.startsWith('/api/')) {
+  if (isApiRequest(req)) {
     // Para peticiones API, devolver 401
     return res.status(401).json({
       error: 'No autorizado',
@@ -41,7 +52,7 @@ export function requireAdmin(req, res, next) {
   if (!req.session || !req.session.user) {
     Logger.warn('⚠️  Intento de acceso sin autenticación');
     
-    if (req.path.startsWith('/api/')) {
+    if (isApiRequest(req)) {
       return res.status(401).json({
         error: 'No autorizado',
         message: 'Debes iniciar sesión',
@@ -55,7 +66,7 @@ export function requireAdmin(req, res, next) {
   if (req.session.user.role !== 'admin' && !authService.isSuperAdmin(req.session.user)) {
     Logger.warn(`⚠️  Usuario '${req.session.user.username}' intentó acceso de admin`);
     
-    if (req.path.startsWith('/api/')) {
+    if (isApiRequest(req)) {
       return res.status(403).json({
         error: 'Acceso denegado',
         message: 'No tienes permisos de administrador',
@@ -132,7 +143,7 @@ export function requireAdmin(req, res, next) {
  */
 export function requireSuperAdmin(req, res, next) {
   if (!req.session || !req.session.user) {
-    if (req.path.startsWith('/api/')) {
+    if (isApiRequest(req)) {
       return res.status(401).json({
         error: 'No autorizado',
         message: 'Debes iniciar sesión',
@@ -144,7 +155,7 @@ export function requireSuperAdmin(req, res, next) {
 
   if (!authService.isSuperAdmin(req.session.user)) {
     Logger.warn(`⚠️  Usuario '${req.session.user.username}' intentó acceso de superadmin`);
-    if (req.path.startsWith('/api/')) {
+    if (isApiRequest(req)) {
       return res.status(403).json({
         error: 'Acceso denegado',
         message: 'No tienes permisos de superadmin',

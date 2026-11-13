@@ -66,6 +66,13 @@ services:
       
       # URL pública de la aplicación (para links en correos)
       APP_URL: ${APP_URL:-http://localhost:3000}
+
+      # Seguridad HTTP
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+
+      # Monitoreo: subredes permitidas aunque estén en rangos bloqueados (anti-SSRF)
+      MONITORING_ALLOWED_CIDRS: ${MONITORING_ALLOWED_CIDRS:-}
       
       # Timeouts de checks
       DEFAULT_PING_TIMEOUT_MS: ${DEFAULT_PING_TIMEOUT_MS:-2000}

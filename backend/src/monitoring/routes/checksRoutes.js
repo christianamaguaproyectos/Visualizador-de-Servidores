@@ -4,7 +4,9 @@
 import express from 'express';
 import { withMonitoringClient } from '../config/monitoringDb.js';
 import Logger from '../../utils/logger.js';
-import { validarConfiguracionChequeo } from '../domain/validators/checkConfigValidator.js';
+import { requireAdmin } from '../../middleware/authMiddleware.js';
+import { validarConfiguracionChequeo, validarParametrosChequeo } from '../domain/validators/checkConfigValidator.js';
+import { validarDestinoChequeo } from '../domain/validators/networkTargetValidator.js';
 import { TiposChequeo } from '../domain/glosario/terminosDominio.js';
 
 const router = express.Router();
@@ -114,11 +116,43 @@ router.get('/:id', async (req, res) => {
 });
 
 /**
+ * Devuelve una copia de la config completando la IP del host para ICMP/TCP
+ * cuando no viene ni `host` ni `ip` (así lo envía el modal "Nuevo Check").
+ * @param {string} kind
+ * @param {Object} config
+ * @param {string|undefined} ipHost
+ * @returns {Object}
+ */
+function completarConfigConIpHost(kind, config, ipHost) {
+  const finalConfig = { ...(config || {}) };
+  if ((kind === 'icmp' || kind === 'tcp') && !finalConfig.host && !finalConfig.ip && ipHost) {
+    finalConfig.ip = ipHost;
+  }
+  return finalConfig;
+}
+
+/**
+ * Valida la config FINAL de un check: sintaxis y destino de red (anti-SSRF)
+ * @param {string} kind
+ * @param {Object} finalConfig
+ * @returns {Promise<string|null>} mensaje de error o null si es válida
+ */
+async function validarConfigFinal(kind, finalConfig) {
+  const validacionConfig = validarConfiguracionChequeo(kind, finalConfig);
+  if (!validacionConfig.valido) return validacionConfig.error;
+
+  const destino = await validarDestinoChequeo(kind, finalConfig);
+  if (!destino.valido) return destino.error;
+
+  return null;
+}
+
+/**
  * POST /api/monitoring/checks
  * Crea un nuevo check
  * Body: { host_id, kind, config, frequency_sec, timeout_ms, retries, enabled }
  */
-router.post('/', async (req, res) => {
+router.post('/', requireAdmin, async (req, res) => {
   try {
     const {
       host_id,
@@ -138,25 +172,24 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'kind debe ser icmp, tcp o http' });
     }
 
-    const validacionConfig = validarConfiguracionChequeo(kind, config);
-    if (!validacionConfig.valido) {
-      return res.status(400).json({ error: validacionConfig.error });
+    const validacionParametros = validarParametrosChequeo({ frequency_sec, timeout_ms, retries });
+    if (!validacionParametros.valido) {
+      return res.status(400).json({ error: validacionParametros.error });
     }
 
     const result = await withClient(async (client) => {
-      // Verificar que el host existe
-      const { rows: hostRows } = await client.query('SELECT id, ip FROM hosts WHERE id = $1', [host_id]);
+      // Verificar que el host existe (host(ip)::text evita el sufijo /32 del tipo INET)
+      const { rows: hostRows } = await client.query('SELECT id, host(ip)::text AS ip FROM hosts WHERE id = $1', [host_id]);
       if (hostRows.length === 0) {
         throw { status: 404, message: 'Host no encontrado' };
       }
 
-      // Auto-completar config con IP del host si no se especifica
-      const finalConfig = { ...config };
-      if (kind === 'icmp' && !finalConfig.host && !finalConfig.ip) {
-        finalConfig.ip = hostRows[0].ip;
-      }
-      if (kind === 'tcp' && !finalConfig.host && !finalConfig.ip) {
-        finalConfig.ip = hostRows[0].ip;
+      // Primero completar con la IP del host (el modal "Nuevo Check" envía config sin ip)
+      // y DESPUÉS validar sintaxis + destino (anti-SSRF) sobre la config final
+      const finalConfig = completarConfigConIpHost(kind, config, hostRows[0].ip);
+      const errorConfig = await validarConfigFinal(kind, finalConfig);
+      if (errorConfig) {
+        throw { status: 400, message: errorConfig };
       }
 
       const { rows } = await client.query(`
@@ -183,7 +216,7 @@ router.post('/', async (req, res) => {
  * PUT /api/monitoring/checks/:id
  * Actualiza un check existente
  */
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAdmin, async (req, res) => {
   try {
     const id = parseIdOrFail(req.params.id, res);
     if (!id) return;
@@ -195,6 +228,11 @@ router.put('/:id', async (req, res) => {
       retries,
       enabled
     } = req.body;
+
+    const validacionParametros = validarParametrosChequeo({ frequency_sec, timeout_ms, retries });
+    if (!validacionParametros.valido) {
+      return res.status(400).json({ error: validacionParametros.error });
+    }
 
     const result = await withClient(async (client) => {
       // Verificar que existe
@@ -215,14 +253,24 @@ router.put('/:id', async (req, res) => {
         updates.push(`kind = $${idx++}`);
         values.push(kind);
       }
-      if (config !== undefined) {
+      if (config !== undefined || kind !== undefined) {
         const tipoFinal = kind ?? existing[0].kind;
-        const validacionConfig = validarConfiguracionChequeo(tipoFinal, config);
-        if (!validacionConfig.valido) {
-          throw { status: 400, message: validacionConfig.error };
+        const configBase = config ?? existing[0].config ?? {};
+
+        // IP de respaldo: la que ya tenía el check o, si no, la del host asociado
+        let ipRespaldo = existing[0].config?.ip;
+        if (!ipRespaldo) {
+          const { rows: hostRows } = await client.query('SELECT host(ip)::text AS ip FROM hosts WHERE id = $1', [existing[0].host_id]);
+          ipRespaldo = hostRows[0]?.ip;
+        }
+
+        const finalConfig = completarConfigConIpHost(tipoFinal, configBase, ipRespaldo);
+        const errorConfig = await validarConfigFinal(tipoFinal, finalConfig);
+        if (errorConfig) {
+          throw { status: 400, message: errorConfig };
         }
         updates.push(`config = $${idx++}`);
-        values.push(JSON.stringify(config));
+        values.push(JSON.stringify(finalConfig));
       }
       if (frequency_sec !== undefined) {
         updates.push(`frequency_sec = $${idx++}`);
@@ -268,7 +316,7 @@ router.put('/:id', async (req, res) => {
  * DELETE /api/monitoring/checks/:id
  * Elimina un check y su historial
  */
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
   try {
     const id = parseIdOrFail(req.params.id, res);
     if (!id) return;
@@ -295,7 +343,7 @@ router.delete('/:id', async (req, res) => {
  * POST /api/monitoring/checks/:id/run
  * Ejecuta un check INMEDIATAMENTE y devuelve el resultado
  */
-router.post('/:id/run', async (req, res) => {
+router.post('/:id/run', requireAdmin, async (req, res) => {
   try {
     const id = parseIdOrFail(req.params.id, res);
     if (!id) return;
@@ -321,7 +369,7 @@ router.post('/:id/run', async (req, res) => {
  * Crea checks en lote para múltiples hosts
  * Body: { host_ids: [], kind, config, frequency_sec, ... }
  */
-router.post('/bulk', async (req, res) => {
+router.post('/bulk', requireAdmin, async (req, res) => {
   try {
     const {
       host_ids = [],
@@ -340,9 +388,9 @@ router.post('/bulk', async (req, res) => {
       return res.status(400).json({ error: 'kind debe ser icmp, tcp o http' });
     }
 
-    const validacionConfig = validarConfiguracionChequeo(kind, config);
-    if (!validacionConfig.valido) {
-      return res.status(400).json({ error: validacionConfig.error });
+    const validacionParametros = validarParametrosChequeo({ frequency_sec, timeout_ms, retries });
+    if (!validacionParametros.valido) {
+      return res.status(400).json({ error: validacionParametros.error });
     }
 
     const result = await withClient(async (client) => {
@@ -352,15 +400,18 @@ router.post('/bulk', async (req, res) => {
       for (const host_id of host_ids) {
         try {
           // Obtener IP del host
-          const { rows: hostRows } = await client.query('SELECT id, ip FROM hosts WHERE id = $1', [host_id]);
+          const { rows: hostRows } = await client.query('SELECT id, host(ip)::text AS ip FROM hosts WHERE id = $1', [host_id]);
           if (hostRows.length === 0) {
             errors.push({ host_id, error: 'Host no encontrado' });
             continue;
           }
 
-          const finalConfig = { ...config };
-          if ((kind === 'icmp' || kind === 'tcp') && !finalConfig.host && !finalConfig.ip) {
-            finalConfig.ip = hostRows[0].ip;
+          // Completar con la IP del host y luego validar sintaxis + destino (anti-SSRF)
+          const finalConfig = completarConfigConIpHost(kind, config, hostRows[0].ip);
+          const errorConfig = await validarConfigFinal(kind, finalConfig);
+          if (errorConfig) {
+            errors.push({ host_id, error: errorConfig });
+            continue;
           }
 
           const { rows } = await client.query(`

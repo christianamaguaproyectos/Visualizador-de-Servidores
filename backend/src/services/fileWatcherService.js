@@ -57,9 +57,9 @@ class FileWatcherService {
    * @param {string} type - Tipo de servidor
    * @param {string} reason - Razón de la recarga
    */
-  _executeReload(type, reason) {
+  async _executeReload(type, reason) {
     try {
-      const data = excelParserService.parseExcelByType(type);
+      const data = await excelParserService.parseExcelByType(type);
       
       // Ejecutar callback si está definido
       if (this.onReloadCallback) {
@@ -89,9 +89,9 @@ class FileWatcherService {
    * @param {string} type - Tipo de servidor
    * @param {string} reason - Razón de la recarga
    */
-  _retryReload(type, reason) {
+  async _retryReload(type, reason) {
     try {
-      const data = excelParserService.parseExcelByType(type);
+      const data = await excelParserService.parseExcelByType(type);
       
       if (this.onReloadCallback) {
         this.onReloadCallback(type, data);

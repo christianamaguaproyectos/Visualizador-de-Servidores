@@ -1,4 +1,4 @@
-import { request } from 'undici';
+import { request, Agent } from 'undici';
 import net from 'net';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
@@ -7,8 +7,22 @@ import Logger from '../../utils/logger.js';
 import { logAdvertencia, logError } from '../../utils/structuredLogger.js';
 import { EstadosChequeo, TiposChequeo } from '../domain/glosario/terminosDominio.js';
 import { validarConfiguracionChequeo } from '../domain/validators/checkConfigValidator.js';
+import { validarDestinoRed, validarDestinoChequeo, lookupSeguro } from '../domain/validators/networkTargetValidator.js';
 
 const execFileAsync = promisify(execFile);
+
+/**
+ * Cliente HTTP para checks: valida la IP resuelta al conectar (anti DNS rebinding)
+ * y nunca sigue redirecciones automáticamente.
+ */
+const agenteHttpSeguro = new Agent({
+  connect: { lookup: lookupSeguro }
+});
+
+/** En Windows un ping exitoso siempre incluye "TTL=" (en inglés y español) */
+const PING_TTL_REGEX = /TTL=\d+/i;
+/** Latencia del ping: "time=12ms", "time<1ms", "tiempo=12ms" y "tiempo<1m" (Windows en español) */
+const PING_TIEMPO_REGEX = /(?:time|tiempo)[=<]\s*(\d+(?:\.\d+)?)\s*ms?/i;
 
 class CheckExecutorService {
   /**
@@ -24,23 +38,35 @@ class CheckExecutorService {
       };
     }
 
+    // Resolver y validar el destino (anti-SSRF); se hace ping a la IP ya validada
+    const destino = await validarDestinoRed(host);
+    if (!destino.valido) {
+      return { status: EstadosChequeo.FALLA, latency: 0, error: destino.error };
+    }
+    const ip = destino.direcciones[0].address;
+
     const start = Date.now();
     const timeoutSec = Math.ceil(timeoutMs / 1000);
 
     // Detectar sistema operativo y ajustar comando
     const isWindows = process.platform === 'win32';
-    const comando = isWindows ? 'ping' : 'ping';
     const argumentos = isWindows
-      ? ['-n', '1', '-w', String(timeoutMs), host]
-      : ['-c', '1', '-W', String(timeoutSec), host];
+      ? ['-n', '1', '-w', String(timeoutMs), ip]
+      : ['-c', '1', '-W', String(timeoutSec), '--', ip];
 
     try {
-      const { stdout } = await execFileAsync(comando, argumentos, { timeout: timeoutMs + 1000 });
+      const { stdout } = await execFileAsync('ping', argumentos, { timeout: timeoutMs + 1000 });
       const latency = Date.now() - start;
 
-      // Extraer tiempo del ping del output
+      // En Windows, ping devuelve código 0 aunque responda "Host de destino inaccesible"
+      // (lo contesta el gateway). Solo es éxito real si la respuesta trae "TTL=".
+      if (isWindows && !PING_TTL_REGEX.test(stdout)) {
+        return { status: EstadosChequeo.FALLA, latency, error: 'Host inaccesible (sin respuesta TTL)' };
+      }
+
+      // Extraer tiempo del ping del output (inglés o español)
       let pingTime = latency;
-      const timeMatch = stdout.match(/time[=<](\d+(?:\.\d+)?)\s*ms/i);
+      const timeMatch = stdout.match(PING_TIEMPO_REGEX);
       if (timeMatch) {
         pingTime = Math.round(parseFloat(timeMatch[1]));
       }
@@ -69,6 +95,13 @@ class CheckExecutorService {
       };
     }
 
+    // Resolver y validar el destino (anti-SSRF); se conecta a la IP ya validada
+    const destino = await validarDestinoRed(host);
+    if (!destino.valido) {
+      return { status: EstadosChequeo.FALLA, latency: 0, error: destino.error };
+    }
+    const ip = destino.direcciones[0].address;
+
     const start = Date.now();
     return new Promise((resolve) => {
       const socket = new net.Socket();
@@ -81,7 +114,7 @@ class CheckExecutorService {
       };
       socket.setTimeout(timeoutMs, () => onDone(EstadosChequeo.TIMEOUT, 'TCP timeout'));
       socket.once('error', (err) => onDone(EstadosChequeo.FALLA, err.message));
-      socket.connect(port, host, () => onDone(EstadosChequeo.OK));
+      socket.connect(Number(port), ip, () => onDone(EstadosChequeo.OK));
     });
   }
 
@@ -95,15 +128,27 @@ class CheckExecutorService {
       };
     }
 
+    // Validar el destino antes de conectar (anti-SSRF). La IP se vuelve a validar
+    // al conectar mediante agenteHttpSeguro (lookupSeguro) para evitar DNS rebinding.
+    const destino = await validarDestinoChequeo(TiposChequeo.HTTP, { url });
+    if (!destino.valido) {
+      return { status: EstadosChequeo.FALLA, latency: 0, error: destino.error };
+    }
+
     const start = Date.now();
     try {
-      const { statusCode, headers } = await request(url, {
+      const { statusCode, headers, body } = await request(url, {
         method: 'GET',
+        dispatcher: agenteHttpSeguro,
+        maxRedirections: 0,
         signal: AbortSignal.timeout(timeoutMs)
       });
+      // Descartar el cuerpo para liberar la conexión
+      await body.dump().catch(() => {});
       const latency = Date.now() - start;
       const status = statusCode === expectCode ? EstadosChequeo.OK : EstadosChequeo.DEGRADADO;
-      return { status, latency, code: statusCode, sample: { headers } };
+      // No se guardan las cabeceras crudas (pueden incluir Set-Cookie o datos internos)
+      return { status, latency, code: statusCode, sample: { statusCode, contentType: headers['content-type'] || null } };
     } catch (err) {
       const latency = Date.now() - start;
       const status = err.name === 'TimeoutError' ? EstadosChequeo.TIMEOUT : EstadosChequeo.FALLA;

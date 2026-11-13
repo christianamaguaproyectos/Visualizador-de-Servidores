@@ -33,6 +33,7 @@ import { createRateLimiter } from './src/middleware/rateLimitMiddleware.js';
 import { attachRequestContext, structuredApiRequestLogger } from './src/middleware/requestContextMiddleware.js';
 import { securityHeadersMiddleware } from './src/middleware/securityHeadersMiddleware.js';
 import { errorHandler } from './src/middleware/errorHandler.js';
+import { createCsrfProtection, getCsrfToken } from './src/middleware/csrfMiddleware.js';
 
 // Utilidades
 import Logger from './src/utils/logger.js';
@@ -63,8 +64,8 @@ class Application {
     // Configurar middleware
     this._setupMiddleware();
 
-    // Configurar rutas
-    this._setupRoutes();
+    // Configurar rutas (async: carga routers dinámicos antes del errorHandler)
+    await this._setupRoutes();
 
     // Iniciar monitoreo si está habilitado
     if (monitoringConfig.enabled) {
@@ -86,9 +87,15 @@ class Application {
    * Configura el middleware de Express
    */
   _setupMiddleware() {
-    this.app.use(cors());
+    // Detrás de un reverse proxy, permite que req.ip / req.protocol usen X-Forwarded-*
+    // (configurable con TRUST_PROXY; por defecto desactivado)
+    this.app.set('trust proxy', env.TRUST_PROXY);
+
+    // CORS: solo los orígenes listados en CORS_ORIGINS (vacío = solo el mismo origen)
+    this.app.use(cors({ origin: env.CORS_ORIGINS, credentials: true }));
     this.app.use(securityHeadersMiddleware);
-    this.app.use(express.json());
+    // Límite explícito del cuerpo JSON para evitar cuerpos enormes
+    this.app.use(express.json({ limit: '256kb' }));
     this.app.use(attachRequestContext);
     
     // Middleware de sesiones
@@ -106,6 +113,11 @@ class Application {
       }
     }));
     
+    // Protección CSRF para POST/PUT/PATCH/DELETE (origen + token X-CSRF-Token)
+    // APP_URL incluida: detrás de un proxy que no reenvía el Host original, el navegador
+    // manda Origin = APP_URL mientras req.get('host') es interno (ej. localhost:3000)
+    this.app.use(createCsrfProtection({ allowedOrigins: [env.APP_URL, ...env.CORS_ORIGINS] }));
+
     // Inyectar información de usuario en todas las vistas
     this.app.use(injectUser);
     this.app.use(structuredApiRequestLogger);
@@ -118,7 +130,7 @@ class Application {
   /**
    * Configura todas las rutas de la aplicación
    */
-  _setupRoutes() {
+  async _setupRoutes() {
     // ========================================
     // RUTAS PÚBLICAS (Sin autenticación)
     // ========================================
@@ -175,6 +187,10 @@ class Application {
       res.sendFile(path.join(__dirname, '..', 'frontend', 'public', 'monitoring.html'));
     });
 
+    // La pantalla de usuarios solo para superadmin, también si se pide el archivo directo
+    // (debe ir ANTES de express.static, que si no la entregaría a cualquier sesión)
+    this.app.use(['/users.html', '/users.js'], requireSuperAdmin);
+
     // Middleware estático (archivos protegidos)
     this.app.use(express.static(path.join(__dirname, '..', 'frontend', 'public')));
 
@@ -189,15 +205,16 @@ class Application {
     // API de usuario actual
     this.app.get('/api/auth/user', (req, res, next) => authController.getCurrentUser(req, res, next));
 
+    // Token CSRF de la sesión (lo usa /js/csrf.js para firmar las peticiones que modifican datos)
+    this.app.get('/api/auth/csrf', getCsrfToken);
+
     // API de clusters virtuales
     this.app.use('/api/clusters', clusterRoutes);
 
     // API de exportación (cualquier usuario autenticado)
-    import('./src/routes/exportRoutes.js').then(({ default: exportRoutes }) => {
-      this.app.use('/api/export', exportRoutes);
-    }).catch(err => {
-      console.error('❌ Error cargando rutas de exportación:', err);
-    });
+    // Se espera (await) la carga para que quede registrada ANTES del errorHandler
+    const { default: exportRoutes } = await import('./src/routes/exportRoutes.js');
+    this.app.use('/api/export', exportRoutes);
 
     // ========================================
     // RUTAS DE ADMINISTRADOR (Solo admin)
@@ -234,10 +251,24 @@ class Application {
     // RUTAS DE MONITOREO (opt-in)
     // ========================================
     if (monitoringConfig.enabled) {
-      import('./src/monitoring/routes/index.js').then(({ default: monitoringRouter }) => {
+      try {
+        const { default: monitoringRouter } = await import('./src/monitoring/routes/index.js');
         this.app.use('/api/monitoring', monitoringRouter);
-      }).catch(() => {});
+      } catch (err) {
+        Logger.error('❌ Error cargando rutas de monitoreo:', err);
+      }
     }
+
+    // ========================================
+    // 404 JSON para rutas /api inexistentes
+    // ========================================
+    this.app.use('/api', (req, res) => {
+      res.status(404).json({
+        error: 'Ruta no encontrada',
+        code: 'NOT_FOUND',
+        requestId: req.requestId || null,
+      });
+    });
 
     // ========================================
     // ERROR HANDLER CENTRALIZADO (debe ir AL FINAL)
