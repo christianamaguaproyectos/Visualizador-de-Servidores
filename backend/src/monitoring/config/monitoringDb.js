@@ -26,10 +26,30 @@ export async function withMonitoringClient(fn) {
 }
 
 /**
+ * Ejecuta fn dentro de una TRANSACCIÓN (BEGIN / COMMIT / ROLLBACK).
+ * Para operaciones de varios pasos: si uno falla, no queda nada a medias.
+ * @param {Function} fn - Función que recibe el cliente
+ * @returns {Promise<any>}
+ */
+export async function withMonitoringTransaction(fn) {
+  return withClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      const resultado = await fn(client);
+      await client.query('COMMIT');
+      return resultado;
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => { });
+      throw err;
+    }
+  });
+}
+
+/**
  * Cierra el pool compartido (para shutdown graceful)
  */
 export async function closeMonitoringPool() {
   await closePool();
 }
 
-export default { getMonitoringPool, withMonitoringClient, closeMonitoringPool };
+export default { getMonitoringPool, withMonitoringClient, withMonitoringTransaction, closeMonitoringPool };

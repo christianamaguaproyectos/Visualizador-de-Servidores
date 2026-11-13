@@ -4,6 +4,7 @@
 import express from 'express';
 import { withMonitoringClient } from '../config/monitoringDb.js';
 import Logger from '../../utils/logger.js';
+import { responderErrorInterno } from '../../utils/respuestaError.js';
 import { requireAdmin } from '../../middleware/authMiddleware.js';
 import { validarConfiguracionChequeo, validarParametrosChequeo } from '../domain/validators/checkConfigValidator.js';
 import { validarDestinoChequeo } from '../domain/validators/networkTargetValidator.js';
@@ -62,7 +63,7 @@ router.get('/', async (req, res) => {
     res.json(result);
   } catch (err) {
     Logger.error('Error listando checks:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -111,7 +112,7 @@ router.get('/:id', async (req, res) => {
       return res.status(err.status).json({ error: err.message });
     }
     Logger.error('Error obteniendo check:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -208,7 +209,7 @@ router.post('/', requireAdmin, async (req, res) => {
       return res.status(err.status).json({ error: err.message });
     }
     Logger.error('Error creando check:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -308,7 +309,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
       return res.status(err.status).json({ error: err.message });
     }
     Logger.error('Error actualizando check:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -335,7 +336,7 @@ router.delete('/:id', requireAdmin, async (req, res) => {
       return res.status(err.status).json({ error: err.message });
     }
     Logger.error('Error eliminando check:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -360,7 +361,7 @@ router.post('/:id/run', requireAdmin, async (req, res) => {
     });
   } catch (err) {
     Logger.error('Error ejecutando check:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -422,7 +423,8 @@ router.post('/bulk', requireAdmin, async (req, res) => {
 
           created.push({ host_id, check_id: rows[0].id });
         } catch (err) {
-          errors.push({ host_id, error: err.message });
+          Logger.error(`Error creando check en lote para host ${host_id}:`, err.message);
+          errors.push({ host_id, error: 'No se pudo crear el check' });
         }
       }
 
@@ -433,7 +435,7 @@ router.post('/bulk', requireAdmin, async (req, res) => {
     res.status(201).json(result);
   } catch (err) {
     Logger.error('Error en bulk create:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -477,7 +479,7 @@ router.get('/stats/summary', async (req, res) => {
     res.json(result);
   } catch (err) {
     Logger.error('Error obteniendo stats:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 

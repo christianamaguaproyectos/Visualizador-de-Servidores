@@ -4,10 +4,20 @@
 import express from 'express';
 import { withMonitoringClient } from '../config/monitoringDb.js';
 import Logger from '../../utils/logger.js';
+import { responderErrorInterno } from '../../utils/respuestaError.js';
 import { requireAdmin } from '../../middleware/authMiddleware.js';
 import scheduler from '../scheduler/scheduler.js';
 
 const router = express.Router();
+
+// Todo :id de este router debe ser un entero positivo (antes un id no numérico
+// llegaba a PostgreSQL y provocaba un error 500 de tipo bigint)
+router.param('id', (req, res, next, id) => {
+  if (!/^[1-9][0-9]{0,18}$/.test(String(id))) {
+    return res.status(400).json({ error: 'id invalido' });
+  }
+  return next();
+});
 
 // Helper que usa el pool de conexiones con schema correcto
 async function withClient(fn) {
@@ -16,6 +26,7 @@ async function withClient(fn) {
     return fn(client);
   });
 }
+// Igual que withClient, pero dentro de una TRANSACCIÓN: en operaciones de varios// pasos (actualizar + registrar evento, borrar en cascada...) no queda nada a mediasasync function withTransaction(fn) {  return withClient(async (client) => {    await client.query('BEGIN');    try {      const resultado = await fn(client);      await client.query('COMMIT');      return resultado;    } catch (err) {      await client.query('ROLLBACK').catch(() => { });      throw err;    }  });}
 
 
 /**
@@ -93,7 +104,7 @@ router.get('/', async (req, res) => {
     res.json(result);
   } catch (err) {
     Logger.error('Error listando hosts:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -144,7 +155,32 @@ router.get('/summary', async (req, res) => {
     res.json(result);
   } catch (err) {
     Logger.error('Error obteniendo summary:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
+  }
+});
+
+/**
+ * GET /api/monitoring/hosts/duplicates
+ * Lista hosts duplicados (mismo nombre)
+ */
+router.get('/duplicates', async (req, res) => {
+  try {
+    const result = await withClient(async (client) => {
+      const { rows } = await client.query(`
+        SELECT h.name, COUNT(*) as count, 
+               json_agg(json_build_object('id', h.id, 'ip', host(h.ip)::text, 'estado', h.estado_actual, 'updated_at', h.updated_at)) as hosts
+        FROM hosts h
+        GROUP BY h.name
+        HAVING COUNT(*) > 1
+        ORDER BY h.name
+      `);
+      return rows;
+    });
+
+    res.json({ duplicates: result, count: result.length });
+  } catch (err) {
+    Logger.error('Error listando duplicados:', err.message);
+    responderErrorInterno(req, res);
   }
 });
 
@@ -201,7 +237,7 @@ router.get('/:id/history', async (req, res) => {
       return res.status(err.status).json({ error: err.message });
     }
     Logger.error('Error obteniendo historial:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -267,7 +303,7 @@ router.get('/:id', async (req, res) => {
       return res.status(err.status).json({ error: err.message });
     }
     Logger.error('Error obteniendo host:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -319,7 +355,7 @@ router.post('/', requireAdmin, async (req, res) => {
       return res.status(err.status).json({ error: err.message, existing_id: err.existing_id });
     }
     Logger.error('Error creando host:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -372,7 +408,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
       return res.status(err.status).json({ error: err.message });
     }
     Logger.error('Error actualizando host:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -402,7 +438,7 @@ router.delete('/:id', requireAdmin, async (req, res) => {
       return res.status(err.status).json({ error: err.message });
     }
     Logger.error('Error eliminando host:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -415,7 +451,7 @@ router.post('/:id/maintenance', requireAdmin, async (req, res) => {
     const { id } = req.params;
     const { duration_hours = 1, comment = '' } = req.body;
 
-    const ends_at = await withClient(async (client) => {
+    const ends_at = await withTransaction(async (client) => {
       // Actualizar estado del host
       await client.query(`
         UPDATE hosts SET estado_actual = 'MAINTENANCE', estado_changed_at = NOW() WHERE id = $1
@@ -437,7 +473,7 @@ router.post('/:id/maintenance', requireAdmin, async (req, res) => {
     res.json({ success: true, ends_at });
   } catch (err) {
     Logger.error('Error poniendo en mantenimiento:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -449,7 +485,7 @@ router.delete('/:id/maintenance', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
-    await withClient(async (client) => {
+    await withTransaction(async (client) => {
       // Cambiar estado a UNKNOWN para que se re-evalúe
       await client.query(`
         UPDATE hosts SET estado_actual = 'UNKNOWN', estado_changed_at = NOW() WHERE id = $1
@@ -467,7 +503,7 @@ router.delete('/:id/maintenance', requireAdmin, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     Logger.error('Error sacando de mantenimiento:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -536,7 +572,7 @@ router.post('/import', requireAdmin, async (req, res) => {
     res.json(result);
   } catch (err) {
     Logger.error('Error importando hosts:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
@@ -546,7 +582,7 @@ router.post('/import', requireAdmin, async (req, res) => {
  */
 router.post('/cleanup-duplicates', requireAdmin, async (req, res) => {
   try {
-    const result = await withClient(async (client) => {
+    const result = await withTransaction(async (client) => {
       // Encontrar nombres duplicados
       const { rows: duplicates } = await client.query(`
         SELECT name, COUNT(*) as count, array_agg(id ORDER BY id) as ids
@@ -570,7 +606,7 @@ router.post('/cleanup-duplicates', requireAdmin, async (req, res) => {
         const { rows: hostDetails } = await client.query(`
           SELECT h.id, h.name, host(h.ip)::text as ip, h.estado_actual, h.updated_at,
                  COUNT(c.id) as check_count,
-                 (SELECT COUNT(*) FROM check_results cr WHERE cr.check_id IN (SELECT id FROM checks WHERE host_id = h.id)) as executions
+                 (SELECT COUNT(*) FROM check_runs cr WHERE cr.check_id IN (SELECT id FROM checks WHERE host_id = h.id)) as executions
           FROM hosts h
           LEFT JOIN checks c ON c.host_id = h.id
           WHERE h.id = ANY($1)
@@ -622,33 +658,9 @@ router.post('/cleanup-duplicates', requireAdmin, async (req, res) => {
     res.json(result);
   } catch (err) {
     Logger.error('Error limpiando duplicados:', err.message);
-    res.status(500).json({ error: err.message });
+    responderErrorInterno(req, res);
   }
 });
 
-/**
- * GET /api/monitoring/hosts/duplicates
- * Lista hosts duplicados (mismo nombre)
- */
-router.get('/duplicates', async (req, res) => {
-  try {
-    const result = await withClient(async (client) => {
-      const { rows } = await client.query(`
-        SELECT h.name, COUNT(*) as count, 
-               json_agg(json_build_object('id', h.id, 'ip', host(h.ip)::text, 'estado', h.estado_actual, 'updated_at', h.updated_at)) as hosts
-        FROM hosts h
-        GROUP BY h.name
-        HAVING COUNT(*) > 1
-        ORDER BY h.name
-      `);
-      return rows;
-    });
-
-    res.json({ duplicates: result, count: result.length });
-  } catch (err) {
-    Logger.error('Error listando duplicados:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
 
 export default router;
