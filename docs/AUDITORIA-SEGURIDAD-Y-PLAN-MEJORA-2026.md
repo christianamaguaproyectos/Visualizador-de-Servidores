@@ -329,14 +329,14 @@ flowchart LR
   - Corregir fugas de listeners en `wirePhysicalUX` (`app.js:2018`), llamada doble a `wireClusterDetailEvents` (`app.js:2388, 2863`) y `MutationObserver` costoso en `nav.js:259`.
 
 ### Fase 3 — Estabilidad de Base de Datos, Scheduler de Monitoreo y Sesiones (P1/P2)
-- [ ] **3.1 (`ARCH-HIGH-09`)**:
+- [x] **3.1 (`ARCH-HIGH-09`)**:
   - Eliminar `new Pool()` por llamada en `monitoringSyncService.js` reutilizando el pool compartido, agrupar `fullSync()` con una sola recarga del scheduler y unificar la gestión de pools PostgreSQL.
   - Refactorizar `scheduler.js` para usar el pool resiliente en lugar de un `pg.Client` único sin reconexión, agregar bandera `tickRunning`, concurrencia controlada, `await` en `stateEvaluatorService.evaluateAndTransition`, respeto de `timeoutMs` en ICMP/TCP/HTTP y apagado limpio (`setupGracefulShutdown`) de servidor, SSE, scheduler y pools.
-- [ ] **3.2 (`MON-MED-01` & `MON-MED-02`)**:
+- [x] **3.2 (`MON-MED-01` & `MON-MED-02`)**:
   - Respetar estado `MAINTENANCE` y `maintenance_windows` activas en el scheduler sin sobrescribir el estado cada 5 s.
   - Mover rutas estáticas (`/duplicates`, `/summary`) antes de `/:id` en `hostsRoutes.js`, validar `:id` numérico y cambiar `check_results` por `check_runs` en `cleanup-duplicates`.
   - Corregir ciclo de vida de incidentes (evitar duplicados abiertos por host, resolver `open` + `ack` en recuperación, registrar `closed_at = NOW()` en `resolve`), envolver mutaciones compuestas en transacciones SQL (`BEGIN`/`COMMIT`/`ROLLBACK`) y ocultar `err.message` crudos de BD en respuestas 500.
-- [ ] **3.3 (`OPS-MED-03`)**:
+- [x] **3.3 (`OPS-MED-03`)**:
   - Incorporar `connect-pg-simple` para almacenar sesiones en PostgreSQL, quitar `cron_restart: '0 * * * *'` de `ecosystem.config.cjs` y ajustar `max_memory_restart: '512M'`.
   - Sincronizar `scripts/sql/*.sql` con `backend/prisma/schema.prisma` (`users.password_reset_tokens`, `inventory.racks.type`, índices únicos necesarios) y corregir rutas/parámetros en `setupMonitoringDb.ps1`, `migrate_users_to_postgres.js` y `manage-users.js`.
 
