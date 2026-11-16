@@ -16,8 +16,11 @@ GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA monitoring TO CURRENT_USER;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA inventory TO CURRENT_USER;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA monitoring TO CURRENT_USER;
 
--- Establecer search_path por defecto
-ALTER DATABASE diagrama_servers SET search_path TO inventory, monitoring, public;
+-- Establecer search_path por defecto en la base ACTUAL (antes tenía fijo "diagrama_servers":
+-- con otro POSTGRES_DB la inicialización fallaba en este punto)
+DO $$ BEGIN
+  EXECUTE format('ALTER DATABASE %I SET search_path TO inventory, monitoring, public', current_database());
+END $$;
 
 -- Mensaje de confirmación
 DO $$ BEGIN

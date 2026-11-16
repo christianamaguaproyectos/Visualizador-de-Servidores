@@ -575,6 +575,11 @@ main {
   background: #2563eb
 }
 
+/* Botones sin ícono propio (ya traen un emoji en el texto): sin el cuadro azul de relleno */
+.virtual-page .header-action:not(.action-upload):not(.action-link):not(.action-unlink):not(.action-home):not(.action-reload)::before {
+  display: none
+}
+
 .virtual-page .action-label {
   font-size: 13px
 }

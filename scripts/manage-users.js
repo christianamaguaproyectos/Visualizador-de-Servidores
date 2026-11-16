@@ -17,7 +17,6 @@ import 'dotenv/config';
 import crypto from 'crypto';
 import authService from '../backend/src/services/authService.js';
 import { closePool } from '../backend/src/config/db.js';
-import { Logger } from '../backend/src/utils/logger.js';
 
 // Argumentos de línea de comandos
 const args = process.argv.slice(2);

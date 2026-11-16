@@ -1,0 +1,103 @@
+# CI (Fase 4.3 / QA-MED-06): se ejecuta en cada Pull Request y en cada push a main.
+# Replica el "Protocolo de Verificación" (sección 5 del plan de seguridad):
+# auditoría de dependencias, secretos rastreados, lint, Prisma, pruebas y build Docker limpio.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  calidad-y-pruebas:
+    name: Lint + pruebas (unitarias e integración)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      # Base de datos EFÍMERA solo para las pruebas (se destruye al terminar el job)
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci_solo_para_pruebas
+          POSTGRES_DB: diagrama_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d diagrama_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TEST_POSTGRES_URL: postgresql://ci:ci_solo_para_pruebas@localhost:5432/diagrama_ci
+      # prisma generate/validate no se conectan: solo necesitan una URL con formato válido
+      DATABASE_URL: postgresql://ci:ci_solo_para_pruebas@localhost:5432/diagrama_ci
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci --no-fund
+
+      - name: Auditoría de dependencias de producción
+        run: npm audit --omit=dev --audit-level=moderate
+
+      - name: Sin secretos ni datos reales rastreados por git
+        run: |
+          prohibidos=$(git ls-files '*.sql' '*.env*' '*users.json' '*.xlsx' '*.xls' '*.csv' '*.dump' \
+            | grep -v -E '^scripts/sql/[^/]+\.sql$|^\.env\.docker\.example$|^backend/config/users\.example\.json$' || true)
+          if [ -n "$prohibidos" ]; then
+            echo "::error::Archivos que no deben estar en el repositorio:"; echo "$prohibidos"; exit 1
+          fi
+
+      - name: Lint (ESLint)
+        run: npm run lint
+
+      - name: Prisma (validar y generar cliente)
+        run: |
+          npx prisma validate --schema=backend/prisma/schema.prisma
+          npx prisma generate --schema=backend/prisma/schema.prisma
+
+      - name: Pruebas (node --test)
+        run: npm test
+
+  docker:
+    name: Build Docker limpio
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Construir imagen de producción
+        run: docker build --target app -t diagrama-ci:app .
+
+      - name: La imagen no contiene secretos, datos, scripts ni compiladores
+        run: |
+          docker run --rm --entrypoint sh diagrama-ci:app -c '
+            set -e
+            falla=0
+            for p in /app/backend/config/users.json /app/scripts /app/.env /app/.git; do
+              if [ -e "$p" ]; then echo "::error::No debería existir $p"; falla=1; fi
+            done
+            if ls /app/backend/uploads/*.xlsx >/dev/null 2>&1; then echo "::error::Hay .xlsx en uploads"; falla=1; fi
+            for b in gcc g++ make python3; do
+              if command -v "$b" >/dev/null 2>&1; then echo "::error::Compilador/herramienta en la imagen final: $b"; falla=1; fi
+            done
+            if [ "$(id -u)" = "0" ]; then echo "::error::La imagen corre como root"; falla=1; fi
+            if touch /app/backend/server.js 2>/dev/null; then echo "::error::El código es escribible por el usuario de la app"; falla=1; fi
+            exit $falla
+          '

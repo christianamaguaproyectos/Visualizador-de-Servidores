@@ -31,6 +31,8 @@ function parseIncidentId(rawId) {
 }
 
 function sanitizeTextInput(value, max = 1000) {
+  // Intencional: reemplaza caracteres de control (evita inyección en logs/correos)
+  // eslint-disable-next-line no-control-regex
   return String(value ?? '').replace(/[\u0000-\u001F\u007F]/g, ' ').trim().slice(0, max);
 }
 
@@ -81,8 +83,8 @@ router.get('/', async (req, res) => {
     }
 
     const result = await withClient(async (client) => {
-      let whereConditions = [];
-      let params = [];
+      const whereConditions = [];
+      const params = [];
       let idx = 1;
 
       if (state) {

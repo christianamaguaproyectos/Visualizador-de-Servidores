@@ -3,6 +3,7 @@ import { construirResumenRacksHtml } from '/js/dominios/hosts/resumenRacks.js';
 import { confirmAction } from '/js/dominios/ui-system/modalConfirm.js';
 import { trackUIEvent } from '/js/dominios/ui-system/uxTelemetry.js';
 import { escapeHtml, textoSeguro } from '/js/dominios/ui-system/seguridadHtml.js';
+import { apiFetch, apiJson } from '/js/dominios/ui-system/apiFetch.js';
 
 // Esperar a que el DOM esté listo y verificar que estamos en una página correcta
 
@@ -348,7 +349,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         console.error('Error exportando:', err);
 
-        showToast('âŒ Error al exportar Excel');
+        showToast('❌ Error al exportar Excel');
 
       }
 
@@ -548,7 +549,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         console.error('Error exportando:', err);
 
-        showToast('âŒ Error al exportar Excel');
+        showToast('❌ Error al exportar Excel');
 
       }
 
@@ -618,7 +619,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (!rackName) {
 
-          showToast('Nombre del host obligatorio', 'warning'); return;
+          showToast('Nombre del host obligatorio', 'warning');
 
           return;
 
@@ -1031,7 +1032,6 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!racks || racks.length === 0) {
 
       console.log('No racks to display - showing fallback message');
-      const racksDebug = fmt(JSON.stringify(racks));
 
       app.innerHTML = `
 
@@ -1039,9 +1039,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         <h2>No se encontraron racks para mostrar</h2>
 
-        <p>Datos cargados: ${DATA.servers ? DATA.servers.length : 0} servidores</p>
-
-        <p>Racks array: ${racksDebug}</p>
+        <p>Todavía no hay racks registrados en esta vista.</p>
 
       </div>
 
@@ -2056,7 +2054,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
           const rackId = selectHost.value;
 
-          if (!rackId) return showToast('Por favor seleccione un host', 'warning'); return;
+          if (!rackId) return showToast('Por favor seleccione un host', 'warning');
 
 
 
@@ -2307,7 +2305,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const dynamicOptions = dynamicViews.map(v => `
 
-    <div class="virtual-option-wrapper" style="position:relative">
+    <div class="virtual-option-wrapper u-relativo">
 
       <button class="virtual-option" data-cluster-key="${encodeURIComponent(v.key || '')}" data-virtual-mode="clusterDetail">
 
@@ -2317,11 +2315,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
       </button>
 
-      <div class="view-actions" style="position:absolute;top:8px;right:8px;display:flex;gap:4px;z-index:10">
+      <div class="view-actions vista-acciones-flotantes">
 
-        <button class="view-edit-btn" data-view-id="${encodeURIComponent(v.id)}" data-view-name="${encodeURIComponent(v.name)}" title="Editar" style="background:#3b82f6;color:white;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px">✏️</button>
+        <button class="view-edit-btn btn-mini btn-mini--azul" data-view-id="${encodeURIComponent(v.id)}" data-view-name="${encodeURIComponent(v.name)}" title="Editar">✏️</button>
 
-        <button class="view-delete-btn" data-view-id="${encodeURIComponent(v.id)}" data-view-name="${encodeURIComponent(v.name)}" title="Eliminar" style="background:#ef4444;color:white;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px">🗑️</button>
+        <button class="view-delete-btn btn-mini btn-mini--rojo" data-view-id="${encodeURIComponent(v.id)}" data-view-name="${encodeURIComponent(v.name)}" title="Eliminar">🗑️</button>
 
       </div>
 
@@ -2353,9 +2351,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
       </div>
 
-      <div class="virtual-menu__actions" style="margin-top:24px;text-align:center">
+      <div class="virtual-menu__actions vista-acciones">
 
-        <button id="btnCreateView" class="home-btn" style="background:#10b981;color:white;padding:12px 24px">
+        <button id="btnCreateView" class="home-btn btn-color-verde btn-grande">
 
           ✨ Crear Nueva Vista
 
@@ -2415,7 +2413,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         <header class="cluster-section__header">
 
-          <div style="flex:1">
+          <div class="u-flex-1">
 
             <h2>${fmt(group.name)}</h2>
 
@@ -2573,7 +2571,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
           <button class="home-btn" id="btnEditCluster">Editar clúster</button>
 
-          <button class="home-btn" id="btnDeleteCluster" style="background:#ef4444;color:white">Eliminar clúster</button>
+          <button class="home-btn btn-color-rojo" id="btnDeleteCluster">Eliminar clúster</button>
 
         </div>
 
@@ -2879,7 +2877,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             </div>
 
-            <button class="btn-edit-host" data-host-id="${encodeURIComponent(String(host.id ?? ''))}" data-host-name="${encodeURIComponent(host.name)}" title="Editar nombre del host" style="padding:4px 8px;background:#3b82f6;color:white;border:none;border-radius:6px;cursor:pointer;font-size:12px;margin-right:8px">✏️ Editar</button>
+            <button class="btn-edit-host btn-mini btn-mini--azul u-mr-8" data-host-id="${encodeURIComponent(String(host.id ?? ''))}" data-host-name="${encodeURIComponent(host.name)}" title="Editar nombre del host">✏️ Editar</button>
 
             <span class="host-card__count">${vmCount} VMs</span>
 
@@ -3380,7 +3378,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     ${renderErrorBlock(DATA.meta?.error)}
 
-    <div class=\"rack-detail\">
+    <div class="rack-detail">
 
       <div class="rack-detail-header">
 
@@ -3388,11 +3386,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
         <div class="muted">${rack.servers.length} servidores</div>
 
-        <div style="display:flex;gap:10px">
+        <div class="u-fila-gap-10">
 
-          ${isVirtuales ? `<button id="btnAddVMToHost" class="home-btn" style="background:#10b981;color:white" title="Agregar VM a este host">➕ Agregar VM</button>` : ''}
+          ${isVirtuales ? `<button id="btnAddVMToHost" class="home-btn btn-color-verde" title="Agregar VM a este host">➕ Agregar VM</button>` : ''}
 
-          <button id="btnDeleteRack" class="home-btn" style="background:#ef4444;color:white" title="Eliminar rack">🗑️ Eliminar Rack</button>
+          <button id="btnDeleteRack" class="home-btn btn-color-rojo" title="Eliminar rack">🗑️ Eliminar Rack</button>
 
           <button id="btnBackRackDetail" class="back-btn">← Volver</button>
 
@@ -3406,7 +3404,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
           <div class="server-item" draggable="true" title="IP: ${fmt(s.ip)}&#10;Hostname: ${fmt(s.nombre || s.hostname)}&#10;Arrastrar para mover a otro rack">
 
-            <div class="server-info" data-view="server" data-id="${encodeURIComponent(s.id)}" style="cursor:pointer;flex:1">
+            <div class="server-info u-flex-1 u-puntero" data-view="server" data-id="${encodeURIComponent(s.id)}">
 
               <div class="server-name">${fmt(s.nombre || s.hostname)}</div>
 
@@ -3422,7 +3420,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             </div>
 
-            <div style="display:flex;gap:5px;align-items:center">
+            <div class="u-fila-gap-5">
 
               <button class="server-btn-edit" data-server-id="${encodeURIComponent(s.id)}" title="Editar servidor">✏️</button>
 
@@ -3680,11 +3678,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
         <div>RAM</div><div>${fmt(s.ramGb)}</div>
 
-        <div>Discos</div><div style="white-space:pre-wrap">${fmt(formatDiscosDisplay(s.discos))}</div>
+        <div>Discos</div><div class="u-pre-wrap">${fmt(formatDiscosDisplay(s.discos))}</div>
 
-        <div>Datastore</div><div style="white-space:pre-wrap">${fmt(s.datastore)}</div>
+        <div>Datastore</div><div class="u-pre-wrap">${fmt(s.datastore)}</div>
 
-        <div>Conexión</div><div style="white-space:pre-wrap">${fmt(s.conexion)}</div>
+        <div>Conexión</div><div class="u-pre-wrap">${fmt(s.conexion)}</div>
 
         <div>Software</div><div>${fmt(s.software)}</div>
 
@@ -3738,15 +3736,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const crudButtons = `
 
-    <button class="home-btn" id="btnEditServer" style="background:#2563eb;margin-left:10px">✏️ Editar</button>
+    <button class="home-btn btn-color-azul u-ml-10" id="btnEditServer">✏️ Editar</button>
 
-    <button class="home-btn" id="btnDeleteServer" style="background:#dc2626;margin-left:10px">🗑️ Eliminar</button>
+    <button class="home-btn btn-color-rojo-oscuro u-ml-10" id="btnDeleteServer">🗑️ Eliminar</button>
 
   `;
 
 
 
-    const back = `<div style="display:flex;justify-content:flex-end;margin:10px 0 0 0"><button class="back-btn" id="btnBackView">← Volver</button>${crudButtons}</div>`;
+    const back = `<div class="u-fila-derecha"><button class="back-btn" id="btnBackView">← Volver</button>${crudButtons}</div>`;
 
     app.innerHTML = `<div class="scrollable">${renderErrorBlock(DATA.meta?.error)}${back}${serverCard(s)}</div>`;
 
@@ -4020,15 +4018,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const serverType = getServerType();
 
-    console.log(`[DEBUG] Fetching /api/data?type=${serverType}`);
-
-    const res = await fetch(`/api/data?type=${serverType}`);
-
-    console.log(`[DEBUG] Response status: ${res.status}`);
+    // apiFetch: tiempo de espera + redirección a /login si la sesión expiró (Fase 4.2)
+    const res = await apiFetch(`/api/data?type=${encodeURIComponent(serverType)}`);
 
     DATA = await res.json();
-
-    console.log(`[DEBUG] DATA received:`, DATA);
 
 
 
@@ -4036,9 +4029,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
       try {
 
-        const clustersRes = await fetch('/api/clusters');
-
-        const clusters = await clustersRes.json();
+        const clusters = await apiJson('/api/clusters');
 
         virtualState.clusters = Array.isArray(clusters) ? clusters : [];
 
@@ -4066,21 +4057,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
+        // Hosts de TODOS los clústeres en paralelo (antes: una petición tras otra, N+1 en serie).
+        // Si un clúster falla, los demás se muestran igual (allSettled).
         const hostsByCluster = {};
-
-        for (const cluster of virtualState.clusters) {
-
-          try {
-
-            const chRes = await fetch(`/api/clusters/${cluster.id}/hosts`);
-
-            const ch = await chRes.json();
-
-            hostsByCluster[cluster.id] = Array.isArray(ch) ? ch : [];
-
-          } catch (_) { }
-
-        }
+        const resultados = await Promise.allSettled(
+          virtualState.clusters.map((cluster) => apiJson(`/api/clusters/${encodeURIComponent(cluster.id)}/hosts`))
+        );
+        resultados.forEach((resultado, i) => {
+          if (resultado.status === 'fulfilled') {
+            const ch = resultado.value;
+            hostsByCluster[virtualState.clusters[i].id] = Array.isArray(ch) ? ch : [];
+          }
+        });
 
         virtualState.clusterHostsById = hostsByCluster;
 
@@ -4121,13 +4109,8 @@ document.addEventListener('DOMContentLoaded', function () {
     // Re-aplicar el modo solo lectura a los botones recién renderizados
     disableReadOnlyActions();
 
-    if (!isVirtuales) {
-
-      // Overview stats (simulado en cliente)
-
-      try { renderOverview(); } catch (_) { }
-
-    }
+    // (El resumen de racks lo dibuja wirePhysicalUX() dentro de route(); aquí había una llamada
+    // a renderOverview() fuera de su alcance que fallaba en silencio: ReferenceError.)
 
   }
 

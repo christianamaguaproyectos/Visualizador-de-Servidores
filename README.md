@@ -250,25 +250,39 @@ GET /events   # Stream de actualizaciones en tiempo real
 
 Toda la documentación técnica se encuentra en la carpeta `docs/` para facilitar el mantenimiento y consulta.
 
-## 🧪 Testing (Próximamente)
+## 🧪 Calidad: lint, pruebas y CI (Fase 4.3)
 
-La arquitectura está preparada para testing unitario:
+```bash
+npm run lint        # ESLint: los errores bloquean el CI, las advertencias no
+npm run test:unit   # pruebas unitarias (no necesitan base de datos)
+npm test            # unitarias + integración
+```
 
-```javascript
-import excelParserService from './src/services/excelParserService.js';
+- **Unitarias** (`tests/unit/`): validador anti-SSRF, CSRF, CSP, `x-request-id`/redacción de
+  logs, escape anti-XSS (frontend y backend) y validación de entradas.
+- **Integración** (`tests/integration/`): levantan la app real (`node backend/server.js`) contra
+  PostgreSQL y prueban login/sesiones, CSRF, RBAC (viewer → 403), anti-SSRF, CRUD de
+  servidores/clústeres, cambio de contraseña y apagado limpio. Necesitan
+  `TEST_POSTGRES_URL` apuntando a una base **de pruebas** (su nombre debe contener `test` o `ci`,
+  porque los esquemas se borran y se recrean con `scripts/sql/*.sql`). Sin esa variable se omiten.
+- **CI** (`.github/workflows/ci.yml`): en cada Pull Request ejecuta `npm audit`, la búsqueda de
+  secretos rastreados, lint, `prisma validate`, todas las pruebas (con un PostgreSQL efímero) y
+  verifica que la imagen Docker no contenga secretos, `scripts/` ni compiladores.
 
-test('parsea Excel correctamente', () => {
-  const result = excelParserService.parseExcelByType('fisicos');
-  expect(result.racks).toBeDefined();
-  expect(result.servers).toBeInstanceOf(Array);
-});
+Ejemplo local con Docker (sin instalar Node):
+```bash
+docker compose exec postgres createdb -U diagrama diagrama_test
+docker run --rm --network <red-de-compose> -v "$PWD:/src" -w /src \
+  -e TEST_POSTGRES_URL=postgresql://diagrama:<clave>@postgres:5432/diagrama_test \
+  -e DATABASE_URL=postgresql://diagrama:<clave>@postgres:5432/diagrama_test \
+  node:22-alpine sh -c "npm ci && npx prisma generate --schema=backend/prisma/schema.prisma && npm test"
 ```
 
 ## 📈 Métricas de Calidad
 
 | Métrica | Valor |
 |---------|-------|
-| Cobertura de Código | 📈 En progreso |
+| Pruebas automatizadas | ✅ `npm test` (unitarias + integración) en CI |
 | Complejidad Ciclomática | ✅ Baja |
 | Mantenibilidad (índice) | ✅ 85/100 |
 | Deuda Técnica | ✅ Mínima |
