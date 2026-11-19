@@ -122,6 +122,29 @@ describe('API (integración)', { skip: omitir || false }, () => {
       assert.equal((await admin.api('GET', '/api/clusters')).status, 200);
       assert.equal(app.proceso.exitCode, null);
     });
+
+    test('cuerpo JSON inválido -> 400 y cuerpo demasiado grande -> 413 (no 500)', async () => {
+      const { data } = await admin.api('GET', '/api/auth/csrf');
+      const inicioLog = app.salida().length;
+      const enviar = (cuerpo) => fetch(`${app.base}/api/clusters`, {
+        method: 'POST',
+        headers: { cookie: admin.cookie, 'x-csrf-token': data.csrfToken, 'content-type': 'application/json' },
+        body: cuerpo,
+      });
+
+      const malo = await enviar('{json roto');
+      assert.equal(malo.status, 400);
+      const cuerpoMalo = await malo.json();
+      assert.equal(cuerpoMalo.code, 'VALIDATION_ERROR');
+      assert.doesNotMatch(cuerpoMalo.error, /Unexpected|SyntaxError|position/);
+
+      const grande = await enviar(JSON.stringify({ name: 'x'.repeat(300 * 1024) }));
+      assert.equal(grande.status, 413);
+      assert.equal((await grande.json()).code, 'PAYLOAD_TOO_LARGE');
+
+      assert.doesNotMatch(app.salida().slice(inicioLog), /Error no manejado/, 'no se registran como errores no manejados');
+      assert.equal(app.proceso.exitCode, null);
+    });
   });
 
   describe('anti-SSRF en checks de monitoreo', () => {
