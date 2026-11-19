@@ -41,6 +41,24 @@ const CONTROL_ALL = /[\x00-\x1F\x7F-\x9F]/g;
 // eslint-disable-next-line no-control-regex
 const CONTROL_EXCEPT_NEWLINES = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g;
 
+/**
+ * Caracteres invisibles y de control bidireccional de Unicode que se ELIMINAN
+ * siempre: espacios de ancho cero y marcas LRM/RLM (U+200B-U+200F), incrustaciones
+ * y anulaciones bidi (U+202A-U+202E), aislamientos bidi (U+2066-U+2069) y BOM
+ * (U+FEFF). Permitirían etiquetas o nombres que se ven idénticos o invertidos
+ * ("Trojan Source") y duplicados que el UNIQUE no detecta. Se construyen con
+ * códigos para no escribir esos caracteres en el fuente.
+ */
+const rangoUnicode = (desde, hasta) => {
+  let s = '';
+  for (let c = desde; c <= hasta; c++) s += String.fromCharCode(c);
+  return s;
+};
+export const INVISIBLES_UNICODE = new RegExp(
+  `[${rangoUnicode(0x200B, 0x200F)}${rangoUnicode(0x202A, 0x202E)}${rangoUnicode(0x2066, 0x2069)}${String.fromCharCode(0xFEFF)}]`,
+  'g',
+);
+
 const has = (obj, ...keys) => keys.some((k) => Object.prototype.hasOwnProperty.call(obj, k));
 const pick = (obj, ...keys) => {
   for (const k of keys) if (has(obj, k)) return obj[k];
@@ -61,7 +79,8 @@ export function parseId(value, field = 'id') {
 }
 
 /**
- * Texto opcional: quita caracteres de control, recorta espacios y valida longitud.
+ * Texto opcional: quita caracteres de control e invisibles/bidi de Unicode,
+ * recorta espacios y valida longitud.
  * null / undefined / '' -> null.
  */
 export function cleanText(value, { field, max, multiline = false, required = false }) {
@@ -73,6 +92,7 @@ export function cleanText(value, { field, max, multiline = false, required = fal
     throw new ValidationError(`${field} debe ser texto`);
   }
   const limpio = String(value)
+    .replace(INVISIBLES_UNICODE, '')
     .replace(multiline ? CONTROL_EXCEPT_NEWLINES : CONTROL_ALL, multiline ? '' : ' ')
     .trim();
   if (!limpio) {
