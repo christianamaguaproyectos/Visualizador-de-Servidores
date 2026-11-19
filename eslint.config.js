@@ -80,4 +80,10 @@ export default [
     },
     rules: REGLAS_COMUNES,
   },
+
+  // Páginas que arrancan como módulo ES (type="module")
+  {
+    files: ['frontend/public/js/paginas/dependencias.js'],
+    languageOptions: { sourceType: 'module' },
+  },
 ];

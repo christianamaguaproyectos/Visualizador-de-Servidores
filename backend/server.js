@@ -26,6 +26,7 @@ import authController from './src/controllers/authController.js';
 import userController from './src/controllers/userController.js';
 import clusterRoutes from './src/routes/clusterRoutes.js';
 import { topologyRouter, dependenciesRouter } from './src/routes/topologyRoutes.js';
+import vendorThreeRoutes from './src/routes/vendorThreeRoutes.js';
 
 // Middleware
 import { requireAuth, requireAdmin, requireSuperAdmin, injectUser } from './src/middleware/authMiddleware.js';
@@ -183,6 +184,14 @@ class Application {
     this.app.get('/virtuales', (req, res) => {
       res.sendFile(path.join(__dirname, '..', 'frontend', 'public', 'virtual.html'));
     });
+
+    // Mapa de Dependencias y Topología (vista 3D + editor 2D)
+    this.app.get('/dependencias', (req, res) => {
+      res.sendFile(path.join(__dirname, '..', 'frontend', 'public', 'dependencies.html'));
+    });
+
+    // three.js auto-alojado (lista cerrada de módulos; ver vendorThreeRoutes.js)
+    this.app.use('/vendor/three', vendorThreeRoutes);
 
     this.app.get('/users', requireSuperAdmin, (req, res) => {
       res.sendFile(path.join(__dirname, '..', 'frontend', 'public', 'users.html'));

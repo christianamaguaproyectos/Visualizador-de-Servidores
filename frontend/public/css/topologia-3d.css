@@ -1,0 +1,47 @@
+/*
+ * Vista 3D de /dependencias: contenedor WebGL, capa de rótulos CSS2D y etiquetas.
+ * CSS2DRenderer posiciona cada etiqueta con element.style.transform (CSSOM).
+ */
+.topo-3d {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 30%, #12213b 0%, var(--topo-fondo-escena, #0a1222) 70%);
+  overflow: hidden;
+}
+.topo-3d__canvas { display: block; width: 100%; height: 100%; outline: none; touch-action: none; }
+.topo-3d__canvas.es-apuntable { cursor: pointer; }
+.topo-3d__rotulos { position: absolute; inset: 0; pointer-events: none; }
+
+/* Etiqueta de nodo */
+.topo-etq {
+  pointer-events: none;
+  max-width: 220px;
+  padding: 6px 10px;
+  margin-bottom: 12px;
+  background: rgba(10, 18, 34, 0.82);
+  border: 1px solid rgba(124, 180, 255, 0.35);
+  border-radius: 8px;
+  color: #f1f5ff;
+  font: 400 12px/1.35 var(--font-family-sans);
+  white-space: nowrap;
+  transition: opacity 150ms ease;
+}
+.topo-etq__fila { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.topo-etq__nombre { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.topo-etq__ip { font: 12px var(--topo-mono, monospace); color: #b6c4dc; }
+.topo-etq__estado { display: flex; align-items: center; gap: 5px; font-weight: 600; }
+.topo-etq__punto { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.topo-etq .topo-pildora { margin-top: 4px; }
+.topo-etq .topo-pildora--simulado { background: rgba(10, 18, 34, 0.6); color: #ffb4ab; }
+.topo-etq--compacta { padding: 4px 8px; }
+.topo-etq--compacta .topo-etq__ip, .topo-etq--compacta .topo-badge, .topo-etq--compacta .topo-pildora:not(.topo-pildora--caido):not(.topo-pildora--simulado) { display: none; }
+.topo-etq--compacta .topo-etq__estado { display: none; }
+.topo-etq--compacta .topo-etq__fila::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--topo-etq-color, #98a2b3); }
+.topo-etq--atenuada { opacity: 0.25; }
+
+/* Etiqueta de arista */
+.topo-etq--arista { margin: 0; text-align: center; font-size: 12px; }
+.topo-etq--arista .topo-etq__fila { justify-content: center; font-weight: 600; }
+.topo-etq__sub { color: #b6c4dc; }
+
+body.topo-sin-animaciones .topo-etq { transition: none; }
