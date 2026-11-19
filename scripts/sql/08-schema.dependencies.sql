@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS inventory.server_dependencies (
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT chk_server_dep_no_self CHECK (source_server_id <> target_server_id),
   CONSTRAINT chk_server_dep_port CHECK (port IS NULL OR (port >= 1 AND port <= 65535)),
-  -- Mismos valores que valida el backend (topologyController.js)
+  -- Mismos valores que valida el backend (dtos/topologyDto.js)
   CONSTRAINT chk_server_dep_type CHECK (dependency_type IN
     ('DATABASE','NETWORK','STORAGE','API','AUTH','HYPERVISOR','BACKUP','DNS_INFRA','SERVICE')),
   CONSTRAINT chk_server_dep_criticality CHECK (criticality IN ('CRITICAL','HIGH','MEDIUM','LOW')),
