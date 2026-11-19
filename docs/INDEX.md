@@ -154,6 +154,8 @@
 ### 🏗️ Arquitectura y Diseño
 1. [ARQUITECTURA.md](./ARQUITECTURA.md) → Documento completo
 2. [COMPARACION.md](./COMPARACION.md) → Ejemplos visuales
+3. [PLAN-DEPENDENCIAS-Y-TOPOLOGIA-SERVIDORES.md](./PLAN-DEPENDENCIAS-Y-TOPOLOGIA-SERVIDORES.md) → Mapa de Dependencias y Topología (plan y estado de ejecución)
+4. [API-REST.md](./API-REST.md) → Referencia de endpoints (incluye Dependencias y Topología)
 
 ### 🔄 Migración
 1. [GUIA-RAPIDA.md](./GUIA-RAPIDA.md) → Sección "Migración Permanente"

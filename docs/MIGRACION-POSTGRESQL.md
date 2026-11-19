@@ -187,6 +187,16 @@ CREATE TABLE inventory.servers (
 );
 ```
 
+#### **Tablas del Mapa de Dependencias y Topología** (`scripts/sql/08-schema.dependencies.sql`)
+
+| Tabla | Contenido |
+|-------|-----------|
+| `inventory.server_dependencies` | Relaciones "origen depende de destino" entre servidores (tipo, criticidad, puerto, protocolo, etiqueta, notas). Admite ciclos (`1 → 2` y `2 → 1`) pero no auto-dependencias ni duplicados del mismo tipo |
+| `inventory.topology_views` | Vistas/diagramas guardados (nombre, slug, viewport, configuración de filtros); una sola es la predeterminada |
+| `inventory.topology_node_positions` | Posición `(x, y)` de cada servidor en cada vista |
+
+Al eliminar un servidor se eliminan en cascada sus dependencias y posiciones. En bases existentes, ver [Aplicar esquemas nuevos en una base existente](#aplicar-esquemas-nuevos-en-una-base-existente).
+
 ---
 
 ## 🔧 Configuración
@@ -397,6 +407,46 @@ curl -X POST http://localhost:3050/api/reload?type=fisicos \
 ```bash
 node scripts/import/ingestInventoryFromExcel.js
 ```
+
+---
+
+### Aplicar esquemas nuevos en una base existente
+
+Los scripts de `scripts/sql/` se montan en `/docker-entrypoint-initdb.d` del contenedor `postgres` (ver `docker-compose.yml`). PostgreSQL **solo los ejecuta al inicializar un volumen de datos vacío**: en una instalación que ya tiene datos, un script nuevo no se aplica solo y hay que lanzarlo a mano.
+
+Es el caso de `scripts/sql/08-schema.dependencies.sql` (Mapa de Dependencias y Topología: tablas `inventory.server_dependencies`, `inventory.topology_views` e `inventory.topology_node_positions`, y la vista inicial "Mapa General"). El script es **idempotente**: se puede ejecutar varias veces sin error y no modifica datos existentes (la vista inicial solo se crea si no hay ninguna vista).
+
+Aplícalo **antes** de desplegar la versión de la aplicación que incluye el módulo (sin estas tablas, los endpoints `/api/topology` y `/api/dependencies` responden error 500).
+
+**Con Docker Compose** (servicio `postgres`; usa el usuario y la base definidos en `.env`, que el contenedor ya tiene como variables de entorno):
+
+```bash
+# Linux / macOS / Git Bash / PowerShell: el script ya está montado dentro del contenedor
+docker compose exec postgres sh -c 'psql -v ON_ERROR_STOP=1 -U $POSTGRES_USER -d $POSTGRES_DB -f /docker-entrypoint-initdb.d/08-schema.dependencies.sql'
+
+# Alternativa enviando el archivo local por la entrada estándar (bash)
+docker compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < scripts/sql/08-schema.dependencies.sql
+```
+
+**Con `psql` directo** (PostgreSQL instalado fuera de Docker; sustituye los marcadores por tus valores, la contraseña se pide de forma interactiva o se toma de `PGPASSWORD`/`.pgpass`):
+
+```bash
+psql -v ON_ERROR_STOP=1 -h <HOST> -p 5432 -U <USUARIO> -d <BASE_DE_DATOS> -f scripts/sql/08-schema.dependencies.sql
+```
+
+**Verificación:**
+
+```sql
+-- Deben aparecer las tres tablas nuevas
+SELECT table_name FROM information_schema.tables
+WHERE table_schema = 'inventory'
+  AND table_name IN ('server_dependencies', 'topology_views', 'topology_node_positions');
+
+-- Debe existir una vista predeterminada
+SELECT name, slug, is_default FROM inventory.topology_views;
+```
+
+No hace falta reiniciar la aplicación después de aplicar el script.
 
 ---
 
