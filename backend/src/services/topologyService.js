@@ -12,17 +12,26 @@
  * mensajes propios: nunca se expone err.message crudo.
  *
  * ── Cruce inventory.servers ↔ monitoring.hosts ─────────────────────────────
- * No hay FK entre ambos: monitoringSyncService.js crea/actualiza el host de
- * monitoreo de cada servidor buscando primero por NOMBRE (hosts.name = servers.nombre)
- * y, si no existe, por IP. La IP del host es la "IP limpia" del inventario: el
- * primer token de servers.ip (separado por espacios, saltos de línea, "," o ";")
- * si tiene forma IPv4; si no hay IP válida guarda el marcador 0.0.0.0.
- * Este servicio replica esa regla en SQL (LEFT JOIN LATERAL, un único host por
- * servidor) con este orden de preferencia:
- *   1) hosts.name = servers.nombre (exacto, como el sync)
- *   2) mismo nombre sin distinguir mayúsculas ni espacios extremos
- *   3) host(hosts.ip) = IP limpia del servidor (nunca 0.0.0.0)
- *   en empate, el host de menor id.
+ * No hay FK entre ambos. monitoringSyncService._sincronizarServidor elige el
+ * host de monitoreo de cada servidor así, y este servicio aplica LA MISMA regla:
+ *   1) hosts.name = servers.nombre (comparación exacta);
+ *   2) si no hay ninguno por nombre: host(hosts.ip) = "IP limpia" del servidor.
+ * "IP limpia" = cleanIP() del sync: el texto de servers.ip hasta el primer
+ * separador (cualquier carácter que /\s/ de JavaScript considera espacio, o
+ * "," o ";"), SIN recortar antes (" 10.0.0.1" da un token vacío = sin IP), y
+ * solo si ese token tiene forma IPv4 (/^\d{1,3}(\.\d{1,3}){3}$/).
+ *
+ * Diferencias deliberadas con el sync (documentadas):
+ *   - Si varios hosts empatan, el sync toma la primera fila que devuelva
+ *     PostgreSQL (sin ORDER BY); aquí se toma, de forma determinista, la de menor id.
+ *   - La IP 0.0.0.0 nunca se usa para el cruce: es el marcador que el sync guarda
+ *     en los hosts sin IP válida, y cruzar por ella asignaría a un servidor el
+ *     estado de cualquier otro servidor sin IP.
+ *
+ * Rendimiento: servidores y hosts se leen UNA vez (CTE MATERIALIZED), la IP limpia
+ * se calcula una vez por servidor y el cruce se resuelve con equi-joins (hash
+ * join), sin evaluar nada por cada par servidor×host.
+ *
  * Solo los hosts HABILITADOS en estado DOWN o DEGRADED son raíces del impacto
  * real (un host deshabilitado —servidor APAGADO/BAJA— puede tener estado viejo).
  */
@@ -40,33 +49,68 @@ export { computeCascadeImpact, isBidirectionalPair, analyzeServer } from './topo
 /** Estados de monitoreo que originan impacto en cascada */
 export const DOWN_STATES = Object.freeze(['DOWN', 'DEGRADED']);
 
-// IP limpia del inventario (misma regla que monitoringSyncService.cleanIP), sin "\" para
-// no depender de escapes dentro de la plantilla JS
-const SQL_IP_LIMPIA = `NULLIF((regexp_match(btrim(COALESCE(s.ip, '')), '^([0-9]{1,3}([.][0-9]{1,3}){3})([[:space:],;]|$)'))[1], '0.0.0.0')`;
+/**
+ * Separadores de IP del sync: monitoringSyncService.cleanIP hace
+ * ip.split(/[\n\s,;]/)[0]. Son exactamente los caracteres de /\s/ en JavaScript
+ * (lo comprueba una prueba unitaria recorriendo todo el BMP) más "," y ";".
+ * Se construyen con códigos para no escribir caracteres invisibles en el fuente.
+ */
+const CODIGOS_ESPACIO_JS = [
+  0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x20, 0xA0, 0x1680,
+  0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200A,
+  0x2028, 0x2029, 0x202F, 0x205F, 0x3000, 0xFEFF,
+];
+export const SEPARADORES_IP = String.fromCharCode(...CODIGOS_ESPACIO_JS) + ',;';
+// Regex de PostgreSQL (se envía como parámetro): prefijo de servers.ip hasta el primer separador
+const RE_PRIMER_TOKEN_IP = `^[^${SEPARADORES_IP}]*`;
 
-/** SELECT de servidores + host de monitoreo + posición en la vista ($1 = view_id o NULL) */
+/**
+ * Servidores + host de monitoreo + posición en la vista.
+ * $1 = view_id (o NULL), $2 = RE_PRIMER_TOKEN_IP, $3 = ids de servidores (o NULL = todos).
+ */
 const SQL_SERVIDORES = `
-  SELECT s.id::text AS id, s.type::text AS type, s.nombre, s.ip, s.hostname, s.rack_norm,
-         s.estado AS estado_inventario, s.activo,
+  WITH sv AS MATERIALIZED (
+    SELECT s.id, s.type, s.nombre, s.ip, s.hostname, s.rack_norm, s.estado, s.activo,
+           CASE WHEN t.token ~ '^[0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}$'
+                 AND t.token <> '0.0.0.0'
+                THEN t.token END AS ip_limpia
+    FROM inventory.servers s
+    CROSS JOIN LATERAL (SELECT substring(COALESCE(s.ip, '') FROM $2::text) AS token) t
+    WHERE $3::bigint[] IS NULL OR s.id = ANY($3::bigint[])
+  ),
+  hs AS MATERIALIZED (
+    SELECT mh.id, mh.name, host(mh.ip) AS ip_txt, mh.estado_actual, mh.enabled, mh.estado_changed_at
+    FROM monitoring.hosts mh
+  ),
+  por_nombre AS (
+    SELECT DISTINCT ON (sv.id) sv.id AS server_id, hs.id AS host_id
+    FROM sv JOIN hs ON hs.name = sv.nombre
+    ORDER BY sv.id, hs.id
+  ),
+  por_ip AS (
+    SELECT DISTINCT ON (sv.id) sv.id AS server_id, hs.id AS host_id
+    FROM sv JOIN hs ON hs.ip_txt = sv.ip_limpia
+    WHERE NOT EXISTS (SELECT 1 FROM por_nombre pn WHERE pn.server_id = sv.id)
+    ORDER BY sv.id, hs.id
+  ),
+  elegido AS (
+    SELECT server_id, host_id FROM por_nombre
+    UNION ALL
+    SELECT server_id, host_id FROM por_ip
+  )
+  SELECT sv.id::text AS id, sv.type::text AS type, sv.nombre, sv.ip, sv.hostname, sv.rack_norm,
+         sv.estado AS estado_inventario, sv.activo,
          h.id::text AS monitoring_host_id, h.estado_actual, h.enabled AS monitoring_enabled,
          h.estado_changed_at,
          p.x, p.y, p.pinned, p.collapsed
-  FROM inventory.servers s
-  CROSS JOIN LATERAL (SELECT ${SQL_IP_LIMPIA} AS ip_limpia) c
-  LEFT JOIN LATERAL (
-    SELECT mh.id, mh.estado_actual, mh.enabled, mh.estado_changed_at
-    FROM monitoring.hosts mh
-    WHERE mh.name = s.nombre
-       OR lower(btrim(mh.name)) = lower(btrim(s.nombre))
-       OR (c.ip_limpia IS NOT NULL AND host(mh.ip) = c.ip_limpia)
-    ORDER BY CASE
-               WHEN mh.name = s.nombre THEN 0
-               WHEN lower(btrim(mh.name)) = lower(btrim(s.nombre)) THEN 1
-               ELSE 2
-             END, mh.id
-    LIMIT 1
-  ) h ON TRUE
-  LEFT JOIN inventory.topology_node_positions p ON p.server_id = s.id AND p.view_id = $1::bigint`;
+  FROM sv
+  LEFT JOIN elegido e ON e.server_id = sv.id
+  LEFT JOIN hs h ON h.id = e.host_id
+  LEFT JOIN inventory.topology_node_positions p ON p.server_id = sv.id AND p.view_id = $1::bigint
+  ORDER BY sv.id`;
+
+/** Lecturas de varias tablas en una misma instantánea consistente */
+const LECTURA_CONSISTENTE = Object.freeze({ isolationLevel: 'REPEATABLE READ', readOnly: true });
 
 const SQL_DEPENDENCIA = `
   SELECT d.id::text AS id, d.source_server_id::text AS source, d.target_server_id::text AS target,
@@ -176,13 +220,7 @@ function mapServer(row) {
 }
 
 async function fetchServers(client, { viewId = null, ids = null } = {}) {
-  const params = [viewId];
-  let where = '';
-  if (ids) {
-    params.push(ids);
-    where = ' WHERE s.id = ANY($2::bigint[])';
-  }
-  const { rows } = await client.query(`${SQL_SERVIDORES}${where} ORDER BY s.id`, params);
+  const { rows } = await client.query(SQL_SERVIDORES, [viewId, RE_PRIMER_TOKEN_IP, ids]);
   return rows;
 }
 
@@ -229,9 +267,13 @@ class TopologyService {
    * @param {{ viewSelector?: {id?: string, slug?: string}|null, includeIsolated?: boolean, simulateDownIds?: string[] }} opciones
    *   includeIsolated=false: solo servidores con alguna relación, con posición
    *   guardada en la vista o simulados como caídos. true: todos los servidores.
+   *
+   * Vista, servidores, hosts y aristas se leen en UNA instantánea (transacción
+   * REPEATABLE READ READ ONLY): una arista nunca apunta a un servidor ausente de
+   * `nodes` aunque otra petición cree o borre servidores a la vez.
    */
   async getTopologyGraph({ viewSelector = null, includeIsolated = false, simulateDownIds = [] } = {}) {
-    return withClient(async (client) => {
+    return withTransaction(async (client) => {
       const view = await resolveView(client, viewSelector);
       const serverRows = await fetchServers(client, { viewId: view?.id ?? null });
       const edgesRaw = await fetchEdges(client);
@@ -304,12 +346,12 @@ class TopologyService {
         },
         generatedAt: new Date().toISOString(),
       };
-    });
+    }, LECTURA_CONSISTENTE);
   }
 
   /** Dependencias y dependientes (directos y transitivos) de un servidor + ciclos */
   async getServerImpactAnalysis(serverId) {
-    return withClient(async (client) => {
+    return withTransaction(async (client) => {
       const [serverRow] = await fetchServers(client, { ids: [serverId] });
       if (!serverRow) throw new NotFoundError('Servidor', serverId);
       const edges = await fetchEdges(client);
@@ -338,7 +380,7 @@ class TopologyService {
         cycles: a.cycles,
         cyclesTruncated: a.cyclesTruncated,
       };
-    });
+    }, LECTURA_CONSISTENTE);
   }
 
   // ── Dependencias ──────────────────────────
