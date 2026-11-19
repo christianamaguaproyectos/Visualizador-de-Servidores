@@ -226,7 +226,7 @@ describe('validación de entradas (topologyDto)', () => {
 });
 
 describe('impacto en cascada: rendimiento y equivalencia (BFS sin materializar rutas)', () => {
-  // Implementación de referencia (la anterior): un BFS con TODAS las rutas por raíz
+  // Implementación de referencia: un BFS con TODAS las rutas por raíz
   function impactoDeReferencia(edges, rootIds) {
     const adj = buildAdjacency(edges);
     const roots = [...new Set(rootIds.map(String))].sort(compareIds);
@@ -274,7 +274,7 @@ describe('impacto en cascada: rendimiento y equivalencia (BFS sin materializar r
     }
   });
 
-  test('cadena de 3000 nodos con 200 raíces simuladas: rápido (antes ~24 s)', () => {
+  test('cadena de 3000 nodos con 200 raíces simuladas: responde en menos de 3 s', () => {
     const N = 3000;
     const edges = Array.from({ length: N - 1 }, (_, i) => ({ source: String(i + 1), target: String(i + 2) }));
     const raices = Array.from({ length: 200 }, (_, i) => String(N - i));

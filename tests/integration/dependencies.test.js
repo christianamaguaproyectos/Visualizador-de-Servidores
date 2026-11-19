@@ -554,7 +554,7 @@ describe('Dependencias y topología (integración)', { skip: omitir || false }, 
       const perf = g.data.nodes.filter((n) => n.name.startsWith('PERF-'));
       assert.equal(perf.length, 1000);
       assert.equal(perf.filter((n) => n.monitoring).length, 1000, 'todos cruzan con su host');
-      // Antes de reescribir la consulta: ~9 s con este volumen (crecía con servidores × hosts)
+      // El grafo de 1000 servidores y 1000 hosts responde en menos de 3 s (cruce con equi-joins)
       assert.ok(ms < 3000, `el grafo tardó ${ms.toFixed(0)} ms`);
     } finally {
       await cliente.query("DELETE FROM inventory.servers WHERE identity_key LIKE 'perf-%'");
