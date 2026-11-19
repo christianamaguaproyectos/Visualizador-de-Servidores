@@ -426,35 +426,52 @@ class TopologyService {
     return rows[0] ? mapDependency(rows[0]) : null;
   }
 
-  async #insertDependency(client, d, createdBy) {
+  /**
+   * Inserta una dependencia. Con siExiste='ignorar', si ya existe la misma
+   * (source, target, tipo) no falla y devuelve null.
+   */
+  async #insertDependency(client, d, createdBy, { siExiste = 'error' } = {}) {
     const { rows } = await client.query(
       `INSERT INTO inventory.server_dependencies
          (source_server_id, target_server_id, dependency_type, criticality, port, protocol, label, notes, created_by)
        VALUES ($1::bigint, $2::bigint, $3, $4, $5, $6, $7, $8, $9)
+       ${siExiste === 'ignorar' ? 'ON CONFLICT ON CONSTRAINT uq_server_dependency DO NOTHING' : ''}
        RETURNING id::text AS id`,
       [d.sourceServerId, d.targetServerId, d.dependencyType, d.criticality, d.port, d.protocol, d.label, d.notes, createdBy],
     );
-    return this.#getDependency(client, rows[0].id);
+    return rows[0] ? this.#getDependency(client, rows[0].id) : null;
   }
 
   /**
-   * Crea una dependencia (y su inversa si bidirectional=true, en la MISMA transacción).
-   * @returns {Promise<{ dependency: object, dependencies: object[] }>}
+   * Crea una dependencia y, si bidirectional=true, también su inversa (en la MISMA
+   * transacción). La relación pedida (source -> target) debe ser nueva (si no, 409);
+   * la inversa es idempotente: si ya existía del mismo tipo se conserva tal cual y
+   * se informa en `inverse.created = false`.
+   *
+   * @returns {Promise<{ dependency: object, dependencies: object[], inverse: null | { created: boolean, dependency: object } }>}
+   *   dependencies = solo las relaciones creadas en esta petición.
    */
   async createDependency(data, createdBy) {
     try {
-      const creadas = await withTransaction(async (client) => {
+      const resultado = await withTransaction(async (client) => {
         await assertServersExist(client, [data.sourceServerId, data.targetServerId]);
-        const lista = [await this.#insertDependency(client, data, createdBy)];
-        if (data.bidirectional) {
-          lista.push(await this.#insertDependency(client, {
-            ...data, sourceServerId: data.targetServerId, targetServerId: data.sourceServerId,
-          }, createdBy));
-        }
-        return lista;
+        const dependency = await this.#insertDependency(client, data, createdBy);
+        if (!data.bidirectional) return { dependency, dependencies: [dependency], inverse: null };
+
+        const datosInversa = { ...data, sourceServerId: data.targetServerId, targetServerId: data.sourceServerId };
+        const creada = await this.#insertDependency(client, datosInversa, createdBy, { siExiste: 'ignorar' });
+        if (creada) return { dependency, dependencies: [dependency, creada], inverse: { created: true, dependency: creada } };
+
+        const { rows } = await client.query(
+          `${SQL_DEPENDENCIA}
+            WHERE d.source_server_id = $1::bigint AND d.target_server_id = $2::bigint AND d.dependency_type = $3`,
+          [datosInversa.sourceServerId, datosInversa.targetServerId, datosInversa.dependencyType],
+        );
+        return { dependency, dependencies: [dependency], inverse: { created: false, dependency: rows[0] ? mapDependency(rows[0]) : null } };
       });
-      Logger.info(`Dependencia creada: ${data.sourceServerId} -> ${data.targetServerId} (${data.dependencyType})${data.bidirectional ? ' y su inversa' : ''}`);
-      return { dependency: creadas[0], dependencies: creadas };
+      const inversa = resultado.inverse ? (resultado.inverse.created ? ' y su inversa' : ' (la inversa ya existía)') : '';
+      Logger.info(`Dependencia creada: ${data.sourceServerId} -> ${data.targetServerId} (${data.dependencyType})${inversa}`);
+      return resultado;
     } catch (err) {
       throw traducirErrorPg(err, 'dependencia');
     }
