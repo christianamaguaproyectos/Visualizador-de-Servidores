@@ -52,34 +52,51 @@ export function buildAdjacency(edges) {
 }
 
 /**
- * BFS desde `startId` siguiendo `adjacency` (Map id -> vecinos).
- * Devuelve, para cada nodo alcanzado (sin incluir el inicial), su profundidad
- * mínima y la ruta más corta [startId, ..., nodo].
+ * BFS desde `startId` siguiendo `adjacency` (Map id -> vecinos), SIN materializar
+ * rutas: O(V + E). Devuelve el árbol BFS (predecesor y profundidad mínima de cada
+ * nodo alcanzado) y el orden de visita (order[0] = startId).
  *
  * @param {string|number|bigint} startId
  * @param {Map<string, string[]>} adjacency
- * @returns {Map<string, { depth: number, path: string[] }>}
+ * @returns {{ order: string[], parent: Map<string, string|null>, depth: Map<string, number> }}
  */
-export function bfsFrom(startId, adjacency) {
+export function bfsTree(startId, adjacency) {
   const start = id(startId);
-  const result = new Map();
   const parent = new Map([[start, null]]); // también hace de conjunto "visitados"
   const depth = new Map([[start, 0]]);
-  const queue = [start];
-  for (let i = 0; i < queue.length; i++) {
-    const current = queue[i];
+  const order = [start];
+  for (let i = 0; i < order.length; i++) {
+    const current = order[i];
     for (const next of adjacency.get(current) || []) {
       if (parent.has(next)) continue;
       parent.set(next, current);
       depth.set(next, depth.get(current) + 1);
-      queue.push(next);
+      order.push(next);
     }
   }
-  for (const node of queue) {
-    if (node === start) continue;
-    const path = [];
-    for (let n = node; n !== null; n = parent.get(n)) path.push(n);
-    result.set(node, { depth: depth.get(node), path: path.reverse() });
+  return { order, parent, depth };
+}
+
+/** Ruta [raíz, ..., nodo] reconstruida desde el mapa de predecesores de un árbol BFS */
+export function pathFromParents(parent, node) {
+  const path = [];
+  for (let n = id(node); n !== null && n !== undefined; n = parent.get(n)) path.push(n);
+  return path.reverse();
+}
+
+/**
+ * BFS desde `startId` con la ruta más corta [startId, ..., nodo] de cada nodo
+ * alcanzado (sin incluir el inicial). Construir todas las rutas cuesta O(V·D):
+ * úsese para UN origen (análisis de un servidor), no dentro de un bucle de raíces.
+ *
+ * @returns {Map<string, { depth: number, path: string[] }>}
+ */
+export function bfsFrom(startId, adjacency) {
+  const { order, parent, depth } = bfsTree(startId, adjacency);
+  const result = new Map();
+  for (let i = 1; i < order.length; i++) {
+    const node = order[i];
+    result.set(node, { depth: depth.get(node), path: pathFromParents(parent, node) });
   }
   return result;
 }
@@ -129,7 +146,9 @@ export function compareIds(a, b) {
  * - Una raíz NO se marca como impactada por sí misma (el ciclo 1 <-> 2 no la
  *   "re-visita"), pero sí por OTRA raíz de la que depende.
  *
- * Complejidad O(R * (V + E)), con R = número de raíces.
+ * Complejidad: un BFS sin rutas por raíz, O(R * (V + E)) con R = número de
+ * raíces; al final se reconstruye UNA ruta por nodo afectado desde el mapa de
+ * predecesores de su raíz ganadora (coste proporcional al tamaño de la salida).
  *
  * @param {{ edges?: Array<{source, target}>, rootIds: Iterable<string|number|bigint>, adjacency?: object }} params
  * @returns {Map<string, { cascadeStatus: string, impactLevel: number, impactedByServers: string[], impactPath: string[] }>}
@@ -139,23 +158,35 @@ export function computeCascadeImpact({ edges, rootIds, adjacency }) {
   const adj = adjacency || buildAdjacency(edges);
   const roots = [...new Set([...(rootIds || [])].map(id))].sort(compareIds);
   const impact = new Map();
+  const ganadora = new Map(); // nodo -> raíz que da su ruta más corta
+  const arboles = new Map(); // raíz -> mapa de predecesores (solo raíces ganadoras)
 
   for (const root of roots) {
-    for (const [nodeId, { depth, path }] of bfsFrom(root, adj.in)) {
+    const { order, parent, depth } = bfsTree(root, adj.in);
+    let gana = false;
+    for (let i = 1; i < order.length; i++) {
+      const nodeId = order[i];
+      const d = depth.get(nodeId);
       const prev = impact.get(nodeId);
       if (!prev) {
-        impact.set(nodeId, { impactLevel: depth, impactedByServers: [root], impactPath: path });
+        impact.set(nodeId, { impactLevel: d, impactedByServers: [root], impactPath: null });
+        ganadora.set(nodeId, root);
+        gana = true;
         continue;
       }
       prev.impactedByServers.push(root);
-      if (depth < prev.impactLevel) {
-        prev.impactLevel = depth;
-        prev.impactPath = path;
+      // Raíces en orden ascendente: en empate de profundidad se queda la de menor id
+      if (d < prev.impactLevel) {
+        prev.impactLevel = d;
+        ganadora.set(nodeId, root);
+        gana = true;
       }
     }
+    if (gana) arboles.set(root, parent);
   }
 
-  for (const entry of impact.values()) {
+  for (const [nodeId, entry] of impact) {
+    entry.impactPath = pathFromParents(arboles.get(ganadora.get(nodeId)), nodeId);
     entry.cascadeStatus = entry.impactLevel === 1 ? CASCADE_STATUS.DIRECT : CASCADE_STATUS.TRANSITIVE;
   }
   return impact;
@@ -204,8 +235,8 @@ export function isBidirectionalPair(edges, a, b) {
 export function findCyclesThrough(serverId, adjacency, limits = CYCLE_LIMITS) {
   const start = id(serverId);
   const { maxCycles, maxSteps } = { ...CYCLE_LIMITS, ...limits };
-  const forward = bfsFrom(start, adjacency.out);
-  const backward = bfsFrom(start, adjacency.in);
+  const forward = bfsTree(start, adjacency.out).parent;
+  const backward = bfsTree(start, adjacency.in).parent;
   const scc = new Set([start]);
   for (const k of forward.keys()) if (backward.has(k)) scc.add(k);
 
