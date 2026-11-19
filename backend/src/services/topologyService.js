@@ -313,7 +313,15 @@ class TopologyService {
       const impact = computeCascadeImpact({ adjacency, rootIds });
 
       const conRelacion = new Set();
-      for (const e of edgesRaw) { conRelacion.add(e.source); conRelacion.add(e.target); }
+      // Relaciones (filas de server_dependencies) salientes y entrantes por servidor
+      const relSalientes = new Map();
+      const relEntrantes = new Map();
+      for (const e of edgesRaw) {
+        conRelacion.add(e.source);
+        conRelacion.add(e.target);
+        relSalientes.set(e.source, (relSalientes.get(e.source) || 0) + 1);
+        relEntrantes.set(e.target, (relEntrantes.get(e.target) || 0) + 1);
+      }
 
       const nodes = serverRows
         .filter((r) => includeIsolated || conRelacion.has(r.id) || r.x !== null || simuladoSet.has(r.id))
@@ -325,8 +333,12 @@ class TopologyService {
           return {
             ...mapServer(r),
             position: r.x === null ? null : { x: num(r.x), y: num(r.y), pinned: r.pinned, collapsed: r.collapsed },
-            dependsOnCount: adjacency.out.get(r.id)?.length ?? 0,
-            dependentsCount: adjacency.in.get(r.id)?.length ?? 0,
+            // *ServerCount = servidores DISTINTOS (vecinos); *RelationCount = relaciones
+            // (dos dependencias de distinto tipo con el mismo servidor cuentan 1 y 2)
+            dependsOnServerCount: adjacency.out.get(r.id)?.length ?? 0,
+            dependentServerCount: adjacency.in.get(r.id)?.length ?? 0,
+            dependsOnRelationCount: relSalientes.get(r.id) ?? 0,
+            dependentRelationCount: relEntrantes.get(r.id) ?? 0,
             isDown: rootSet.has(r.id),
             downSource,
             cascadeStatus: imp ? imp.cascadeStatus : CASCADE_STATUS.NONE,
