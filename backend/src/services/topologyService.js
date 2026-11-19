@@ -145,7 +145,10 @@ function traducirErrorPg(err, contexto) {
       }
       if (constraint.startsWith('topology_views_name')) return new ConflictError('Ya existe una vista con ese nombre');
       if (constraint.startsWith('topology_views_slug')) return new ConflictError('Ya existe una vista con ese slug');
-      return new ConflictError(`El ${contexto} ya existe`);
+      if (constraint === 'uq_topology_views_single_default') {
+        return new ConflictError('Otra operación cambió la vista predeterminada al mismo tiempo; reintente');
+      }
+      return new ConflictError('Ya existe un registro con esos datos');
     case '23503':
       return new NotFoundError('Servidor');
     case '23514':
@@ -157,6 +160,21 @@ function traducirErrorPg(err, contexto) {
     default:
       return err;
   }
+}
+
+/**
+ * Serializa los cambios de vista predeterminada: dos transacciones que marcan
+ * vistas como predeterminadas a la vez se ejecutan una tras otra (la segunda ve
+ * el resultado de la primera) en lugar de chocar con uq_topology_views_single_default.
+ * SHARE ROW EXCLUSIVE choca consigo mismo y con las escrituras, no con las lecturas.
+ */
+async function bloquearCambioDeVistaPorDefecto(client) {
+  await client.query('LOCK TABLE inventory.topology_views IN SHARE ROW EXCLUSIVE MODE');
+}
+
+async function desmarcarVistaPorDefecto(client) {
+  await bloquearCambioDeVistaPorDefecto(client);
+  await client.query('UPDATE inventory.topology_views SET is_default = FALSE WHERE is_default');
 }
 
 const num = (v) => (v === null || v === undefined ? null : Number(v));
@@ -252,7 +270,8 @@ async function assertServersExist(client, ids) {
   const faltan = unicos.filter((i) => !existentes.has(i)).sort(compareIds);
   if (faltan.length) {
     const lista = faltan.slice(0, 20).join(', ') + (faltan.length > 20 ? '…' : '');
-    throw new NotFoundError(faltan.length === 1 ? 'Servidor' : 'Servidores', lista);
+    if (faltan.length === 1) throw new NotFoundError('Servidor', lista);
+    throw new AppError(`No se encontraron los servidores con ID ${lista}`, 404, 'NOT_FOUND');
   }
 }
 
@@ -497,7 +516,7 @@ class TopologyService {
     try {
       return await withTransaction(async (client) => {
         // Solo una vista por defecto: se desmarca la anterior en la misma transacción
-        if (data.isDefault) await client.query('UPDATE inventory.topology_views SET is_default = FALSE WHERE is_default');
+        if (data.isDefault) await desmarcarVistaPorDefecto(client);
         const vp = data.viewport || {};
         const { rows } = await client.query(
           `INSERT INTO inventory.topology_views
@@ -517,6 +536,8 @@ class TopologyService {
   async updateView(id, patch) {
     try {
       return await withTransaction(async (client) => {
+        // El bloqueo de tabla se toma ANTES que el de fila para no invertir el orden de bloqueos
+        if (patch.isDefault === true) await bloquearCambioDeVistaPorDefecto(client);
         const { rows } = await client.query('SELECT is_default FROM inventory.topology_views WHERE id = $1::bigint FOR UPDATE', [id]);
         if (!rows[0]) throw new NotFoundError('Vista', id);
         if (patch.isDefault === false && rows[0].is_default) {
