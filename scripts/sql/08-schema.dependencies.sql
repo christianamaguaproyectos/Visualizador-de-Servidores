@@ -88,10 +88,15 @@ DROP TRIGGER IF EXISTS t_topology_views_updated ON inventory.topology_views;
 CREATE TRIGGER t_topology_views_updated BEFORE UPDATE ON inventory.topology_views
   FOR EACH ROW EXECUTE FUNCTION inventory.inventory_set_updated_at();
 
--- Vista por defecto (no se duplica si ya existe)
+-- Vista por defecto: solo se siembra si NO hay ninguna vista (instalación nueva).
+-- Así la re-ejecución nunca falla aunque se haya renombrado/cambiado el slug de
+-- "Mapa General", se haya marcado otra vista como predeterminada o se haya
+-- borrado a propósito (no se "resucita"). ON CONFLICT sin árbitro cubre todas
+-- las restricciones únicas (name, slug y el índice de una sola vista por defecto).
 INSERT INTO inventory.topology_views (name, slug, description, is_default, layout_mode)
-VALUES ('Mapa General', 'general', 'Vista general con todos los servidores y sus dependencias', TRUE, 'manual')
-ON CONFLICT (slug) DO NOTHING;
+SELECT 'Mapa General', 'general', 'Vista general con todos los servidores y sus dependencias', TRUE, 'manual'
+WHERE NOT EXISTS (SELECT 1 FROM inventory.topology_views)
+ON CONFLICT DO NOTHING;
 
 -- -------------------------------------------------------------
 -- 3) Posiciones (x, y) de cada servidor en cada vista
