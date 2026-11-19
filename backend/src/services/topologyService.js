@@ -27,7 +27,7 @@
  * real (un host deshabilitado —servidor APAGADO/BAJA— puede tener estado viejo).
  */
 
-import { withClient } from '../config/db.js';
+import { withClient, withTransaction } from '../config/db.js';
 import { AppError, ConflictError, NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import Logger from '../utils/logger.js';
 import {
@@ -86,20 +86,6 @@ const SQL_VISTA = `
 // ─────────────────────────────────────────────
 //  Utilidades internas
 // ─────────────────────────────────────────────
-
-async function withTransaction(fn) {
-  return withClient(async (client) => {
-    await client.query('BEGIN');
-    try {
-      const resultado = await fn(client);
-      await client.query('COMMIT');
-      return resultado;
-    } catch (err) {
-      await client.query('ROLLBACK').catch(() => { });
-      throw err;
-    }
-  });
-}
 
 /**
  * Traduce errores de PostgreSQL a errores HTTP con mensaje propio.
