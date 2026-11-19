@@ -321,7 +321,13 @@ export function parseViewUpdate(body) {
 /**
  * Cuerpo de PUT /api/topology/views/:id/positions
  * { positions: [{ serverId, x, y, pinned?, collapsed? }], viewport?: {zoom,x,y}, removeServerIds?: [] }
- * Si un servidor viene repetido gana la última posición.
+ * - Si un servidor viene repetido en positions gana la última posición.
+ * - Un mismo servidor en positions y en removeServerIds es contradictorio -> 400
+ *   (el cliente debe enviar solo la última acción del usuario sobre ese nodo).
+ * - pinned omitido = true: lo omite el arrastre manual del usuario, que fija el
+ *   nodo; el auto-layout debe enviar pinned:false de forma explícita para los
+ *   nodos que coloca él (así un re-layout posterior puede moverlos y respeta
+ *   los fijados a mano). Coincide con el DEFAULT TRUE de la columna en la BD.
  */
 export function parsePositionsPayload(body) {
   requireBodyObject(body);
@@ -352,6 +358,12 @@ export function parsePositionsPayload(body) {
       throw new ValidationError(`removeServerIds admite como máximo ${LIMITS.maxPositions} IDs`);
     }
     removeServerIds = [...new Set(removeRaw.map((v) => parseId(v, 'removeServerIds')))];
+  }
+  const solapados = removeServerIds.filter((sid) => porServidor.has(sid));
+  if (solapados.length) {
+    throw new ValidationError(
+      `Un servidor no puede estar a la vez en positions y en removeServerIds (ID ${solapados.slice(0, 20).join(', ')})`,
+    );
   }
 
   const viewport = body.viewport === undefined || body.viewport === null ? null : parseViewport(body.viewport);
