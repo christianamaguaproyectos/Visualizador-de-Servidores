@@ -2,12 +2,16 @@
 // la app REAL + PostgreSQL. Se omite si no hay TEST_POSTGRES_URL (tests/helpers/appDePrueba.js).
 import { describe, test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import {
   CREDENCIALES, URL_BD, clienteHttp, crearUsuarios, iniciarApp, motivoParaOmitir, prepararBaseDeDatos,
 } from '../helpers/appDePrueba.js';
 
 const omitir = motivoParaOmitir();
+const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 describe('Dependencias y topología (integración)', { skip: omitir || false }, () => {
   let app;
@@ -328,12 +332,235 @@ describe('Dependencias y topología (integración)', { skip: omitir || false }, 
     for (const [metodo, ruta, body] of prohibidos) {
       const r = await lector.api(metodo, ruta, { body });
       assert.equal(r.status, 403, `${metodo} ${ruta} -> ${r.status}`);
+      assert.notEqual(r.data.code, 'CSRF_INVALID', 'el 403 es por rol, no por CSRF');
+      assert.equal(r.data.error, 'Acceso denegado');
     }
     for (const ruta of ['/api/dependencies', '/api/topology/views', '/api/topology/graph', `/api/dependencies/server/${S.s2}/impact`]) {
       assert.equal((await lector.api('GET', ruta)).status, 200, ruta);
     }
     // Sigue existiendo (el viewer no la borró)
     assert.equal((await admin.api('GET', '/api/dependencies')).data.dependencies.length, 3);
+  });
+
+  test('posiciones: nodo sin relaciones pero con posición aparece; solape positions/remove -> 400; límites', async () => {
+    const ruta = `/api/topology/views/${vistaGeneral.id}/positions`;
+    assert.equal((await admin.api('PUT', ruta, { body: { positions: [{ serverId: S.aislado, x: 5, y: 5 }] } })).status, 200);
+    const g = await lector.api('GET', '/api/topology/graph');
+    const aislado = nodo(g.data, S.aislado);
+    assert.ok(aislado, 'con posición guardada aparece aunque includeIsolated=false');
+    assert.equal(aislado.dependsOnServerCount, 0);
+    assert.equal(aislado.dependentRelationCount, 0);
+
+    const solape = await admin.api('PUT', ruta, { body: { positions: [{ serverId: S.aislado, x: 1, y: 1 }], removeServerIds: [S.aislado] } });
+    assert.equal(solape.status, 400);
+    assert.match(solape.data.error, /a la vez en positions y en removeServerIds/);
+    assert.equal((await admin.api('PUT', ruta, { body: { removeServerIds: [S.aislado] } })).data.removed, 1);
+
+    const dos = await admin.api('PUT', ruta, { body: { positions: [{ serverId: '999998', x: 0, y: 0 }, { serverId: '999999', x: 0, y: 0 }] } });
+    assert.equal(dos.status, 404);
+    assert.equal(dos.data.error, 'No se encontraron los servidores con ID 999998, 999999');
+
+    const muchos = Array.from({ length: 1001 }, (_, i) => String(i + 1));
+    assert.equal((await admin.api('PUT', ruta, { body: { removeServerIds: muchos } })).status, 400);
+    assert.equal((await admin.api('PUT', ruta, { body: { viewport: { zoom: 50 } } })).status, 400);
+    assert.equal((await admin.api('PUT', ruta, { body: { viewport: { x: 1e8 } } })).status, 400);
+    const grande = { clave: 'x'.repeat(9000) };
+    assert.equal((await admin.api('POST', '/api/topology/views', { body: { name: 'Filtro grande', filterConfig: grande } })).status, 400);
+    assert.equal((await lector.api('GET', `/api/topology/graph?simulateDownIds=${S.s1}&simulateDownIds=${S.s2}`)).status, 400);
+  });
+
+  test('contadores del nodo: servidores distintos frente a relaciones', async () => {
+    const extra = await admin.api('POST', '/api/dependencies', { body: { sourceServerId: S.s1, targetServerId: S.s2, dependencyType: 'NETWORK' } });
+    assert.equal(extra.status, 201, JSON.stringify(extra.data));
+    try {
+      const g = await lector.api('GET', '/api/topology/graph');
+      const n1 = nodo(g.data, S.s1);
+      assert.equal(n1.dependsOnServerCount, 1, 'S1 depende solo de S2');
+      assert.equal(n1.dependsOnRelationCount, 2, 'API + NETWORK hacia S2');
+      assert.equal(n1.dependentServerCount, 1);
+      assert.equal(n1.dependentRelationCount, 1);
+      const n2 = nodo(g.data, S.s2);
+      assert.equal(n2.dependentServerCount, 1);
+      assert.equal(n2.dependentRelationCount, 2);
+      assert.equal(n2.dependsOnServerCount, 2, 'S1 y S3');
+      assert.equal('dependsOnCount' in n1, false, 'sin nombres ambiguos');
+    } finally {
+      assert.equal((await admin.api('DELETE', `/api/dependencies/${extra.data.dependency.id}`)).status, 200);
+    }
+  });
+
+  test('relación mutua cuando la inversa ya existe: 201, no se duplica y se informa', async () => {
+    // Ya existe S2 -> S1 (AUTH); se pide S1 -> S2 (AUTH) mutua
+    const r = await admin.api('POST', '/api/dependencies', {
+      body: { sourceServerId: S.s1, targetServerId: S.s2, dependencyType: 'AUTH', bidirectional: true },
+    });
+    assert.equal(r.status, 201, JSON.stringify(r.data));
+    assert.equal(r.data.dependencies.length, 1, 'solo se creó la relación pedida');
+    assert.equal(r.data.dependency.source, S.s1);
+    assert.deepEqual({ created: r.data.inverse.created, id: r.data.inverse.dependency.id }, { created: false, id: dep.s2s1 });
+    // Si la relación pedida ya existe sigue siendo 409
+    const dup = await admin.api('POST', '/api/dependencies', {
+      body: { sourceServerId: S.s1, targetServerId: S.s2, dependencyType: 'AUTH', bidirectional: true },
+    });
+    assert.equal(dup.status, 409);
+    assert.equal((await admin.api('DELETE', `/api/dependencies/${r.data.dependency.id}`)).status, 200);
+    // Sin bidirectional, inverse = null
+    const simple = await admin.api('POST', '/api/dependencies', { body: { sourceServerId: S.aislado, targetServerId: S.s3 } });
+    assert.equal(simple.status, 201);
+    assert.equal(simple.data.inverse, null);
+    assert.equal((await admin.api('DELETE', `/api/dependencies/${simple.data.dependency.id}`)).status, 200);
+  });
+
+  test('vista predeterminada: marcar otra desmarca la anterior y las peticiones concurrentes no chocan', async () => {
+    const predeterminadas = async () => (await lector.api('GET', '/api/topology/views')).data.views.filter((v) => v.isDefault);
+    const creadas = [];
+    try {
+      const a = await admin.api('POST', '/api/topology/views', { body: { name: 'Vista A', isDefault: true } });
+      assert.equal(a.status, 201, JSON.stringify(a.data));
+      creadas.push(a.data.view.id);
+      assert.deepEqual((await predeterminadas()).map((v) => v.id), [a.data.view.id]);
+
+      const u = await admin.api('PUT', `/api/topology/views/${vistaGeneral.id}`, { body: { isDefault: true } });
+      assert.equal(u.status, 200);
+      assert.deepEqual((await predeterminadas()).map((v) => v.id), [vistaGeneral.id]);
+
+      const concurrentes = await Promise.all([0, 1, 2].map((i) => admin.api('POST', '/api/topology/views', {
+        body: { name: `Concurrente ${i}`, isDefault: true },
+      })));
+      for (const r of concurrentes) {
+        assert.equal(r.status, 201, JSON.stringify(r.data));
+        creadas.push(r.data.view.id);
+      }
+      assert.equal((await predeterminadas()).length, 1, 'exactamente una vista predeterminada');
+    } finally {
+      assert.equal((await admin.api('PUT', `/api/topology/views/${vistaGeneral.id}`, { body: { isDefault: true } })).status, 200);
+      for (const id of creadas) assert.equal((await admin.api('DELETE', `/api/topology/views/${id}`)).status, 200);
+    }
+    assert.deepEqual((await predeterminadas()).map((v) => v.id), [vistaGeneral.id]);
+  });
+
+  test('08-schema.dependencies.sql se puede re-ejecutar en cualquier estado de las vistas', async () => {
+    const sql = fs.readFileSync(path.join(RAIZ, 'scripts', 'sql', '08-schema.dependencies.sql'), 'utf8')
+      .replace(String.fromCharCode(0xFEFF), '');
+    const cliente = new pg.Client({ connectionString: URL_BD });
+    await cliente.connect();
+    const vistas = async () => (await cliente.query(
+      'SELECT name, slug, is_default FROM inventory.topology_views ORDER BY id',
+    )).rows;
+    // Cada escenario se ejecuta en una transacción que se revierte al final
+    const escenario = async (preparar, comprobar) => {
+      await cliente.query('BEGIN');
+      try {
+        await preparar();
+        await cliente.query(sql);
+        await cliente.query(sql);
+        comprobar(await vistas());
+      } finally {
+        await cliente.query('ROLLBACK');
+      }
+    };
+    try {
+      // a) estado normal: no duplica "Mapa General"
+      await escenario(async () => { }, (v) => {
+        assert.equal(v.filter((x) => x.slug === 'general').length, 1);
+        assert.equal(v.filter((x) => x.is_default).length, 1);
+      });
+      // b) otra vista predeterminada y "Mapa General" borrada: no falla ni la resucita
+      await escenario(async () => {
+        await cliente.query('UPDATE inventory.topology_views SET is_default = FALSE');
+        await cliente.query("INSERT INTO inventory.topology_views (name, slug, is_default) VALUES ('Producción', 'produccion', TRUE)");
+        await cliente.query("DELETE FROM inventory.topology_views WHERE slug = 'general'");
+      }, (v) => {
+        assert.deepEqual(v.map((x) => [x.slug, x.is_default]), [['produccion', true]]);
+      });
+      // c) slug de "Mapa General" cambiado (mismo nombre): no falla por el UNIQUE de name
+      await escenario(async () => {
+        await cliente.query("UPDATE inventory.topology_views SET slug = 'mapa-general' WHERE slug = 'general'");
+      }, (v) => {
+        assert.deepEqual(v.map((x) => [x.name, x.slug]), [['Mapa General', 'mapa-general']]);
+      });
+      // d) sin ninguna vista (instalación nueva o vacía): se siembra una sola vez
+      await escenario(async () => {
+        await cliente.query('DELETE FROM inventory.topology_views');
+      }, (v) => {
+        assert.deepEqual(v.map((x) => [x.slug, x.is_default]), [['general', true]]);
+      });
+    } finally {
+      await cliente.end();
+    }
+  });
+
+  test('cruce servidor <-> host: misma regla que el sync de monitoreo', async () => {
+    const cliente = new pg.Client({ connectionString: URL_BD });
+    await cliente.connect();
+    const nbsp = String.fromCharCode(0xA0);
+    const servidores = [
+      ['CRUCE-ESPACIO', ' 10.71.0.1'], // espacio inicial: el sync no obtiene IP
+      ['CRUCE-Mayus', null], // solo existe un host "cruce-mayus": el sync no ignora mayúsculas
+      ['CRUCE-LISTA', '10.71.0.3;10.71.0.4'], // primera IP de una lista
+      ['CRUCE-NOMBRE', '10.71.0.5'], // el nombre gana a la IP
+      ['CRUCE-CERO', '0.0.0.0'], // el marcador 0.0.0.0 nunca cruza
+      ['CRUCE-NBSP', `10.71.0.7${nbsp}(principal)`], // NBSP es separador para el sync (\s de JS)
+    ];
+    const hosts = [
+      ['CRUCE-OTRO-1', '10.71.0.1'], ['cruce-mayus', '10.71.0.2'], ['CRUCE-OTRO-3', '10.71.0.3'],
+      ['CRUCE-OTRO-5', '10.71.0.5'], ['CRUCE-NOMBRE', '10.71.0.6'], ['CRUCE-OTRO-0', '0.0.0.0'], ['CRUCE-OTRO-7', '10.71.0.7'],
+    ];
+    try {
+      for (const [nombre, ip] of servidores) {
+        await cliente.query("INSERT INTO inventory.servers (type, identity_key, nombre, ip) VALUES ('fisicos', $1, $2, $3)", [`cruce-${nombre}`, nombre, ip]);
+      }
+      const idHost = {};
+      for (const [nombre, ip] of hosts) {
+        const { rows } = await cliente.query(
+          "INSERT INTO monitoring.hosts (name, ip, type, enabled, estado_actual) VALUES ($1, $2::inet, 'fisico', FALSE, 'UP') RETURNING id::text AS id",
+          [nombre, ip],
+        );
+        idHost[nombre] = rows[0].id;
+      }
+      const g = await lector.api('GET', '/api/topology/graph?includeIsolated=true');
+      assert.equal(g.status, 200);
+      const hostDe = (nombre) => g.data.nodes.find((n) => n.name === nombre).monitoring?.hostId ?? null;
+      assert.equal(hostDe('CRUCE-ESPACIO'), null);
+      assert.equal(hostDe('CRUCE-Mayus'), null);
+      assert.equal(hostDe('CRUCE-LISTA'), idHost['CRUCE-OTRO-3']);
+      assert.equal(hostDe('CRUCE-NOMBRE'), idHost['CRUCE-NOMBRE']);
+      assert.equal(hostDe('CRUCE-CERO'), null);
+      assert.equal(hostDe('CRUCE-NBSP'), idHost['CRUCE-OTRO-7']);
+    } finally {
+      await cliente.query("DELETE FROM inventory.servers WHERE identity_key LIKE 'cruce-%'");
+      await cliente.query("DELETE FROM monitoring.hosts WHERE name LIKE 'CRUCE-%' OR name = 'cruce-mayus'");
+      await cliente.end();
+    }
+  });
+
+  test('rendimiento: grafo con 1000 servidores y 1000 hosts en poco tiempo', async () => {
+    const cliente = new pg.Client({ connectionString: URL_BD });
+    await cliente.connect();
+    try {
+      await cliente.query(`INSERT INTO inventory.servers (type, identity_key, nombre, ip)
+        SELECT 'fisicos', 'perf-' || g, 'PERF-' || g, '10.72.' || (g / 250) || '.' || (g % 250) FROM generate_series(1, 1000) g`);
+      // La mitad cruza por nombre y la otra mitad por IP
+      await cliente.query(`INSERT INTO monitoring.hosts (name, ip, type, enabled, estado_actual)
+        SELECT CASE WHEN g % 2 = 0 THEN 'PERF-' || g ELSE 'PERF-H-' || g END,
+               ('10.72.' || (g / 250) || '.' || (g % 250))::inet, 'fisico', FALSE, 'UP'
+        FROM generate_series(1, 1000) g`);
+      await cliente.query('ANALYZE inventory.servers');
+      await cliente.query('ANALYZE monitoring.hosts');
+      const t0 = performance.now();
+      const g = await lector.api('GET', '/api/topology/graph?includeIsolated=true');
+      const ms = performance.now() - t0;
+      assert.equal(g.status, 200);
+      const perf = g.data.nodes.filter((n) => n.name.startsWith('PERF-'));
+      assert.equal(perf.length, 1000);
+      assert.equal(perf.filter((n) => n.monitoring).length, 1000, 'todos cruzan con su host');
+      // Antes de reescribir la consulta: ~9 s con este volumen (crecía con servidores × hosts)
+      assert.ok(ms < 3000, `el grafo tardó ${ms.toFixed(0)} ms`);
+    } finally {
+      await cliente.query("DELETE FROM inventory.servers WHERE identity_key LIKE 'perf-%'");
+      await cliente.query("DELETE FROM monitoring.hosts WHERE name LIKE 'PERF-%'");
+      await cliente.end();
+    }
   });
 
   test('CSRF: escribir sin token -> 403', async () => {

@@ -3,13 +3,14 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  analyzeServer, buildAdjacency, CASCADE_STATUS, compareIds, computeCascadeImpact, findCyclesThrough,
-  isBidirectionalPair, markBidirectionalPairs,
+  analyzeServer, bfsFrom, bfsTree, buildAdjacency, CASCADE_STATUS, compareIds, computeCascadeImpact, findCyclesThrough,
+  isBidirectionalPair, markBidirectionalPairs, pathFromParents,
 } from '../../backend/src/services/topologyGraph.js';
 import {
-  parseBooleanQuery, parseDependencyCreate, parseDependencyUpdate, parseIdList, parsePositionsPayload,
+  cleanText, parseBooleanQuery, parseDependencyCreate, parseDependencyUpdate, parseIdList, parsePositionsPayload,
   parseViewCreate, parseViewSelector, slugify, LIMITS,
 } from '../../backend/src/dtos/topologyDto.js';
+import { SEPARADORES_IP } from '../../backend/src/services/topologyService.js';
 
 // Ejemplo del plan: 1 <-> 2 (ciclo) y 2 -> 3 (cadena). "A -> B" = A depende de B.
 const CICLO_Y_CADENA = [
@@ -221,5 +222,117 @@ describe('validación de entradas (topologyDto)', () => {
     assert.throws(() => parseViewCreate({ name: '' }), { statusCode: 400 });
     assert.throws(() => parseViewCreate({ name: 'x'.repeat(121) }), { statusCode: 400 });
     assert.throws(() => parseViewCreate({ name: 'ok', filterConfig: [] }), { statusCode: 400 });
+  });
+});
+
+describe('impacto en cascada: rendimiento y equivalencia (BFS sin materializar rutas)', () => {
+  // Implementación de referencia (la anterior): un BFS con TODAS las rutas por raíz
+  function impactoDeReferencia(edges, rootIds) {
+    const adj = buildAdjacency(edges);
+    const roots = [...new Set(rootIds.map(String))].sort(compareIds);
+    const impacto = new Map();
+    for (const root of roots) {
+      for (const [n, { depth, path }] of bfsFrom(root, adj.in)) {
+        const prev = impacto.get(n);
+        if (!prev) { impacto.set(n, { impactLevel: depth, impactedByServers: [root], impactPath: path }); continue; }
+        prev.impactedByServers.push(root);
+        if (depth < prev.impactLevel) { prev.impactLevel = depth; prev.impactPath = path; }
+      }
+    }
+    return impacto;
+  }
+
+  test('bfsTree + pathFromParents reconstruyen la ruta más corta', () => {
+    const adj = buildAdjacency(CICLO_Y_CADENA);
+    const { order, parent, depth } = bfsTree('3', adj.in);
+    assert.deepEqual(order, ['3', '2', '1']);
+    assert.equal(depth.get('1'), 2);
+    assert.deepEqual(pathFromParents(parent, '1'), ['3', '2', '1']);
+  });
+
+  test('mismo resultado que la implementación de referencia en grafos aleatorios', () => {
+    let semilla = 12345;
+    const azar = (n) => { semilla = (semilla * 1103515245 + 12345) % 2147483648; return semilla % n; };
+    for (let caso = 0; caso < 30; caso++) {
+      const nodos = 5 + azar(40);
+      const edges = [];
+      for (let i = 0; i < nodos * 2; i++) {
+        const s = 1 + azar(nodos);
+        const t = 1 + azar(nodos);
+        if (s !== t) edges.push({ source: String(s), target: String(t) });
+      }
+      const raices = Array.from({ length: 1 + azar(5) }, () => String(1 + azar(nodos)));
+      const nuevo = computeCascadeImpact({ edges, rootIds: raices });
+      const ref = impactoDeReferencia(edges, raices);
+      assert.equal(nuevo.size, ref.size, `caso ${caso}`);
+      for (const [n, r] of ref) {
+        const x = nuevo.get(n);
+        assert.equal(x.impactLevel, r.impactLevel, `caso ${caso} nodo ${n}`);
+        assert.deepEqual(x.impactedByServers, r.impactedByServers, `caso ${caso} nodo ${n}`);
+        assert.deepEqual(x.impactPath, r.impactPath, `caso ${caso} nodo ${n}`);
+      }
+    }
+  });
+
+  test('cadena de 3000 nodos con 200 raíces simuladas: rápido (antes ~24 s)', () => {
+    const N = 3000;
+    const edges = Array.from({ length: N - 1 }, (_, i) => ({ source: String(i + 1), target: String(i + 2) }));
+    const raices = Array.from({ length: 200 }, (_, i) => String(N - i));
+    const t0 = performance.now();
+    const impacto = computeCascadeImpact({ edges, rootIds: raices });
+    const ms = performance.now() - t0;
+    assert.equal(impacto.size, N - 1);
+    // El nodo 1 lo afecta en primer lugar la raíz más cercana (2801), a 2800 saltos
+    assert.equal(impacto.get('1').impactLevel, N - 200);
+    assert.equal(impacto.get('1').impactPath[0], String(N - 199));
+    assert.equal(impacto.get('1').impactPath.length, N - 199);
+    assert.equal(impacto.get('1').impactedByServers.length, 200);
+    assert.ok(ms < 3000, `tardó ${ms.toFixed(0)} ms`);
+  });
+});
+
+describe('cruce con monitoreo: separadores de IP idénticos a los del sync', () => {
+  test('SEPARADORES_IP = espacios de JavaScript + "," + ";" (todo el BMP)', () => {
+    const esperados = new Set([',', ';']);
+    for (let c = 0; c <= 0xFFFF; c++) {
+      const ch = String.fromCharCode(c);
+      if (/[\n\s,;]/.test(ch)) esperados.add(ch);
+    }
+    assert.deepEqual(new Set(SEPARADORES_IP), esperados);
+  });
+});
+
+describe('validación de entradas: reglas añadidas', () => {
+  test('cleanText elimina caracteres invisibles y de control bidi', () => {
+    const invisibles = [0x200B, 0x200C, 0x200D, 0x200E, 0x200F, 0x202A, 0x202B, 0x202C, 0x202D, 0x202E,
+      0x2066, 0x2067, 0x2068, 0x2069, 0xFEFF].map((c) => String.fromCharCode(c)).join('');
+    assert.equal(cleanText(`Mapa${invisibles} General`, { field: 'name', max: 120 }), 'Mapa General');
+    assert.equal(cleanText(`ab${String.fromCharCode(0x202E)}cd`, { field: 'label', max: 120 }), 'abcd');
+    assert.equal(cleanText(String.fromCharCode(0x200B, 0xFEFF), { field: 'label', max: 120 }), null);
+    // Letras con acento y emojis se conservan
+    assert.equal(cleanText('Núcleo ERP ✓', { field: 'label', max: 120 }), 'Núcleo ERP ✓');
+  });
+
+  test('un servidor en positions y en removeServerIds a la vez -> 400', () => {
+    assert.throws(
+      () => parsePositionsPayload({ positions: [{ serverId: 2, x: 0, y: 0 }], removeServerIds: ['2'] }),
+      { statusCode: 400, message: /a la vez en positions y en removeServerIds/ },
+    );
+    const ok = parsePositionsPayload({ positions: [{ serverId: 2, x: 0, y: 0 }], removeServerIds: [3] });
+    assert.deepEqual(ok.removeServerIds, ['3']);
+  });
+
+  test('pinned omitido = true (arrastre manual); el auto-layout envía pinned:false', () => {
+    const r = parsePositionsPayload({ positions: [{ serverId: 1, x: 0, y: 0 }, { serverId: 2, x: 5, y: 5, pinned: false }] });
+    assert.equal(r.positions[0].pinned, true);
+    assert.equal(r.positions[1].pinned, false);
+  });
+
+  test('límites del lote: removeServerIds > 1000, viewport fuera de rango y filterConfig > 8 KB -> 400', () => {
+    const ids = Array.from({ length: LIMITS.maxPositions + 1 }, (_, i) => i + 1);
+    assert.throws(() => parsePositionsPayload({ removeServerIds: ids }), { statusCode: 400 });
+    assert.throws(() => parsePositionsPayload({ viewport: { zoom: 11 } }), { statusCode: 400 });
+    assert.throws(() => parsePositionsPayload({ viewport: { x: 1e8 } }), { statusCode: 400 });
+    assert.throws(() => parseViewCreate({ name: 'ok', filterConfig: { x: 'a'.repeat(LIMITS.maxFilterConfigBytes) } }), { statusCode: 400 });
   });
 });
