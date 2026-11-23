@@ -263,6 +263,10 @@ body.topo-sin-filtros .topo-filtros { display: none; }
 .topo-resumen__cabecera { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 .topo-resumen__detalle { max-height: 40dvh; overflow: auto; }
 .topo-resumen__texto { margin: 0 0 6px; }
+.topo-resumen__texto p { margin: 0 0 4px; }
+.topo-resumen__caidas-titulo { color: var(--color-text-secondary); }
+.topo-resumen__caidas--reales .topo-resumen__caidas-titulo { color: var(--color-danger-700); font-weight: 600; }
+.topo-resumen__caidas--simuladas .topo-resumen__caidas-titulo { color: #93370d; font-weight: 600; }
 .topo-resumen__lista { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; }
 .topo-resumen__item { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; }
 .topo-resumen__punto { width: 8px; height: 8px; border-radius: 50%; background: var(--topo-transitivo); }

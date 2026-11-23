@@ -94,12 +94,22 @@ export function crearSimulador({ banda, resumen, boton, estado, recargar }) {
     resumen.querySelector(valor ? '.topo-resumen__cerrar' : '.topo-resumen__pastilla')?.focus();
   }
 
-  function textoPastilla(imp, raices) {
-    const n = raices.length;
-    const caidas = estado.simulando || imp.simulatedDownIds.length
-      ? `${n} ${n === 1 ? 'caída simulada' : 'caídas simuladas'}`
-      : `${n} ${n === 1 ? 'caída' : 'caídas'}`;
-    return `${caidas} · ${imp.totalImpacted} ${imp.totalImpacted === 1 ? 'afectado' : 'afectados'}`;
+  /** Separa las caídas reales (monitoreo) de las simuladas; un servidor caído de verdad cuenta como real */
+  function separarCaidas(imp, raices) {
+    const simulados = new Set((imp.simulatedDownIds || []).map(String));
+    const reales = new Set((imp.monitoringDownIds || raices.filter((r) => !simulados.has(String(r)))).map(String));
+    return {
+      reales: raices.filter((r) => reales.has(String(r))),
+      simuladas: raices.filter((r) => !reales.has(String(r)) && simulados.has(String(r))),
+    };
+  }
+
+  function textoPastilla(imp, { reales, simuladas }) {
+    const partes = [];
+    if (reales.length) partes.push(`${reales.length} ${reales.length === 1 ? 'caída real' : 'caídas reales'}`);
+    if (simuladas.length) partes.push(`${simuladas.length} ${simuladas.length === 1 ? 'simulada' : 'simuladas'}`);
+    partes.push(`${imp.totalImpacted} ${imp.totalImpacted === 1 ? 'afectado' : 'afectados'}`);
+    return partes.join(' · ');
   }
 
   function render() {
@@ -107,27 +117,31 @@ export function crearSimulador({ banda, resumen, boton, estado, recargar }) {
     const raices = imp?.rootIds || [];
     // Sin caídas (reales o simuladas) no se muestra nada; en simulación la banda superior ya guía
     if (!imp || !raices.length) { resumen.hidden = true; resumen.replaceChildren(); return; }
+    const caidas = separarCaidas(imp, raices);
     resumen.hidden = false;
     resumen.classList.toggle('es-abierto', abierto);
     const pastilla = h('button', {
       type: 'button', class: 'topo-resumen__pastilla', 'aria-expanded': abierto ? 'true' : 'false',
       'aria-controls': 'topo-resumen-detalle', title: abierto ? 'Plegar detalle del impacto' : 'Ver detalle del impacto',
       onClick: () => fijarAbierto(!abierto),
-    }, icono(estado.simulando || imp.simulatedDownIds.length ? 'rayo' : 'alerta', 14), textoPastilla(imp, raices));
+    }, icono(estado.simulando || imp.simulatedDownIds.length ? 'rayo' : 'alerta', 14), textoPastilla(imp, caidas));
     if (!abierto) { resumen.replaceChildren(pastilla); return; }
 
     const afect = estado.grafo.nodes.filter((n) => n.cascadeStatus !== 'NONE').sort((a, b) => a.impactLevel - b.impactLevel || a.name.localeCompare(b.name));
-    const nombres = raices.map(nombreDe);
     const fuerte = (t) => h('strong', {}, t);
-    let frase;
-    if (estado.simulando || imp.simulatedDownIds.length) {
-      frase = h('p', { class: 'topo-resumen__texto' }, 'Si cae ', fuerte(nombres.join(', ')), ', se ven afectados ', fuerte(String(imp.totalImpacted)),
-        ' servidores: ', fuerte(String(imp.directCount)), ' directos y ', fuerte(String(imp.transitiveCount)), ' en cascada.');
-    } else if (imp.totalImpacted === 0) {
-      frase = h('p', { class: 'topo-resumen__texto' }, fuerte(nombres.join(', ')), raices.length > 1 ? ' están caídos; ningún servidor depende de ellos.' : ' está caído; ningún servidor depende de él.');
-    } else {
-      frase = h('p', { class: 'topo-resumen__texto' }, 'Caída detectada en monitoreo: ', fuerte(nombres.join(', ')), '. Afecta a ', fuerte(String(imp.totalImpacted)), ' servidores.');
-    }
+    // Caídas reales y simuladas por separado, cada una con su conteo
+    const grupo = (clave, titulo, ids) => (ids.length
+      ? h('p', { class: `topo-resumen__caidas topo-resumen__caidas--${clave}` },
+        h('span', { class: 'topo-resumen__caidas-titulo' }, `${titulo} (${ids.length}): `), fuerte(ids.map(nombreDe).join(', ')))
+      : null);
+    const frase = h('div', { class: 'topo-resumen__texto' }, ...[
+      grupo('reales', 'Caídas reales (monitoreo)', caidas.reales),
+      grupo('simuladas', 'Caídas simuladas', caidas.simuladas),
+      h('p', { class: 'topo-resumen__total' }, ...(imp.totalImpacted
+        ? ['Afectados: ', fuerte(String(imp.totalImpacted)), ` ${imp.totalImpacted === 1 ? 'servidor' : 'servidores'} (`,
+          fuerte(String(imp.directCount)), ' directos y ', fuerte(String(imp.transitiveCount)), ' en cascada).']
+        : ['Ningún servidor depende de ', raices.length > 1 ? 'ellos.' : 'él.'])),
+    ].filter(Boolean));
     const visibles = expandido ? afect : afect.slice(0, 6);
     const lista = afect.length ? h('ul', { class: 'topo-resumen__lista' }, visibles.map((n) => {
       const crit = criticidadSalto(n);
