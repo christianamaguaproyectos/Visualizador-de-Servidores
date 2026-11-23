@@ -44,6 +44,7 @@ export async function iniciarPaginaDependencias() {
   let autoguardado = 0;
   let avisoSoloLectura = false;
   let controladorCarga = null;
+  let cargaPrincipal = null; // carga pedida por el usuario (el refresco en vivo no la interrumpe)
   let firmaCargada = null; // grafo + inventario de la última carga (el refresco en vivo no redibuja si no cambió)
   let aisladosCargados = null;
 
@@ -274,9 +275,11 @@ export async function iniciarPaginaDependencias() {
     estado.inventario.fisicos?.racks, estado.inventario.virtuales?.servers]);
 
   async function recargar({ simulateDownIds = [...estado.simulados], conservarPosiciones = false, catalogo: conCatalogo = false, silencioso = false } = {}) {
+    if (silencioso && cargaPrincipal) return;
     if (controladorCarga) controladorCarga.abort();
     const controlador = new AbortController();
     controladorCarga = controlador;
+    if (!silencioso) cargaPrincipal = controlador;
     if (!conservarPosiciones) mostrarEstado('cargando');
     try {
       const aislados = incluirAislados();
@@ -298,6 +301,8 @@ export async function iniciarPaginaDependencias() {
       if (silencioso) return; // un refresco en vivo fallido no sustituye lo que ya se ve
       if (err?.status === 404) mostrarEstado('noexiste');
       else mostrarEstado('error', { detalle: err?.datos?.error || null });
+    } finally {
+      if (cargaPrincipal === controlador) cargaPrincipal = null;
     }
   }
 
