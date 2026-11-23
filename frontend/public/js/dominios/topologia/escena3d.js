@@ -232,7 +232,16 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     return true;
   }
 
+  /** Consume la inercia pendiente de un giro o desplazamiento (si no, desviaría el movimiento) */
+  function detenerInercia() {
+    const amortiguado = controles.enableDamping;
+    controles.enableDamping = false;
+    controles.update();
+    controles.enableDamping = amortiguado;
+  }
+
   function moverCamara(objetivo, posicion, instantaneo) {
+    detenerInercia();
     if (instantaneo || !animaciones()) {
       tween = null;
       controles.target.copy(objetivo);
