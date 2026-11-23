@@ -10,6 +10,26 @@ Cómo levantar el sistema completo en un equipo con Windows desde cero, cargar d
 - Los puertos **3000** (aplicación) y **5432** (PostgreSQL, solo accesible desde el propio equipo) libres. Si alguno está ocupado, cámbialo en el `.env` (`APP_PORT`, `POSTGRES_PORT`).
 - Un navegador actual (Chrome, Edge o Firefox) con WebGL activo para la vista 3D. Sin WebGL el mapa se abre en el Editor 2D.
 
+Para abrir PowerShell en la carpeta del proyecto: en el Explorador de archivos, entra en la carpeta, escribe `powershell` en la barra de direcciones y pulsa **Enter**. Comprueba que Docker responde:
+
+```powershell
+docker version
+```
+
+### Antes de empezar: contenedores con el mismo nombre
+
+Los contenedores de este proyecto tienen nombres fijos: **`diagrama-app`** y **`diagrama-postgres`**. Si ya existen en el equipo (por ejemplo, de otra copia del proyecto), Docker no puede crear los nuevos. Compruébalo:
+
+```powershell
+docker ps -a --filter "name=diagrama-"
+```
+
+Si aparecen, detenlos antes de seguir con `docker compose down` **desde la carpeta de la copia que los creó** (los datos de sus volúmenes se conservan). Si ya no tienes esa carpeta, elimínalos por nombre:
+
+```powershell
+docker rm -f diagrama-app diagrama-postgres
+```
+
 ## 2. Configurar el archivo `.env`
 
 ```powershell
@@ -73,11 +93,11 @@ Abre **http://localhost:3000** (o el puerto que pusiste en `APP_PORT`) e inicia 
 ## 7. Recorrido de demostración
 
 1. **Inicio:** el panel muestra las secciones; pulsa la tarjeta **Mapa de Dependencias** (o el enlace del menú lateral).
-2. **Mapa 3D:** la sala de datos aparece encuadrada: racks en fila, hosts con sus VMs y el clúster. `srv-db-01` brilla en rojo y el indicador superior derecho resume *2 caídas · 7 afectados*. Gira con el ratón y acerca con la rueda.
+2. **Mapa 3D:** la sala de datos aparece encuadrada: racks en fila, hosts con sus VMs y el clúster. `srv-db-01` brilla en rojo y el indicador superior derecho resume *2 caídas reales · 7 afectados*; al pulsarlo se despliega el detalle. Gira con el ratón y acerca con la rueda.
 3. **Pasar el puntero y hacer clic:** al pasar sobre un servidor se resaltan sus relaciones y se atenúan las demás; con un clic se abre el inspector con sus datos, de quién depende y quién depende de él.
-4. **Simular caída:** pulsa **Simular caída** y haz clic en `srv-nas-01`. El mapa resalta toda la cadena de impacto y el indicador explica cuántos servidores se ven afectados. Sal con la **×** de la banda superior o con `Esc`.
+4. **Simular caída:** pulsa **Simular caída** y haz clic en `srv-nas-01`. El mapa resalta toda la cadena de impacto y el indicador separa las **caídas reales (monitoreo)** de las **caídas simuladas**, cada una con su conteo, y cuántos servidores se ven afectados. Sal con la **×** de la banda superior o con `Esc`.
 5. **Editor 2D y nueva relación:** pulsa **Editor 2D**, pasa el puntero sobre una tarjeta, arrastra desde uno de sus puntos de conexión hasta otra tarjeta y completa el formulario (tipo y criticidad). La relación aparece al guardar.
-6. **Detalle de servidor:** en **Servidores Físicos**, abre `srv-db-01`. Debajo de la ficha, el bloque **Dependencias e impacto** lista sus relaciones con su estado; **Abrir en el mapa** vuelve al mapa con ese servidor seleccionado.
+6. **Detalle de servidor:** en **Servidores Físicos**, abre `srv-db-01`. En la fila superior, el botón **🔗 Dependencias e impacto** (con el número de relaciones) lleva al bloque del mismo nombre, que lista sus relaciones con su estado y el impacto en cascada; **Abrir en el mapa** vuelve al mapa con ese servidor seleccionado.
 
 Más detalles de cada función en la [Guía de usuario](./GUIA-USUARIO.md#mapa-de-dependencias).
 
@@ -108,6 +128,7 @@ docker compose down -v
 | Síntoma | Solución |
 |---------|----------|
 | `Defina POSTGRES_PASSWORD en .env` | Falta el archivo `.env` o la variable: repite el paso 2. |
+| `The container name "/diagrama-app" is already in use` | Hay contenedores de otra copia del proyecto: ver *Antes de empezar* en el paso 1. |
 | `port is already allocated` | Otro programa usa el puerto: cambia `APP_PORT` o `POSTGRES_PORT` en `.env` y vuelve a ejecutar `docker compose up -d`. |
 | El mapa muestra error al cargar | La base es anterior al módulo: aplica el esquema del paso 3. |
 | La vista 3D no aparece | El navegador no tiene WebGL: el mapa se abre en el Editor 2D. Activa la aceleración por hardware del navegador. |

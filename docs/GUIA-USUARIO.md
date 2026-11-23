@@ -136,7 +136,7 @@ Puedes **arrastrar** un servidor de un rack y **soltarlo** en una unidad vacía 
 
 Haz clic en cualquier servidor dentro de un rack o en las etiquetas laterales para abrir su ficha completa con toda la información registrada.
 
-Debajo de la ficha aparece el bloque **🔗 Dependencias e impacto** (igual en físicos y virtuales):
+Debajo de la ficha aparece el bloque **🔗 Dependencias e impacto** (igual en físicos y virtuales). El botón del mismo nombre en la fila superior, junto a **Volver**, muestra el número de relaciones y lleva directamente al bloque:
 
 - **Depende de** y **Dependen de él:** cada relación con el estado de monitoreo del otro servidor (UP, DOWN, DEGRADED…), su tipo y su criticidad.
 - **Resumen de impacto:** cuántos servidores se verían afectados si este cae (directos y en cascada) y, si existe, la dependencia circular en la que participa.
@@ -233,7 +233,7 @@ Los archivos se descargan con el nombre `topologia-<vista>-<fecha>.<extensión>`
 ### Simular una caída e impacto en cascada
 
 - Si Monitoreo detecta servidores caídos o degradados, aparece arriba a la derecha un indicador compacto (por ejemplo, *2 caídas · 4 afectados*). Haz clic para ver el detalle (qué servidores se ven afectados y a qué nivel) y en **×** para plegarlo; el mapa recuerda si lo dejaste abierto.
-- **Simular caída:** activa el modo simulación y haz clic en uno o varios servidores para ver qué pasaría si cayeran (o pulsa `S` con un servidor seleccionado). El mapa resalta la cadena de impacto por niveles, atenúa los servidores no relacionados y el indicador muestra el resumen (por ejemplo, *«Si cae srv-nas-01, se ven afectados 12 servidores»*). Un segundo clic en un servidor quita su caída simulada. No modifica datos ni envía alertas. Sales con el mismo botón, con la **×** de la banda superior o con `Esc`.
+- **Simular caída:** activa el modo simulación y haz clic en uno o varios servidores para ver qué pasaría si cayeran (o pulsa `S` con un servidor seleccionado). El mapa resalta la cadena de impacto por niveles, atenúa los servidores no relacionados y el indicador muestra el resumen con las **caídas reales (monitoreo)** y las **caídas simuladas** por separado, cada una con su conteo, y el total de servidores afectados (por ejemplo, *«1 caída real · 1 simulada · 12 afectados»*). Un segundo clic en un servidor quita su caída simulada. No modifica datos ni envía alertas. Sales con el mismo botón, con la **×** de la banda superior o con `Esc`.
 - **Ver solo impacto** (en el detalle del indicador) atenúa todo lo que no está afectado.
 
 ### Leyenda de colores
