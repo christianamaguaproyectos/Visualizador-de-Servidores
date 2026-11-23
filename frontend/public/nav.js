@@ -6,6 +6,13 @@
 (function () {
     'use strict';
 
+    // Al salir de la página el navegador cancela las peticiones en curso: no es un error real
+    let paginaSaliendo = false;
+    window.addEventListener('pagehide', () => { paginaSaliendo = true; });
+    window.addEventListener('beforeunload', () => { paginaSaliendo = true; });
+    window.addEventListener('pageshow', () => { paginaSaliendo = false; });
+    const esCancelacionPorSalida = (e) => e?.name === 'AbortError' || (paginaSaliendo && e instanceof TypeError);
+
     const NAV_ITEMS = [
         {
             id: 'home',
@@ -241,6 +248,7 @@
                 }
             }
         } catch (e) {
+            if (esCancelacionPorSalida(e)) return;
             console.error('Error loading nav user info:', e);
         }
     }
