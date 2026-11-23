@@ -42,10 +42,10 @@ describe('Dependencias y topología (integración)', { skip: omitir || false }, 
     assert.equal((await admin.login(CREDENCIALES.admin)).status, 200);
     assert.equal((await lector.login(CREDENCIALES.lector)).status, 200);
     assert.equal((await admin.api('POST', '/api/racks', { body: { name: 'RACK-DEP', raw_name: 'RACK-DEP' } })).status, 201);
-    S.s1 = await crearServidor('DEP-S1 App ERP', '10.70.0.11');
-    S.s2 = await crearServidor('DEP-S2 API Cache', '10.70.0.12');
-    S.s3 = await crearServidor('DEP-S3 PostgreSQL', '10.70.0.13');
-    S.aislado = await crearServidor('DEP-S4 Aislado', '10.70.0.14');
+    S.s1 = await crearServidor('DEP-S1 App ERP', '198.51.100.11');
+    S.s2 = await crearServidor('DEP-S2 API Cache', '198.51.100.12');
+    S.s3 = await crearServidor('DEP-S3 PostgreSQL', '198.51.100.13');
+    S.aislado = await crearServidor('DEP-S4 Aislado', '198.51.100.14');
 
     // El sync crea un host de monitoreo (con check ICMP) por servidor. Se desactivan sus
     // checks para que el scheduler real no cambie el estado durante la prueba
@@ -54,8 +54,8 @@ describe('Dependencias y topología (integración)', { skip: omitir || false }, 
     await cliente.connect();
     try {
       await cliente.query(`UPDATE monitoring.checks SET enabled = FALSE
-                           WHERE host_id IN (SELECT id FROM monitoring.hosts WHERE host(ip) LIKE '10.70.0.%')`);
-      await cliente.query("UPDATE monitoring.hosts SET estado_actual = 'UNKNOWN' WHERE host(ip) LIKE '10.70.0.%'");
+                           WHERE host_id IN (SELECT id FROM monitoring.hosts WHERE host(ip) LIKE '198.51.100.%')`);
+      await cliente.query("UPDATE monitoring.hosts SET estado_actual = 'UNKNOWN' WHERE host(ip) LIKE '198.51.100.%'");
     } finally {
       await cliente.end();
     }
@@ -243,7 +243,7 @@ describe('Dependencias y topología (integración)', { skip: omitir || false }, 
       assert.equal(nodo(porIp.data, S.s3).status, 'DEGRADED');
       assert.equal(nodo(porIp.data, S.s2).cascadeStatus, 'DIRECT_IMPACT');
     } finally {
-      await cliente.query("UPDATE monitoring.hosts SET estado_actual = 'UNKNOWN' WHERE host(ip) = '10.70.0.13'").catch(() => { });
+      await cliente.query("UPDATE monitoring.hosts SET estado_actual = 'UNKNOWN' WHERE host(ip) = '198.51.100.13'").catch(() => { });
       await cliente.end();
     }
   });
@@ -495,16 +495,16 @@ describe('Dependencias y topología (integración)', { skip: omitir || false }, 
     await cliente.connect();
     const nbsp = String.fromCharCode(0xA0);
     const servidores = [
-      ['CRUCE-ESPACIO', ' 10.71.0.1'], // espacio inicial: el sync no obtiene IP
+      ['CRUCE-ESPACIO', ' 203.0.113.1'], // espacio inicial: el sync no obtiene IP
       ['CRUCE-Mayus', null], // solo existe un host "cruce-mayus": el sync no ignora mayúsculas
-      ['CRUCE-LISTA', '10.71.0.3;10.71.0.4'], // primera IP de una lista
-      ['CRUCE-NOMBRE', '10.71.0.5'], // el nombre gana a la IP
+      ['CRUCE-LISTA', '203.0.113.3;203.0.113.4'], // primera IP de una lista
+      ['CRUCE-NOMBRE', '203.0.113.5'], // el nombre gana a la IP
       ['CRUCE-CERO', '0.0.0.0'], // el marcador 0.0.0.0 nunca cruza
-      ['CRUCE-NBSP', `10.71.0.7${nbsp}(principal)`], // NBSP es separador para el sync (\s de JS)
+      ['CRUCE-NBSP', `203.0.113.7${nbsp}(principal)`], // NBSP es separador para el sync (\s de JS)
     ];
     const hosts = [
-      ['CRUCE-OTRO-1', '10.71.0.1'], ['cruce-mayus', '10.71.0.2'], ['CRUCE-OTRO-3', '10.71.0.3'],
-      ['CRUCE-OTRO-5', '10.71.0.5'], ['CRUCE-NOMBRE', '10.71.0.6'], ['CRUCE-OTRO-0', '0.0.0.0'], ['CRUCE-OTRO-7', '10.71.0.7'],
+      ['CRUCE-OTRO-1', '203.0.113.1'], ['cruce-mayus', '203.0.113.2'], ['CRUCE-OTRO-3', '203.0.113.3'],
+      ['CRUCE-OTRO-5', '203.0.113.5'], ['CRUCE-NOMBRE', '203.0.113.6'], ['CRUCE-OTRO-0', '0.0.0.0'], ['CRUCE-OTRO-7', '203.0.113.7'],
     ];
     try {
       for (const [nombre, ip] of servidores) {
