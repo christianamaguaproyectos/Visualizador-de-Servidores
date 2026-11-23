@@ -136,6 +136,14 @@ Puedes **arrastrar** un servidor de un rack y **soltarlo** en una unidad vacía 
 
 Haz clic en cualquier servidor dentro de un rack o en las etiquetas laterales para abrir su ficha completa con toda la información registrada.
 
+Debajo de la ficha aparece el bloque **🔗 Dependencias e impacto** (igual en físicos y virtuales):
+
+- **Depende de** y **Dependen de él:** cada relación con el estado de monitoreo del otro servidor (UP, DOWN, DEGRADED…), su tipo y su criticidad.
+- **Resumen de impacto:** cuántos servidores se verían afectados si este cae (directos y en cascada) y, si existe, la dependencia circular en la que participa.
+- **Relacionar con otro servidor** (administradores): abre un formulario breve dentro del mismo bloque (dirección, servidor, tipo y criticidad); se cierra con su **×** o con `Esc`.
+- **🗑 Eliminar relación** (administradores): pide confirmación antes de borrar.
+- **Abrir en el mapa:** abre el Mapa de Dependencias con este servidor seleccionado y centrado (`/dependencias?focus=<id>`), aunque todavía no tenga relaciones.
+
 ---
 
 ## Servidores Virtuales
@@ -194,7 +202,7 @@ Pulsa **Editor 2D** en la barra superior para ver el mapa como un diagrama edita
 - **Auto-ordenar ▾:** *Por capas* (proveedores arriba, aplicaciones abajo) o *Anillos*.
 - **Guardar:** el botón inferior indica si hay cambios sin guardar; las posiciones también se guardan solas poco después de mover algo.
 - **Paleta de servidores** (izquierda): arrastra al lienzo los servidores que todavía no están en el mapa.
-- **Exportar:** SVG o PNG del diagrama 2D, PNG de la vista 3D, o JSON con los datos del mapa.
+- **Minimapa** (esquina inferior derecha, también en 3D): muestra el encuadre actual; un clic o arrastre sobre él centra la vista y se pliega con su **×**.
 
 ### Crear y editar relaciones (administradores)
 
@@ -202,10 +210,30 @@ Pulsa **Editor 2D** en la barra superior para ver el mapa como un diagrama edita
 - **Arrastrando en el Editor 2D:** pasa el ratón sobre una tarjeta, arrastra desde uno de sus puntos de conexión (aparecen en los bordes) hasta otro servidor y suelta: se abre el mismo formulario con origen y destino ya elegidos.
 - **Desde el inspector:** *Relación desde aquí* en un servidor; *Editar* o *Eliminar* (con confirmación) en una relación.
 
+### Vistas guardadas
+
+Una **vista** es un diagrama con sus propias posiciones (por ejemplo, *Mapa General* y *ERP Producción*). El selector de la barra superior cambia de vista; cada una recuerda dónde dejaste cada servidor y su encuadre.
+
+- **＋ Nueva vista** (administradores): nombre y descripción opcional.
+- **✎ Editar vista** (administradores): renombra la vista actual o la elimina con **Eliminar vista** (pide confirmación). Eliminar una vista borra solo sus posiciones: los servidores y sus relaciones no cambian. La vista predeterminada no se puede eliminar.
+
+### Exportar el mapa
+
+Botón **Exportar** de la barra superior:
+
+| Formato | Contenido |
+|---------|-----------|
+| **SVG** (Editor 2D) | Diagrama vectorial con sus estilos, para abrir o imprimir en cualquier visor |
+| **PNG** (Editor 2D) | Imagen del diagrama a doble resolución, para informes y presentaciones |
+| **PNG de la vista 3D** | Captura de la escena 3D tal como se ve |
+| **JSON** | Servidores, posiciones y relaciones de la vista actual |
+
+Los archivos se descargan con el nombre `topologia-<vista>-<fecha>.<extensión>`.
+
 ### Simular una caída e impacto en cascada
 
 - Si Monitoreo detecta servidores caídos o degradados, aparece arriba a la derecha un indicador compacto (por ejemplo, *2 caídas · 4 afectados*). Haz clic para ver el detalle (qué servidores se ven afectados y a qué nivel) y en **×** para plegarlo; el mapa recuerda si lo dejaste abierto.
-- **Simular caída:** activa el modo simulación y haz clic en uno o varios servidores para ver qué pasaría si cayeran. No modifica datos ni envía alertas. Sales con el mismo botón, con la **×** de la banda superior o con `Esc`.
+- **Simular caída:** activa el modo simulación y haz clic en uno o varios servidores para ver qué pasaría si cayeran (o pulsa `S` con un servidor seleccionado). El mapa resalta la cadena de impacto por niveles, atenúa los servidores no relacionados y el indicador muestra el resumen (por ejemplo, *«Si cae srv-nas-01, se ven afectados 12 servidores»*). Un segundo clic en un servidor quita su caída simulada. No modifica datos ni envía alertas. Sales con el mismo botón, con la **×** de la banda superior o con `Esc`.
 - **Ver solo impacto** (en el detalle del indicador) atenúa todo lo que no está afectado.
 
 ### Leyenda de colores
@@ -230,7 +258,7 @@ El grosor de cada relación indica su criticidad (crítica, alta, media o baja) 
 | Rol | Qué puede hacer en el mapa |
 |-----|----------------------------|
 | **Viewer** | Ver el 3D y el 2D, buscar, filtrar, inspeccionar, simular caídas, exportar y usar la lista. No ve controles de edición ni puntos de conexión. |
-| **Admin / Superadmin** | Todo lo anterior y además crear, editar y eliminar relaciones, mover servidores, guardar posiciones y crear vistas. |
+| **Admin / Superadmin** | Todo lo anterior y además crear, editar y eliminar relaciones (también desde el detalle del servidor), mover servidores, guardar posiciones y crear, renombrar o eliminar vistas. |
 
 ### Accesibilidad
 

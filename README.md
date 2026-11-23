@@ -18,6 +18,8 @@ Sistema web profesional para visualizar y gestionar servidores físicos y virtua
 
 ## 🚀 Inicio Rápido
 
+> 🐳 ¿Solo quieres verlo funcionando? Sigue la [guía de demostración con Docker](./docs/GUIA-DEMO-DOCKER.md).
+
 ### Requisitos
 - Node.js 18+
 - Archivo Excel con datos de servidores
@@ -143,6 +145,7 @@ Ver [**SEGURIDAD-RED.md**](./docs/SEGURIDAD-RED.md) para más detalles.
 - 🔒 [**SEGURIDAD-RED.md**](./docs/SEGURIDAD-RED.md) - Protección automática en redes públicas
 - 🌐 [**ACCESO-RED.md**](./docs/ACCESO-RED.md) - Configuración de acceso en red local
 - ⚙️ [**PM2-GUIA.md**](./docs/PM2-GUIA.md) - Gestión con PM2 para producción
+- 🐳 [**GUIA-DEMO-DOCKER.md**](./docs/GUIA-DEMO-DOCKER.md) - Demostración en Docker (Windows): instalación desde cero, datos de ejemplo y recorrido del Mapa de Dependencias
 - 📚 [**INDEX.md**](./docs/INDEX.md) - Índice completo de documentación
 
 ## 🛠️ Configuración

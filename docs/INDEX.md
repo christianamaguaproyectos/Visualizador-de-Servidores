@@ -8,6 +8,9 @@
 ### Si eres **Usuario/Admin**
 👉 Empieza aquí: [**GUIA-RAPIDA.md**](./GUIA-RAPIDA.md)
 
+### Si vas a **mostrar el sistema en Docker** (demostración en Windows)
+👉 Sigue: [**GUIA-DEMO-DOCKER.md**](./GUIA-DEMO-DOCKER.md)
+
 ### Si necesitas **Configurar Acceso en Red**
 👉 Lee esto: [**ACCESO-RED.md**](./ACCESO-RED.md) y [**SEGURIDAD-RED.md**](./SEGURIDAD-RED.md)
 
@@ -156,6 +159,7 @@
 2. [COMPARACION.md](./COMPARACION.md) → Ejemplos visuales
 3. [PLAN-DEPENDENCIAS-Y-TOPOLOGIA-SERVIDORES.md](./PLAN-DEPENDENCIAS-Y-TOPOLOGIA-SERVIDORES.md) → Mapa de Dependencias y Topología (plan y estado de ejecución)
 4. [API-REST.md](./API-REST.md) → Referencia de endpoints (incluye Dependencias y Topología)
+5. [GUIA-DEMO-DOCKER.md](./GUIA-DEMO-DOCKER.md) → Levantar todo en Docker, cargar datos de demostración y recorrido del Mapa de Dependencias
 
 ### 🔄 Migración
 1. [GUIA-RAPIDA.md](./GUIA-RAPIDA.md) → Sección "Migración Permanente"

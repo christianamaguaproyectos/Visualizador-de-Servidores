@@ -245,7 +245,7 @@ Implementar usando el pool compartido ([db.js](../backend/src/config/db.js) / Pr
 | :--- | :--- | :--- |
 | **Fase 1** — Backend, esquema y API | ✅ Completada (1.1, 1.2, 1.3) | `feat/dependencias-fase1-backend` |
 | **Fase 2** — Lienzo interactivo `/dependencias` | ✅ Completada (2.1, 2.2, 2.3) | `feat/dependencias-fase2-canvas-drawio` |
-| **Fase 3** — Impacto, vistas, exportación e integración en inventario | ⏳ Pendiente | `feat/dependencias-fase3-impacto-vistas-export` |
+| **Fase 3** — Impacto, vistas, exportación e integración en inventario | ✅ Completada (3.1, 3.2, 3.3, 3.4) | `feat/dependencias-fase3-impacto-vistas-export` |
 
 ### Fase 1: entregado
 
@@ -281,7 +281,7 @@ Implementar usando el pool compartido ([db.js](../backend/src/config/db.js) / Pr
   - **Editor 2D** (`lienzoDrawio.js`): tarjetas arrastrables con ajuste a cuadrícula de 10 px, puertos N/S/E/O para crear relaciones arrastrando, curvas Bézier con punta de flecha, separación de relaciones mutuas (`isBidirectionalPair`) y paralelas, formulario rápido con buscadores, ⇅ e inversa opcional, inspector con edición y eliminación (con confirmación) para administradores.
 - **2.3 Auto-layout** (`autoLayout.js`, funciones puras): componentes fuertemente conexas (Tarjan iterativo) para que los ciclos formen un bloque, niveles por el camino más largo hasta un proveedor y orden por baricentro; disposiciones *Por capas* (280 × 150 px) y *Anillos*.
 - **Pruebas:** `tests/unit/topologia-layout.test.js` (auto-layout, geometría de aristas, disposición de sala de datos, reescritura del especificador de three) y `tests/integration/dependencias-pagina.test.js` (página con la CSP estricta, `/vendor/three` con lista cerrada y 404 al resto, sin sesión no se sirve nada). Verificación en navegador real (Chromium) con la app y PostgreSQL en Docker: sin errores de consola ni violaciones de CSP.
-- **Adelantado de la Fase 3** sobre la API real: simulación de caída e indicador de impacto, exportación (SVG, PNG 2D/3D, JSON), minimapa y selector/creación de vistas.
+- **Adelantado de la Fase 3** sobre la API real: simulación de caída e indicador de impacto, exportación (SVG, PNG 2D/3D, JSON), minimapa y selector/creación de vistas (se completa en la Fase 3).
 
 ### Decisiones de la Fase 2
 
@@ -290,3 +290,18 @@ Implementar usando el pool compartido ([db.js](../backend/src/config/db.js) / Pr
 3. **Interfaz:** una acción por control visible; toda ventana o panel flotante (modales, inspector, indicador de impacto, leyenda, minimapa, menú **⋯**, banda de simulación, confirmaciones) se cierra con **×** además de `Esc`/Cancelar. El impacto de las caídas reales se muestra como un indicador compacto plegable que recuerda su estado.
 4. **El auto-layout guarda `pinned: false`** en los nodos que coloca, como pide la API de la Fase 1.
 5. **Permisos en la interfaz:** el rol `viewer` no ve controles de edición, puertos ni paleta; la API rechaza igualmente cualquier escritura (403).
+
+### Fase 3: entregado
+
+- **3.1 Impacto real y simulación** (`simuladorImpacto.js`): los servidores `DOWN`/`DEGRADED` de Monitoreo brillan en rojo/ámbar, las relaciones hacia sus dependientes se animan y los afectados muestran su nivel; **Simular caída** marca uno o varios servidores (clic o tecla `S`), resalta la cadena por niveles, atenúa lo no relacionado y resume *«Si cae X, se ven afectados N servidores…»* sin escribir en la base.
+- **3.2 Vistas, exportación y minimapa:** selector de vistas con posiciones y encuadre propios; los administradores crean, renombran y eliminan vistas desde un único modal (la predeterminada no se elimina). **Exportar**: SVG con estilos embebidos y PNG ×2 del Editor 2D, PNG de la vista 3D y JSON con nodos, posiciones y relaciones (`exportadorDiagrama.js`). Minimapa en ambos modos. `/dependencias?focus=<id>` selecciona y centra el servidor, aunque no tenga relaciones.
+- **3.3 Detalle de servidor** en `/fisicos` y `/virtuales` (`bloqueDependenciasServidor.js`, `css/dependencias-detalle.css`): bloque **Dependencias e impacto** con `GET /api/dependencies/server/:id/impact`: proveedores y dependientes con estado de monitoreo, total afectado en cascada y ciclos; para administradores, eliminar relación (con confirmación) y un formulario compacto en línea para relacionar con otro servidor; **Abrir en el mapa**.
+- **Datos de demostración:** `scripts/seed-demo-topologia.js` (idempotente; `--borrar` elimina solo lo que creó). Ver [GUIA-DEMO-DOCKER.md](./GUIA-DEMO-DOCKER.md).
+- **3.4 Pruebas:** `tests/integration/dependencias-fase3.test.js` (datos de demostración, ciclo de vida de vistas, bloque del detalle y páginas sin código inline) junto a `dependencies.test.js` (puntos 1 a 6) y `dependencias-pagina.test.js` (punto 7). `npm run lint` sin errores y `npm test` en verde con PostgreSQL 17. Verificación en navegador real (Chromium) con la aplicación en Docker: detalle de servidor, enfoque desde el detalle, vistas, archivos exportados válidos, simulación, cierres con **×**, sin errores de consola ni violaciones de CSP.
+
+### Decisiones de la Fase 3
+
+1. **Formulario de relación en el detalle de servidor:** formulario compacto en línea (dirección, servidor, tipo y criticidad) en lugar de una ventana emergente; los campos avanzados (puerto, protocolo, etiqueta, notas, relación mutua) siguen en el formulario completo del mapa.
+2. **Una acción por control:** **Nueva vista** y **Editar vista** comparten el modal; eliminar la vista está dentro de *Editar vista*. En el detalle, el formulario se cierra con su **×** o `Esc`.
+3. **Permisos:** el `viewer` ve el bloque del detalle y **Abrir en el mapa**, pero no los botones de relacionar ni eliminar; la API rechaza igualmente cualquier escritura (403).
+4. **Datos de demostración marcados:** los servidores llevan una `identity_key` con prefijo propio, los racks y hosts de monitoreo una marca; los checks de monitoreo demo quedan desactivados para que el estado no cambie solo. Si ya existe un rack con el mismo nombre, se reutiliza y no se borra.

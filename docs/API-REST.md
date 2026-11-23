@@ -993,7 +993,7 @@ No son endpoints de datos, pero también requieren sesión:
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| GET | `/dependencias` | Página del Mapa de Dependencias (`dependencies.html`). Sin sesión redirige al login. |
+| GET | `/dependencias` | Página del Mapa de Dependencias (`dependencies.html`). Sin sesión redirige al login. Parámetros opcionales: `vista=<slug>`, `modo=3d` o `modo=2d` y `focus=<serverId>` (selecciona y centra ese servidor; lo usa **Abrir en el mapa** del detalle de servidor). |
 | GET | `/vendor/three/three.module.js` | three.js (r170) auto-alojado desde el paquete npm `three`. |
 | GET | `/vendor/three/addons/controls/OrbitControls.js` | Controles de cámara de la vista 3D. |
 | GET | `/vendor/three/addons/renderers/CSS2DRenderer.js` | Etiquetas HTML de la vista 3D. |
