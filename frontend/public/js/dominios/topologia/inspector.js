@@ -158,13 +158,14 @@ export function crearInspector({ raiz, estado, acciones }) {
       h('section', { class: 'topo-insp__seccion' }, h('h3', {}, `Depende de (${salientes.length})`), listaRelaciones(salientes, 'out')),
       h('section', { class: 'topo-insp__seccion' }, h('h3', {}, `Dependen de él (${entrantes.length})`), listaRelaciones(entrantes, 'in')),
       h('section', { class: 'topo-insp__seccion' }, h('h3', {}, 'Análisis'), analisis),
-      fichaInventario(n),
       h('div', { class: 'topo-insp__acciones' },
         h('button', { type: 'button', class: 'btn btn-secondary topo-btn-sm', onClick: () => acciones.enfocar(id) }, icono('enfocar', 14), 'Enfocar'),
         h('button', { type: 'button', class: 'btn btn-secondary topo-btn-sm', onClick: () => acciones.simular(id) }, icono('rayo', 14), estado.simulados.has(id) ? 'Quitar simulación' : 'Simular caída'),
         estado.esAdmin ? h('button', { type: 'button', class: 'btn btn-primary topo-btn-sm', onClick: () => acciones.nuevaRelacion({ origen: id }) }, icono('mas', 14), 'Relación desde aquí') : null,
         estado.esAdmin ? h('a', { class: 'btn btn-secondary topo-btn-sm', href: `${tipo.ruta}#view=server&id=${encodeURIComponent(id)}&accion=editar`, title: 'Abre el formulario de edición del inventario' }, icono('editar', 14), 'Editar servidor') : null,
         h('a', { class: 'btn btn-secondary topo-btn-sm', href: `${tipo.ruta}#view=server&id=${encodeURIComponent(id)}` }, 'Ver en inventario')),
+      // La ficha completa va al final: las acciones quedan a la vista sin desplazar tanto
+      fichaInventario(n),
     );
     cuerpo.replaceChildren(...bloques.filter(Boolean));
   }

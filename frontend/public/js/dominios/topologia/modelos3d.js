@@ -27,7 +27,7 @@ const CAJA = { ancho: 3.0, alto: 3.4 };
 export const alturaAncla = (tipo) => ALTURA_ANCLA[tipo] ?? 1.0;
 const ALTURA_HALO = 1.1;
 // Frontal del servidor montado según su estado (sin luz: el color se lee igual desde lejos)
-const FRONTAL = { normal: '#2e4266', DOWN: '#c0281c', DEGRADED: '#8a5a00', MAINTENANCE: '#5b3aa8', UNKNOWN: '#2a3242' };
+const FRONTAL = { normal: '#3a5480', DOWN: '#c0281c', DEGRADED: '#8a5a00', MAINTENANCE: '#5b3aa8', UNKNOWN: '#2a3242' };
 
 /** Textura radial (blanco → transparente) para halos y sombras */
 function texturaRadial(colorCentro, alfaCentro) {
@@ -85,14 +85,14 @@ function crearRecursos() {
   geo.marco = new THREE.EdgesGeometry(geo.unidad);
   const tex = { halo: texturaRadial('255,255,255', 1), sombra: texturaRadial('0,0,0', 0.45), discontinua: texturaDiscontinua() };
   const mat = {
-    pedestal: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.3, roughness: 0.7 }),
+    pedestal: new THREE.MeshLambertMaterial({ color: 0xffffff }),
     anillo: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, side: THREE.DoubleSide }),
     seleccion: new THREE.MeshBasicMaterial({ color: ESCENARIO.seleccion, transparent: true, opacity: 0.9, toneMapped: false, side: THREE.DoubleSide }),
-    chasis: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.25, roughness: 0.6 }),
-    bahia: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.2, roughness: 0.55 }),
+    chasis: new THREE.MeshLambertMaterial({ color: 0xffffff }),
+    bahia: new THREE.MeshLambertMaterial({ color: 0xffffff }),
     led: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }),
-    rejilla: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.5, roughness: 0.6 }),
-    srvChasis: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.35, roughness: 0.5 }),
+    rejilla: new THREE.MeshLambertMaterial({ color: 0xffffff }),
+    srvChasis: new THREE.MeshLambertMaterial({ color: 0xffffff }),
     srvFrente: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }),
     marco: new THREE.LineBasicMaterial({ color: ESCENARIO.seleccion, toneMapped: false, transparent: true, opacity: 0.95 }),
     vmCubo: new THREE.MeshStandardMaterial({
@@ -522,8 +522,14 @@ export function crearModelosNodos(escena) {
     return [reg.centro.x, reg.centro.y, reg.centro.z + reg.slot.fondo / 2 + 0.05];
   }
 
+  /** Datos nuevos del grafo (estado de monitoreo e impacto) sin tocar la geometría */
+  function refrescarDatos(nodoDe) {
+    for (const reg of info) { const n = nodoDe(reg.id); if (n) reg.nodo = n; }
+  }
+
   return {
     construir,
+    refrescarDatos,
     actualizarEstilos,
     fijarEscala,
     fijarSeleccion,

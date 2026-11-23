@@ -45,7 +45,7 @@ const easeInOutCubic = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 /
  */
 const FPS_AMBIENTE = 30;
 const MS_HOVER = 30;
-const FPS_MINIMO = 40;
+const FPS_MINIMO = 45;
 
 export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alClicNodo, alClicArista, alClicRack, alClicVacio, alPerderContexto, alMoverCamara, alRendimientoBajo, alReconstruir }) {
   const dpr = window.devicePixelRatio || 1;
@@ -57,7 +57,7 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
-  const RATIO_ALTA = Math.min(dpr, 1.5);
+  const RATIO_ALTA = Math.min(dpr, 1.25);
   const ratioDeCalidad = () => (estado.calidad3d === 'rendimiento' ? 1 : RATIO_ALTA);
   let ratio = ratioDeCalidad();
   renderer.setPixelRatio(ratio);
@@ -148,14 +148,37 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
   function factorZ() { return LAYOUT.factorZ3d; }
   function aEspacio(p) { return new THREE.Vector3(p.x * ESCALA_3D, 0, p.y * ESCALA_3D * factorZ()); }
 
+  let firmaEstructura = null;
+  /** Lo que cambia la geometría: servidores, relaciones, racks/U, disposición y filtros (no el estado) */
+  function firmaDe(nodos, aristas, inventario) {
+    return JSON.stringify([
+      estado.disposicion3d,
+      nodos.map((n) => [n.id, n.type, n.name, n.ip, n.rack]),
+      aristas.map((e) => [e.id, e.source, e.target, e.dependencyType, e.criticality]),
+      (inventario || []).map((r) => [r.id, r.name, (r.servers || []).map((s) => [s.id, s.nombre, s.ip, s.rackPosition, s.rackUnits])]),
+      estado.disposicion3d === 'editor' ? [...estado.posiciones].map(([k, p]) => [k, p.x, p.y]) : null,
+    ]);
+  }
+
   function reconstruir({ encuadrar = false } = {}) {
     const nodos = estado.nodosVisibles();
     const aristas = estado.aristasVisibles(nodos);
+    // Cambio solo de estado (monitoreo, impacto): se recolorean las instancias sin reconstruir
+    const inventarioActual = estado.disposicion3d === 'editor' ? null : estado.racksSala?.();
+    const firma = firmaDe(nodos, aristas, inventarioActual);
+    if (!encuadrar && firma === firmaEstructura) {
+      nodos3d.refrescarDatos((id) => estado.nodoPorId.get(String(id)));
+      aristas3d.refrescarDatos((id) => estado.aristaPorId.get(String(id)));
+      actualizarEstilos();
+      alReconstruir?.();
+      return;
+    }
+    firmaEstructura = firma;
     centros = new Map();
     tipos = new Map();
     // Sala de racks (por defecto, con el inventario de racks), sala sin inventario o las
     // posiciones del editor 2D
-    const inventario = estado.disposicion3d === 'editor' ? null : estado.racksSala?.();
+    const inventario = inventarioActual;
     let sala = null;
     if (estado.disposicion3d !== 'editor') sala = inventario ? disposicionSalaRacks(nodos, inventario) : disposicionSala(nodos);
     slots = sala?.slots || new Map();
@@ -176,7 +199,9 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     etiquetas.construir(nodos, (id) => centros.get(String(id)), nombreDe, {
       anclaDe: (id) => { const s = slots.get(String(id)); return s ? [s.x, s.y + s.alto / 2, s.z + s.fondo / 2 + 0.06] : null; },
       detalleDe,
-      discreta: (id) => slots.has(String(id)),
+      // Sala de racks: los nombres van pintados en el frente del rack y en el rótulo del host;
+      // la etiqueta flotante solo aparece con caída, impacto, hover o selección
+      discreta: (id) => Boolean(sala?.racks) && (slots.has(String(id)) || tipos.get(String(id)) !== 'fisicos'),
     });
     caja = new THREE.Box3();
     for (const c of centros.values()) caja.expandByPoint(c);
@@ -684,6 +709,23 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     return { x: r.left + (v.x * 0.5 + 0.5) * r.width, y: r.top + (-v.y * 0.5 + 0.5) * r.height };
   }
 
+  /** Coste de la escena: llamadas de dibujo, triángulos y memoria aproximada de texturas (MB) */
+  function estadisticas() {
+    renderer.render(escena, camara);
+    const i = renderer.info;
+    const vistas = new Set();
+    let bytes = 0;
+    escena.traverse((o) => {
+      for (const m of [].concat(o.material || [])) {
+        const t = m.map;
+        if (!t || vistas.has(t) || !t.image?.width) continue;
+        vistas.add(t);
+        bytes += t.image.width * t.image.height * 4 * (t.generateMipmaps === false ? 1 : 4 / 3);
+      }
+    });
+    return { llamadas: i.render.calls, triangulos: i.render.triangles, geometrias: i.memory.geometries, texturas: vistas.size, memoriaTexturasMB: Math.round(bytes / 1048576 * 10) / 10 };
+  }
+
   /** Datos de la sala de racks (pruebas y accesibilidad) */
   function salaInfo() {
     return {
@@ -704,6 +746,7 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     enfocarNodo,
     enfocarRack,
     salaInfo,
+    estadisticas,
     reiniciarCamara,
     zoom,
     centrarEnPx,

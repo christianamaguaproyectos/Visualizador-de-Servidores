@@ -23,7 +23,7 @@ import { confirmAction } from '../ui-system/modalConfirm.js';
 const $ = (sel) => document.querySelector(sel);
 const toast = (msg, tipo = 'info', ms) => window.showToast?.(msg, tipo, ms);
 // Refresco del estado de monitoreo (los cambios de inventario llegan además por SSE)
-const INTERVALO_VIVO_MS = 15000;
+const INTERVALO_VIVO_MS = 30000;
 
 export async function iniciarPaginaDependencias() {
   const estado = crearEstadoTopologia();

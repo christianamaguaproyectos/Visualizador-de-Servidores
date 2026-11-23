@@ -96,7 +96,9 @@ export function crearZonasSuelo(escena) {
       }
       // Rótulo en el borde frontal (el más cercano a la cámara), para que los equipos no lo
       // tapen: el de cada bloque justo delante de él y el del área en su franja frontal
-      const alto = ALTO_ROTULO[z.tipo] || 1.35;
+      const lineasRotulo = String(z.etiqueta).split('\n').length;
+      // Un bloque con varias líneas (host con sus VMs) crece en alto; el gabinete ya tiene su medida
+      const alto = (ALTO_ROTULO[z.tipo] || 1.35) * (SIN_CONTORNO.has(z.tipo) ? 1 : 1 + 0.75 * (lineasRotulo - 1));
       const { textura, aspecto } = texturaTexto(z.etiqueta, COLORES[z.tipo] || COLORES.rack, TEXTO[z.tipo] || TEXTO.rack);
       const ancho = z.anchoRotulo ? Math.min(alto * aspecto, z.anchoRotulo) : Math.min(alto * aspecto, Math.max(4, z.x1 - z.x0 - 0.3));
       const plano = new THREE.Mesh(

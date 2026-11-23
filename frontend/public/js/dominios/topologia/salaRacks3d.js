@@ -12,8 +12,8 @@ import * as THREE from '/vendor/three/three.module.js';
 import { ESCENARIO } from './constantesVisuales.js';
 import { RACK, ALTO_GABINETE } from './salaDatos.js';
 
-const PX_ANCHO = 512; // resolución horizontal del rotulado frontal (≈30 px por U)
-const COLOR = { gabinete: '#22314a', gabineteSinRack: '#2f3646', riel: '#4a5d7d', ciego: '#172134', fantasma: '#3a4252' };
+const PX_ANCHO = 320; // resolución horizontal del rotulado frontal (≈19 px por U; 1 textura por rack)
+const COLOR = { gabinete: '#2c3d5c', gabineteSinRack: '#2f3646', riel: '#4a5d7d', ciego: '#1c2840', fantasma: '#3a4252' };
 const LATERAL = 0.14;
 
 export function crearSalaRacks3D(escena) {
@@ -22,9 +22,9 @@ export function crearSalaRacks3D(escena) {
   escena.add(grupo);
   const unidad = new THREE.BoxGeometry(1, 1, 1);
   const mat = {
-    estructura: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.45, roughness: 0.55 }),
-    ciego: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.2, roughness: 0.85 }),
-    fantasma: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.2, roughness: 0.7, transparent: true, opacity: 0.55 }),
+    estructura: new THREE.MeshLambertMaterial({ color: 0xffffff }),
+    ciego: new THREE.MeshLambertMaterial({ color: 0xffffff }),
+    fantasma: new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 }),
     invisible: new THREE.MeshBasicMaterial({ visible: false }),
     marco: new THREE.LineBasicMaterial({ color: ESCENARIO.seleccion, toneMapped: false, transparent: true, opacity: 0.9 }),
   };

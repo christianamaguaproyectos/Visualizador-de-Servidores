@@ -4,6 +4,7 @@
  * 'simulacion', 'foco', 'guardado', 'animaciones', 'calidad3d', 'disposicion3d'.
  */
 import { capas } from './autoLayout.js';
+import { graficosModestos } from './deteccionWebgl.js';
 
 export function crearEstadoTopologia() {
   const oyentes = new Map();
@@ -39,7 +40,8 @@ export function crearEstadoTopologia() {
     simulados: new Set(),
     focoImpacto: false,
     animaciones: animacionesGuardadas === null ? !preferenciaReducida : animacionesGuardadas === '1',
-    calidad3d: calidadGuardada === 'alta' || calidadGuardada === 'rendimiento' ? calidadGuardada : 'alta',
+    // Sin elección guardada: modo rendimiento en equipos sin GPU dedicada (portátiles)
+    calidad3d: calidadGuardada === 'alta' || calidadGuardada === 'rendimiento' ? calidadGuardada : (graficosModestos() ? 'rendimiento' : 'alta'),
     // Disposición de la vista 3D: 'sala' (sala de datos ordenada) | 'editor' (posiciones del 2D)
     disposicion3d: disposicionGuardada === 'editor' ? 'editor' : 'sala',
     calidad3dElegida: calidadGuardada === 'alta' || calidadGuardada === 'rendimiento',

@@ -231,6 +231,11 @@ export function crearAristas3D(escena) {
    * @param {(e) => 'normal'|'resaltada'|'tenue'|'atenuada'} estiloDe
    * @param {boolean} animaciones
    */
+  /** Datos nuevos de las relaciones (p. ej. si transportan impacto) sin reconstruir los tubos */
+  function refrescarDatos(aristaDe) {
+    for (const reg of aristas) { const e = aristaDe(reg.id); if (e) reg.arista = e; }
+  }
+
   function actualizarEstilos(estiloDe, animaciones) {
     aristas.forEach((reg, i) => {
       const estado = estiloDe(reg.arista);
@@ -304,6 +309,7 @@ export function crearAristas3D(escena) {
 
   return {
     construir,
+    refrescarDatos,
     actualizarEstilos,
     animar,
     pausarParticulas,

@@ -200,5 +200,5 @@ test('sala de racks: cada rack del inventario (también vacío) es un gabinete y
   assert.ok(s.zonas.some((z) => z.tipo === 'gabinete' && z.etiqueta === 'RACK-A1\n7/42U'));
   // Virtualización a la derecha de la sala de racks
   assert.ok(s.centros.get('20').x > sueltos.x + RACK.ancho);
-  assert.ok(s.zonas.some((z) => z.tipo === 'host' && z.etiqueta === 'Host srv-db-01'));
+  assert.ok(s.zonas.some((z) => z.tipo === 'host' && z.etiqueta === 'Host srv-db-01\nsrv-web-01'), 'el rótulo del host lista sus VMs');
 });

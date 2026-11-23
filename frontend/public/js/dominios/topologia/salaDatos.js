@@ -299,7 +299,13 @@ export function disposicionSalaRacks(nodos, racks = []) {
     // Dos bloques por fila; las filas crecen hacia el fondo y la delantera queda a la altura
     // del frente de los racks (la sala se ve compacta y los racks siguen siendo protagonistas)
     const x0 = listaRacks.length ? xMaxInfra + RACK.separacionVirtualizacion : 0;
-    const r = colocarFilas(bloquesVirt, 0, (b) => (b.zona.tipo === 'host' ? `Host ${b.nombre}` : `Clúster ${b.nombre}`), listaRacks.length ? 2 : SALA.bloquesPorFila);
+    const conVms = (b) => {
+      const nombres = vmsPorHost.get(b.nombre).map((v) => v.name || `#${v.id}`);
+      const lineas = [];
+      for (let i = 0; i < nombres.length; i += 3) lineas.push(nombres.slice(i, i + 3).join(' · '));
+      return [`${b.zona.tipo === 'host' ? 'Host' : 'Clúster'} ${b.nombre}`, ...lineas].join('\n');
+    };
+    const r = colocarFilas(bloquesVirt, 0, conVms, listaRacks.length ? 2 : SALA.bloquesPorFila);
     const dz = listaRacks.length ? -r.zFin : 0;
     r.centros.forEach((v, k) => centros.set(k, { x: v.x + x0, z: v.z + dz }));
     for (const q of r.zonas) { q.x0 += x0; q.x1 += x0; q.z0 += dz; q.z1 += dz; }
