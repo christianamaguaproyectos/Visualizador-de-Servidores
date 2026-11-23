@@ -415,6 +415,8 @@ body.topo-modo-2d .topo-estado--cargando { background: rgba(248, 250, 252, 0.7);
 .topo-modal__cabecera { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px 8px; }
 .topo-modal__titulo { margin: 0; font: 700 18px var(--topo-titulo); }
 .topo-modal__acciones { display: flex; justify-content: flex-end; gap: 8px; padding-top: 6px; }
+.topo-modal__accion-izq { margin-right: auto; }
+.topo-modal__accion-izq[hidden] { display: none; }
 .topo-form { display: flex; flex-direction: column; gap: 12px; padding: 4px 18px 18px; }
 .topo-form__extremos { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: start; }
 .topo-form__invertir { margin-top: 24px; }

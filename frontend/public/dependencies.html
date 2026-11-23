@@ -28,6 +28,9 @@
         <button type="button" id="topo-vista-nueva" class="topo-icon-btn topo-solo-admin is-hidden" title="Nueva vista" aria-label="Nueva vista">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
         </button>
+        <button type="button" id="topo-vista-editar" class="topo-icon-btn topo-solo-admin is-hidden" title="Renombrar o eliminar la vista" aria-label="Editar vista">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+        </button>
       </div>
 
       <div class="topo-buscar">
@@ -303,6 +306,7 @@
           <textarea id="topo-vista-desc" name="description" rows="2" maxlength="1000"></textarea>
         </div>
         <div class="topo-modal__acciones">
+          <button type="button" class="btn btn-danger topo-modal__accion-izq" data-accion="eliminar-vista" hidden>Eliminar vista</button>
           <button type="button" class="btn btn-secondary" data-accion="cancelar">Cancelar</button>
           <button type="submit" class="btn btn-primary">Crear vista</button>
         </div>

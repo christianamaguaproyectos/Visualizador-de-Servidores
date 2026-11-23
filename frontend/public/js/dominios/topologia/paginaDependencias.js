@@ -610,17 +610,37 @@ export async function iniciarPaginaDependencias() {
   modalAyuda.querySelectorAll('[data-accion="cancelar"]').forEach((b) => b.addEventListener('click', cerrarAyuda));
   modalAyuda.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); cerrarAyuda(); } });
 
-  // Nueva vista
+  // Vistas: el mismo modal crea una vista nueva o renombra/elimina la actual.
+  // Cada vista guarda sus propias posiciones; cambiar de vista recarga el grafo.
   const modalVista = $('#topo-modal-vista');
+  const btnEliminarVista = modalVista.querySelector('[data-accion="eliminar-vista"]');
   let liberarVista = null;
-  $('#topo-vista-nueva').addEventListener('click', () => {
-    modalVista.querySelector('form').reset();
+  let vistaEditada = null;
+  const vistaActual = () => estado.vistas?.find((v) => v.slug === $('#topo-vista').value) || estado.vista || null;
+
+  function abrirModalVista(vista = null) {
+    vistaEditada = vista;
+    const f = modalVista.querySelector('form');
+    f.reset();
+    if (vista) {
+      f.elements.name.value = vista.name || '';
+      f.elements.description.value = vista.description || '';
+    }
+    $('#topo-modal-vista-titulo').textContent = vista ? 'Editar vista' : 'Nueva vista';
+    f.querySelector('[type="submit"]').textContent = vista ? 'Guardar cambios' : 'Crear vista';
+    // La vista predeterminada no se puede eliminar (la API responde 409)
+    btnEliminarVista.hidden = !vista || Boolean(vista.isDefault);
     modalVista.querySelector('.topo-form__error-general').hidden = true;
     modalVista.hidden = false;
     liberarVista = atraparFoco(modalVista);
     modalVista.querySelector('input').focus();
+  }
+  $('#topo-vista-nueva').addEventListener('click', () => abrirModalVista(null));
+  $('#topo-vista-editar').addEventListener('click', () => {
+    const v = vistaActual();
+    if (v) abrirModalVista(v); else toast('No hay una vista seleccionada', 'warning');
   });
-  const cerrarVista = () => { modalVista.hidden = true; liberarVista?.(); };
+  const cerrarVista = () => { modalVista.hidden = true; vistaEditada = null; liberarVista?.(); };
   modalVista.querySelectorAll('[data-accion="cancelar"]').forEach((b) => b.addEventListener('click', cerrarVista));
   modalVista.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); cerrarVista(); } });
   modalVista.querySelector('form').addEventListener('submit', async (ev) => {
@@ -629,8 +649,17 @@ export async function iniciarPaginaDependencias() {
     const err = modalVista.querySelector('.topo-form__error-general');
     const name = f.elements.name.value.trim();
     if (!name) { err.textContent = 'El nombre es obligatorio.'; err.hidden = false; return; }
+    const description = f.elements.description.value.trim() || null;
     try {
-      const { view } = await api.crearVista({ name, description: f.elements.description.value.trim() || null });
+      if (vistaEditada) {
+        const { view } = await api.editarVista(vistaEditada.id, { name, description });
+        cerrarVista();
+        await cargarVistas();
+        if (estado.vista && String(estado.vista.id) === String(view.id)) estado.vista = { ...estado.vista, name: view.name, description: view.description };
+        toast(`Vista "${view.name}" guardada`, 'success');
+        return;
+      }
+      const { view } = await api.crearVista({ name, description });
       cerrarVista();
       vistaSel = view.slug;
       await cargarVistas();
@@ -638,6 +667,25 @@ export async function iniciarPaginaDependencias() {
       await recargar();
       toast(`Vista "${view.name}" creada`, 'success');
     } catch (e) { err.textContent = e.message; err.hidden = false; }
+  });
+  btnEliminarVista.addEventListener('click', async () => {
+    const v = vistaEditada;
+    if (!v) return;
+    cerrarVista();
+    const ok = await confirmAction({
+      title: 'Eliminar vista',
+      message: `Se eliminará la vista "${v.name}" y las posiciones guardadas en ella. Los servidores y sus relaciones no cambian.`,
+      confirmText: 'Eliminar',
+    });
+    if (!ok) return;
+    try {
+      await api.eliminarVista(v.id);
+      vistaSel = null;
+      await cargarVistas();
+      actualizarUrl();
+      await recargar();
+      toast(`Vista "${v.name}" eliminada`, 'success');
+    } catch (e) { toast(e.message || 'No se pudo eliminar la vista', 'error'); }
   });
 
   $('#topo-nueva-relacion').addEventListener('click', () => formulario.abrir({ origen: estado.seleccion?.tipo === 'nodo' ? estado.seleccion.id : null }));
@@ -722,9 +770,15 @@ export async function iniciarPaginaDependencias() {
   await cargarVistas();
   await recargar();
   if (focoInicial) {
+    // Un servidor sin relaciones ni posición en la vista no viene en el grafo: se muestran todos
+    if (!estado.nodoPorId.has(String(focoInicial)) && /^\d+$/.test(focoInicial)) {
+      includeIsolated = true;
+      $('#topo-ver-aislados').textContent = 'Ocultar servidores sin relaciones';
+      await recargar();
+    }
     if (estado.nodoPorId.has(String(focoInicial))) {
       setTimeout(() => seleccionar({ tipo: 'nodo', id: focoInicial }, { enfocar: true, parpadeo: true }), 50);
-    } else toast('El servidor no tiene relaciones en esta vista', 'warning');
+    } else toast('No se encontró el servidor solicitado', 'warning');
   }
   // Exposición mínima para las pruebas automatizadas en navegador
   window.__topologia = { estado, escena: () => escena, lienzo, simulador };
