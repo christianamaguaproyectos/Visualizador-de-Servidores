@@ -33,7 +33,7 @@ export const SERVIDORES = [
   ['srv-nas-01', 'fisicos', 'RACK-A3', '10.0.0.15', 'Genérica', 'NAS 2U', 'Almacenamiento'],
   ['srv-bkp-01', 'fisicos', 'RACK-A3', '10.0.0.16', 'Genérica', 'Servidor 2U', 'Linux'],
   ['srv-sw-01', 'fisicos', 'RACK-A4', '10.0.0.17', 'Genérica', 'Switch 1U', 'Red'],
-  ['srv-db-01', 'fisicos', 'RACK-B1', '10.0.0.18', 'Genérica', 'Servidor 2U', 'Linux'],
+  ['srv-db-01', 'fisicos', 'RACK-A5', '10.0.0.18', 'Genérica', 'Servidor 2U', 'Linux'],
   ['srv-web-01', 'virtuales', 'srv-hv-01', '10.0.0.21', null, null, 'Linux'],
   ['srv-api-01', 'virtuales', 'srv-hv-01', '10.0.0.22', null, null, 'Linux'],
   ['srv-portal-01', 'virtuales', 'srv-hv-01', '10.0.0.23', null, null, 'Linux'],
