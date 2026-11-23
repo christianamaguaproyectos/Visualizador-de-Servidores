@@ -3624,7 +3624,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const gestor = window.serverManager;
     if (!gestor) return;
     if (accion === 'editar' && params.get('id')) {
-      await gestor.openServerModalForEdit(params.get('id'));
+      // Mismo objeto que usa el botón Editar de la ficha (con todos sus campos)
+      const servidor = (DATA.servers || []).find((x) => String(x.id) === String(params.get('id')));
+      await gestor.openServerModalForEdit(servidor || params.get('id'));
     } else if (accion === 'agregar' && params.get('name')) {
       await gestor.openServerModal(params.get('name'));
       const posicion = Number(params.get('posicion'));
