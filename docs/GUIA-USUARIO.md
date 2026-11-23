@@ -166,14 +166,25 @@ Accede desde **🔗 Mapa de Dependencias** en el menú lateral o desde su tarjet
 
 ### Vista 3D (por defecto)
 
-La vista 3D representa el centro de datos como una **sala ordenada**:
+La vista 3D representa el centro de datos como una **sala de racks** fiel al inventario de **Servidores Físicos**:
 
-- **Infraestructura:** los servidores físicos se agrupan por su rack en bloques alineados, organizados en filas (`Fila A · RACK-01`, `Fila B · …`).
-- **Virtualización:** cada host aparece al frente de su bloque con sus máquinas virtuales en cuadrícula detrás (`Host …`); las VMs de un clúster sin host físico en el mapa se agrupan en su propio bloque (`Clúster …`).
-- Los servidores físicos se dibujan como gabinetes de rack (armario alto con sus unidades y luces de estado) y las VMs como cubos translúcidos. Cada fila, host, clúster y área lleva su rótulo en el borde frontal.
-- Las relaciones son arcos que pasan por encima de los equipos (más altos cuanto más lejos está el destino), con partículas que avanzan del origen al destino. Al pasar el puntero sobre un servidor, o al seleccionarlo, sus relaciones se resaltan y las demás se atenúan.
-- Los nombres de los servidores nunca se superponen: si dos chocan, uno se eleva con una línea guía hacia su equipo o se oculta temporalmente; las etiquetas de los servidores seleccionados, caídos o afectados tienen prioridad. Al pasar el puntero sobre un servidor se muestra su ficha breve con el nombre completo.
-- Al abrir el mapa (y con **Encajar**) la cámara se ajusta para que todo el contenido ocupe la vista.
+- **Sala de racks:** cada rack físico del inventario (también los vacíos) es un gabinete de **42U** en una fila de la sala, con el frente hacia ti. Su nombre y su ocupación (por ejemplo `RACK-A3 · 14/42U`) aparecen en la cabecera del gabinete y en el suelo, delante de él.
+- **Cada servidor en su unidad:** los servidores ocupan las mismas U que en la vista de rack de **Servidores Físicos** (posición `1-42` desde abajo y altura en U; los que no tienen posición ocupan el primer hueco libre, igual que en esa vista). El frente del rack muestra la numeración de las U, y el nombre y la IP de cada servidor; las U libres llevan paneles ciegos.
+- **Estado de monitoreo:** el frontal y el LED de cada servidor toman el color de su estado (UP verde, DOWN rojo, DEGRADED ámbar, MAINT violeta). Los servidores **caídos** muestran siempre su nombre en una **etiqueta roja**, sin necesidad de pasar el puntero.
+- **Virtualización:** a la derecha de la sala, cada host o clúster tiene su bloque con sus máquinas virtuales (cubos translúcidos); el rótulo del bloque lista los nombres de sus VMs.
+- **Dependencias:** arcos que salen del frente de la unidad del servidor y pasan por encima de los gabinetes, con partículas del origen al destino. Al pasar el puntero sobre un servidor, o al seleccionarlo, sus relaciones se resaltan y las demás se atenúan.
+- Los servidores que oculta un filtro siguen ocupando su U (en gris), para que el rack refleje siempre el inventario. Si un servidor físico no tiene rack o no cabe en el suyo, aparece en un rack aparte rotulado **Sin ubicar**.
+- Al abrir el mapa (y con **Encajar**) la cámara se ajusta para que toda la sala ocupe la vista.
+
+**Pasar el puntero** sobre un servidor muestra su resumen (nombre, IP, rack y U, modelo o sistema operativo, estado). **Clic** abre el inspector con el detalle completo: datos de monitoreo, impacto, de quién depende y quién depende de él, análisis de impacto y la **ficha de inventario** con los mismos campos que el detalle de **Servidores Físicos** o **Virtuales**. **Clic en un gabinete** (fuera de un servidor) abre la ficha del rack: ocupación, huecos libres y servidores por unidad; doble clic lo muestra de frente.
+
+Accesos desde el inspector:
+
+- **Ver en inventario:** abre el detalle del servidor en **Servidores Físicos** o **Virtuales** (o el rack en la vista de racks).
+- **Editar servidor** (administradores): abre el formulario de edición de **Servidores Físicos** o **Virtuales** con ese servidor.
+- **Agregar servidor en este rack** (administradores, en la ficha del rack): abre el formulario de alta de **Servidores Físicos** con el rack elegido y la primera posición libre para un equipo de 2U.
+
+**Tiempo real:** el mapa se actualiza sin recargar la página ni mover la cámara. Las altas, cambios y bajas de servidores o racks (desde **Servidores Físicos**, **Virtuales** o la API) llegan al instante; el estado de monitoreo se consulta cada 30 segundos mientras la pestaña está visible. La pastilla de resumen (caídas y afectados) se actualiza sola.
 
 | Acción | Cómo |
 |--------|------|
@@ -187,9 +198,9 @@ La vista 3D representa el centro de datos como una **sala ordenada**:
 
 En el menú **⋯ (Más opciones)**:
 
-- **Disposición 3D:** *sala de datos* (por defecto) o *posiciones del editor*, que coloca los servidores donde los dejaste en el Editor 2D.
-- **Modo rendimiento 3D:** menor resolución y sin animaciones de fondo para que el giro sea fluido en equipos modestos. Se activa solo (con un aviso) si el equipo no alcanza unos 40 fps al abrir el mapa; puedes cambiarlo cuando quieras y se recuerda en tu navegador.
-- **Animaciones**, **Mostrar filtros**, **Mostrar todos los servidores** (incluye los que aún no tienen relaciones) y **Atajos de teclado**.
+- **Disposición 3D:** *sala de datos* (la sala de racks, por defecto) o *posiciones del editor*, que coloca los servidores donde los dejaste en el Editor 2D.
+- **Modo rendimiento 3D:** menor resolución y sin animaciones de fondo para que el giro sea fluido en portátiles. Es el modo inicial en equipos con gráficos integrados y se activa solo (con un aviso) si el equipo no alcanza unos 45 fps al abrir el mapa; puedes cambiarlo cuando quieras y se recuerda en tu navegador.
+- **Animaciones**, **Mostrar filtros**, **Mostrar todos los servidores** (en el Editor 2D y con las posiciones del editor; la sala de racks ya los muestra todos) y **Atajos de teclado**.
 
 Si el navegador no admite WebGL, el mapa se abre directamente en el Editor 2D.
 
@@ -338,6 +349,7 @@ El sistema utiliza **Server-Sent Events (SSE)** para sincronizar datos automáti
 
 - 🔄 Al crear, editar, mover o eliminar un servidor, todos los usuarios verán los cambios.
 - 🔄 Al crear o eliminar un rack, la vista se actualiza.
+- 🔗 El **Mapa de Dependencias** (sala de racks 3D y Editor 2D) refleja esos cambios y el estado de monitoreo sin recargar la página.
 - 📊 Los contadores de KPIs se recalculan automáticamente.
 
 ---

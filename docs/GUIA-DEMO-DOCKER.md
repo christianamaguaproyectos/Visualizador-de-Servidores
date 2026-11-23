@@ -82,7 +82,7 @@ La contraseña debe tener entre 8 y 256 caracteres. La primera vez, este comando
 docker compose run --rm tools node scripts/seed-demo-topologia.js
 ```
 
-Crea 16 servidores ficticios (`srv-web-01`, `srv-db-01`…, IPs `10.0.0.x`) en racks, dos hosts con máquinas virtuales y un clúster; 23 relaciones de distintos tipos (con una dependencia circular `srv-web-01 ↔ srv-api-01` y la cadena `srv-api-01 → srv-db-01`); estado de monitoreo fijo con **srv-db-01 caído** y **srv-bkp-01 degradado**; y las posiciones del *Mapa General*.
+Crea 30 servidores ficticios (`srv-web-01`, `srv-db-01`…, IPs `10.0.0.x`): **cinco racks de 42U** (`RACK-A1` a `RACK-A5`) con 22 equipos físicos de 1U, 2U y 4U en su posición, con huecos libres y un equipo sin posición que ocupa el primer hueco; dos hosts con máquinas virtuales y un clúster; 23 relaciones de distintos tipos (con una dependencia circular `srv-web-01 ↔ srv-api-01` y la cadena `srv-api-01 → srv-db-01`); estado de monitoreo fijo con **srv-db-01 caído** y **srv-bkp-01 degradado**; y las posiciones del *Mapa General*.
 
 El script se puede ejecutar varias veces sin duplicar nada y no modifica datos reales.
 
@@ -93,11 +93,13 @@ Abre **http://localhost:3000** (o el puerto que pusiste en `APP_PORT`) e inicia 
 ## 7. Recorrido de demostración
 
 1. **Inicio:** el panel muestra las secciones; pulsa la tarjeta **Mapa de Dependencias** (o el enlace del menú lateral).
-2. **Mapa 3D:** la sala de datos aparece encuadrada: racks en fila, hosts con sus VMs y el clúster. `srv-db-01` brilla en rojo y el indicador superior derecho resume *2 caídas reales · 7 afectados*; al pulsarlo se despliega el detalle. Gira con el ratón y acerca con la rueda.
-3. **Pasar el puntero y hacer clic:** al pasar sobre un servidor se resaltan sus relaciones y se atenúan las demás; con un clic se abre el inspector con sus datos, de quién depende y quién depende de él.
-4. **Simular caída:** pulsa **Simular caída** y haz clic en `srv-nas-01`. El mapa resalta toda la cadena de impacto y el indicador separa las **caídas reales (monitoreo)** de las **caídas simuladas**, cada una con su conteo, y cuántos servidores se ven afectados. Sal con la **×** de la banda superior o con `Esc`.
-5. **Editor 2D y nueva relación:** pulsa **Editor 2D**, pasa el puntero sobre una tarjeta, arrastra desde uno de sus puntos de conexión hasta otra tarjeta y completa el formulario (tipo y criticidad). La relación aparece al guardar.
-6. **Detalle de servidor:** en **Servidores Físicos**, abre `srv-db-01`. En la fila superior, el botón **🔗 Dependencias e impacto** (con el número de relaciones) lleva al bloque del mismo nombre, que lista sus relaciones con su estado y el impacto en cascada; **Abrir en el mapa** vuelve al mapa con ese servidor seleccionado.
+2. **Sala de racks 3D:** aparecen los cinco racks en fila, cada uno con su nombre y su ocupación (`RACK-A3 · 14/42U`), y a la derecha la zona de virtualización con los hosts y el clúster. `srv-db-01` (en `RACK-A5`, U29–U30) tiene el frontal en rojo y una etiqueta roja visible; el indicador superior derecho resume *2 caídas reales · 7 afectados* y al pulsarlo se despliega el detalle. Gira con el ratón y acerca con la rueda.
+3. **Un rack de cerca:** haz doble clic en `RACK-A3`. Se ve de frente con la numeración de las U y cada equipo en su unidad (`srv-nas-01` ocupa U21–U24, como en la vista de rack de **Servidores Físicos**); el clic abre su ficha con los huecos libres.
+4. **Pasar el puntero y hacer clic:** al pasar sobre un servidor se ve su resumen (rack, U, modelo) y se resaltan sus relaciones; con un clic se abre el inspector con sus datos, de quién depende y quién depende de él, y su ficha de inventario. **Ver en inventario** abre su detalle en **Servidores Físicos**.
+5. **Tiempo real:** en otra pestaña, agrega un servidor en **Servidores Físicos** (por ejemplo en `RACK-A4`, posición 20, 2U) o usa **Agregar servidor en este rack** desde la ficha del rack. Al guardar, el equipo aparece en su U en la sala 3D sin recargar; al eliminarlo, desaparece.
+6. **Simular caída:** pulsa **Simular caída** y haz clic en `srv-nas-01`. El mapa resalta toda la cadena de impacto y el indicador separa las **caídas reales (monitoreo)** de las **caídas simuladas**, cada una con su conteo, y cuántos servidores se ven afectados. Sal con la **×** de la banda superior o con `Esc`.
+7. **Editor 2D y nueva relación:** pulsa **Editor 2D**, pasa el puntero sobre una tarjeta, arrastra desde uno de sus puntos de conexión hasta otra tarjeta y completa el formulario (tipo y criticidad). La relación aparece al guardar.
+8. **Detalle de servidor:** en **Servidores Físicos**, abre `srv-db-01`. En la fila superior, el botón **🔗 Dependencias e impacto** (con el número de relaciones) lleva al bloque del mismo nombre, que lista sus relaciones con su estado y el impacto en cascada; **Abrir en el mapa** vuelve al mapa con ese servidor seleccionado.
 
 Más detalles de cada función en la [Guía de usuario](./GUIA-USUARIO.md#mapa-de-dependencias).
 
