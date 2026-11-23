@@ -406,6 +406,7 @@ export async function iniciarPaginaDependencias() {
           alClicVacio: () => estado.seleccionar(null),
           alPerderContexto: () => { $('#topo-contexto').hidden = false; },
           alMoverCamara: actualizarEncuadre,
+          alRendimientoBajo: () => toast('La vista 3D pasó a modo rendimiento para moverse con fluidez. Puedes cambiarlo en el menú «Más opciones».', 'info', 6000),
         });
         pendiente3d = true;
         return escena;
@@ -431,7 +432,7 @@ export async function iniciarPaginaDependencias() {
     // El aviso de contexto gráfico perdido solo aplica a la vista 3D
     if (modo === '2d') $('#topo-contexto').hidden = true;
     $('#topo-paleta').classList.toggle('is-hidden', modo !== '2d' || !estado.esAdmin);
-    document.querySelectorAll('#topo-exportar-menu [data-modo]').forEach((li) => { li.hidden = li.dataset.modo !== modo; });
+    document.querySelectorAll('#topo-exportar-menu [data-modo], #topo-mas-menu [data-modo]').forEach((li) => { li.hidden = li.dataset.modo !== modo; });
     lienzo.mostrar(modo === '2d');
     actualizarUrl();
     leyenda.render();
@@ -551,6 +552,20 @@ export async function iniciarPaginaDependencias() {
   }));
 
   $('#topo-animaciones').addEventListener('click', () => estado.fijarAnimaciones(!estado.animaciones));
+  // Calidad 3D: alta (partículas, animación ambiental, resolución alta) o rendimiento
+  const botonCalidad = $('#topo-rendimiento3d');
+  const pintarCalidad = () => botonCalidad.setAttribute('aria-checked', estado.calidad3d === 'rendimiento' ? 'true' : 'false');
+  botonCalidad.addEventListener('click', () => estado.fijarCalidad3d(estado.calidad3d === 'rendimiento' ? 'alta' : 'rendimiento'));
+  estado.on('calidad3d', () => {
+    pintarCalidad();
+    // El antialias se fija al crear el contexto WebGL: si cambia, se recrea la escena
+    if (escena?.requiereRecrear()) {
+      escena.dispose();
+      escena = null; cargando3d = null; pendiente3d = true;
+      if (estado.modo === '3d') cambiarModo('3d');
+    }
+  });
+  pintarCalidad();
   $('#topo-ver-filtros').addEventListener('click', (ev) => {
     const visible = document.body.classList.toggle('topo-sin-filtros') === false;
     ev.currentTarget.setAttribute('aria-checked', visible ? 'true' : 'false');

@@ -4,6 +4,9 @@
  *
  * Los proxies de picking (tubos de r=0,18) NO se añaden a la escena: el raycast se hace
  * directamente contra ellos, así no cuestan llamadas de dibujo.
+ *
+ * Partículas: un único THREE.Points con un búfer de posiciones y colores para todas las
+ * aristas (una sola llamada de dibujo); se pausan mientras se gira la cámara.
  */
 import * as THREE from '/vendor/three/three.module.js';
 import { CSS2DObject } from '/vendor/three/addons/renderers/CSS2DRenderer.js';
@@ -16,6 +19,25 @@ const RADIO_SALIDA = 1.0;
 const RADIO_LLEGADA = 1.1;
 const VELOCIDAD = 2.5;
 const ESTADO_OPACIDAD = { normal: 1, resaltada: 1 / 0.6, tenue: 0.4, atenuada: 0 };
+// Segmentos de los tubos: a lo largo y alrededor (los tubos son finos: 4 lados bastan)
+const SEG_TUBO = 24;
+const LADOS_TUBO = 4;
+
+/** Textura redonda y difusa para las partículas */
+function texturaParticula() {
+  const c = document.createElement('canvas');
+  c.width = 32; c.height = 32;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.45, 'rgba(255,255,255,0.85)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 32, 32);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
 
 /** Curva que recorre la base solo hasta tFin (deja sitio a la punta) */
 class CurvaRecortada extends THREE.Curve {
@@ -30,10 +52,13 @@ export function crearAristas3D(escena) {
 
   const materiales = new Map();
   const geoPunta = new THREE.ConeGeometry(1, LARGO_PUNTA, 16);
-  const geoParticula = new THREE.SphereGeometry(0.07, 8, 6);
-  const geoCono = new THREE.ConeGeometry(0.11, 0.3, 12);
+  const texParticula = texturaParticula();
+  const geoCono = new THREE.ConeGeometry(0.11, 0.3, 8);
   const matPunta = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
-  const matParticula = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+  const matParticula = new THREE.PointsMaterial({
+    size: 0.26, map: texParticula, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending,
+    depthWrite: false, toneMapped: false, sizeAttenuation: true,
+  });
   const matProxy = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, transparent: true, opacity: 0 });
   const matResalte = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, toneMapped: false, depthWrite: false });
 
@@ -43,8 +68,16 @@ export function crearAristas3D(escena) {
   let particulas = null;
   let conos = null;
   let listaParticulas = [];
-  let resalte = null;
+  // Malla de resalte persistente (geometría vacía si no hay arista resaltada): su shader se
+  // compila al cargar la escena y no en el primer hover
+  const resalte = new THREE.Mesh(new THREE.BufferGeometry(), matResalte);
+  resalte.matrixAutoUpdate = false;
+  resalte.renderOrder = 2;
+  resalte.frustumCulled = false;
+  grupo.add(resalte);
   let tiempo = 0;
+  let particulasActivas = false; // animaciones encendidas y calidad alta
+  let particulasPausadas = false; // la cámara se está moviendo
   const tmpM = new THREE.Matrix4();
   const tmpQ = new THREE.Quaternion();
   const tmpV = new THREE.Vector3();
@@ -80,14 +113,16 @@ export function crearAristas3D(escena) {
 
   function limpiar() {
     for (const a of aristas) { grupo.remove(a.tubo); a.tubo.geometry.dispose(); a.proxy.geometry.dispose(); }
-    for (const m of [puntas, particulas, conos]) if (m) { grupo.remove(m); m.dispose(); }
+    for (const m of [puntas, conos]) if (m) { grupo.remove(m); m.dispose(); }
+    if (particulas) { grupo.remove(particulas); particulas.geometry.dispose(); }
     quitarResalte();
     aristas = []; porId = new Map(); listaParticulas = [];
     puntas = null; particulas = null; conos = null;
   }
 
   function quitarResalte() {
-    if (resalte) { grupo.remove(resalte); resalte.geometry.dispose(); resalte = null; }
+    resalte.geometry.dispose();
+    resalte.geometry = new THREE.BufferGeometry();
   }
 
   /**
@@ -119,10 +154,11 @@ export function crearAristas3D(escena) {
       const recortada = new CurvaRecortada(base, tFin);
       const crit = CRITICIDADES[e.criticality] || CRITICIDADES.MEDIUM;
       const r = crit.radio * (e.carriesImpact ? 1.15 : 1);
-      const tubo = new THREE.Mesh(new THREE.TubeGeometry(recortada, 48, r, 8, false), material(e.dependencyType, e.criticality, 'normal', e.carriesImpact));
+      const tubo = new THREE.Mesh(new THREE.TubeGeometry(recortada, SEG_TUBO, r, LADOS_TUBO, false), material(e.dependencyType, e.criticality, 'normal', e.carriesImpact));
       tubo.renderOrder = 1;
+      tubo.matrixAutoUpdate = false; // geometría ya en coordenadas del mundo
       grupo.add(tubo);
-      const proxy = new THREE.Mesh(new THREE.TubeGeometry(recortada, 24, 0.18, 6, false), matProxy);
+      const proxy = new THREE.Mesh(new THREE.TubeGeometry(recortada, 12, 0.18, 4, false), matProxy);
       proxy.updateMatrixWorld();
       const reg = { id: String(e.id), arista: e, base, recortada, tFin, largo, tubo, proxy, r, estado: 'normal', idx: aristas.length };
       proxy.userData.aristaId = reg.id;
@@ -133,6 +169,7 @@ export function crearAristas3D(escena) {
     puntas = new THREE.InstancedMesh(geoPunta, matPunta, Math.max(1, aristas.length));
     puntas.count = aristas.length;
     puntas.frustumCulled = false;
+    puntas.matrixAutoUpdate = false;
     puntas.renderOrder = 1;
     aristas.forEach((reg, i) => {
       const crit = CRITICIDADES[reg.arista.criticality] || CRITICIDADES.MEDIUM;
@@ -152,18 +189,23 @@ export function crearAristas3D(escena) {
       const cuantas = (CRITICIDADES[reg.arista.criticality] || CRITICIDADES.MEDIUM).particulas;
       for (let j = 0; j < cuantas; j++) listaParticulas.push({ reg, fase: j / cuantas });
     }
-    particulas = new THREE.InstancedMesh(geoParticula, matParticula, Math.max(1, listaParticulas.length));
-    particulas.count = listaParticulas.length;
+    const geoP = new THREE.BufferGeometry();
+    const posP = new THREE.BufferAttribute(new Float32Array(Math.max(1, listaParticulas.length) * 3), 3);
+    posP.setUsage(THREE.DynamicDrawUsage);
+    geoP.setAttribute('position', posP);
+    geoP.setAttribute('color', new THREE.BufferAttribute(new Float32Array(Math.max(1, listaParticulas.length) * 3).fill(1), 3));
+    geoP.setDrawRange(0, listaParticulas.length);
+    particulas = new THREE.Points(geoP, matParticula);
     particulas.frustumCulled = false;
-    particulas.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    particulas.matrixAutoUpdate = false;
     particulas.renderOrder = 5;
-    listaParticulas.forEach((_, i) => particulas.setColorAt(i, tmpColor.set(0xffffff)));
     grupo.add(particulas);
 
     // Conos fijos de dirección (sustituyen a las partículas con movimiento reducido)
     conos = new THREE.InstancedMesh(geoCono, matPunta, Math.max(1, aristas.length * 3));
     conos.count = aristas.length * 3;
     conos.frustumCulled = false;
+    conos.matrixAutoUpdate = false;
     aristas.forEach((reg, i) => {
       [0.3, 0.5, 0.7].forEach((t, j) => {
         const pos = reg.base.getPoint(t * reg.tFin, tmpV);
@@ -193,35 +235,45 @@ export function crearAristas3D(escena) {
       puntas.setColorAt(i, c);
       for (let j = 0; j < 3; j++) conos.setColorAt(i * 3 + j, c);
     });
+    const colores = particulas?.geometry.attributes.color;
     listaParticulas.forEach((p, i) => {
       const a = p.reg.arista;
       const factor = p.reg.estado === 'atenuada' ? 0 : p.reg.estado === 'tenue' ? 0.35 : 1;
-      particulas.setColorAt(i, tmpColor.set(a.carriesImpact ? COLOR_CAIDA : (TIPOS_DEPENDENCIA[a.dependencyType]?.color || '#cbd5e1')).multiplyScalar(factor));
+      tmpColor.set(a.carriesImpact ? COLOR_CAIDA : (TIPOS_DEPENDENCIA[a.dependencyType]?.color || '#cbd5e1')).multiplyScalar(factor);
+      colores.setXYZ(i, tmpColor.r, tmpColor.g, tmpColor.b);
     });
+    if (colores) colores.needsUpdate = true;
     if (puntas?.instanceColor) puntas.instanceColor.needsUpdate = true;
     if (conos?.instanceColor) conos.instanceColor.needsUpdate = true;
-    if (particulas?.instanceColor) particulas.instanceColor.needsUpdate = true;
-    if (particulas) particulas.visible = animaciones;
+    particulasActivas = animaciones;
+    if (particulas) particulas.visible = particulasActivas && !particulasPausadas;
     if (conos) conos.visible = !animaciones;
     if (animaciones) moverParticulas(0);
   }
 
+  /** Oculta las partículas mientras se mueve la cámara (y las recupera al soltar) */
+  function pausarParticulas(pausa) {
+    particulasPausadas = pausa;
+    if (particulas) particulas.visible = particulasActivas && !particulasPausadas;
+  }
+
   function moverParticulas(dt) {
+    if (!particulas) return;
     tiempo += dt;
+    const pos = particulas.geometry.attributes.position;
     listaParticulas.forEach((p, i) => {
       const reg = p.reg;
       const rapidez = reg.arista.carriesImpact ? 1.6 : 1;
       let t = (p.fase + (tiempo * VELOCIDAD * rapidez) / reg.largo) % 1;
       if (reg.arista.carriesImpact) t = 1 - t; // propagación target → source
       reg.base.getPoint(t * reg.tFin, tmpV);
-      tmpM.makeTranslation(tmpV.x, tmpV.y, tmpV.z);
-      particulas.setMatrixAt(i, tmpM);
+      pos.setXYZ(i, tmpV.x, tmpV.y, tmpV.z);
     });
-    if (particulas) particulas.instanceMatrix.needsUpdate = true;
+    pos.needsUpdate = true;
   }
 
   function animar(dt, animaciones) {
-    if (!animaciones || !listaParticulas.length) return false;
+    if (!animaciones || particulasPausadas || !listaParticulas.length) return false;
     moverParticulas(dt);
     return true;
   }
@@ -238,16 +290,16 @@ export function crearAristas3D(escena) {
     elEtqLinea2.hidden = !a.label;
     etiqueta.position.copy(reg.base.getPoint(0.5, tmpV));
     etiqueta.position.y += 0.35;
-    resalte = new THREE.Mesh(new THREE.TubeGeometry(reg.recortada, 48, reg.r * 1.3, 8, false), matResalte);
+    resalte.geometry.dispose();
+    resalte.geometry = new THREE.TubeGeometry(reg.recortada, SEG_TUBO, reg.r * 1.3, LADOS_TUBO, false);
     matResalte.color.set(a.carriesImpact ? COLOR_CAIDA : (TIPOS_DEPENDENCIA[a.dependencyType]?.color || '#ffffff'));
-    resalte.renderOrder = 2;
-    grupo.add(resalte);
   }
 
   return {
     construir,
     actualizarEstilos,
     animar,
+    pausarParticulas,
     resaltar,
     objetosPicking: () => aristas.map((a) => a.proxy),
     idDesdeInterseccion: (hit) => hit.object.userData.aristaId || null,
@@ -259,7 +311,8 @@ export function crearAristas3D(escena) {
       escena.remove(grupo);
       for (const m of materiales.values()) m.dispose();
       materiales.clear();
-      [geoPunta, geoParticula, geoCono].forEach((g) => g.dispose());
+      [geoPunta, geoCono].forEach((g) => g.dispose());
+      texParticula.dispose();
       [matPunta, matParticula, matProxy, matResalte].forEach((m) => m.dispose());
     },
   };

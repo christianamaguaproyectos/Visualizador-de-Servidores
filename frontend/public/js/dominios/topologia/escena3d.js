@@ -3,7 +3,14 @@
  * entrar en el modo 3D: el Editor 2D nunca descarga three.js.
  *
  * Render bajo demanda: solo hay bucle continuo mientras hay animación (partículas,
- * halos, tween de cámara o amortiguamiento de los controles).
+ * halos, tween de cámara o amortiguamiento de los controles). Para que gire fluido en
+ * equipos con gráficos integrados:
+ *  - las etiquetas CSS2D y el minimapa solo se recalculan cuando cambia la cámara o los datos;
+ *  - la animación ambiental (partículas, LEDs, halos) va a 30 fps como máximo y se
+ *    detiene mientras se gira o desplaza la cámara;
+ *  - el picking usa una caja invisible por nodo y el hover se limita a uno cada 30 ms;
+ *  - calidad 'rendimiento' (automática si los fps iniciales bajan de 40, o elegida en
+ *    el menú): resolución 1x, sin partículas ni animación ambiental, etiquetas mínimas.
  */
 import * as THREE from '/vendor/three/three.module.js';
 import { OrbitControls } from '/vendor/three/addons/controls/OrbitControls.js';
@@ -20,12 +27,23 @@ const easeInOutCubic = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 /
  * @param {{ contenedor: HTMLElement, estado: object, alClicNodo: Function, alClicArista: Function,
  *           alClicVacio: Function, alPerderContexto: Function, alMoverCamara?: Function }} opciones
  */
-export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alClicNodo, alClicArista, alClicVacio, alPerderContexto, alMoverCamara }) {
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+const FPS_AMBIENTE = 30;
+const MS_HOVER = 30;
+const FPS_MINIMO = 40;
+
+export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alClicNodo, alClicArista, alClicVacio, alPerderContexto, alMoverCamara, alRendimientoBajo }) {
+  const dpr = window.devicePixelRatio || 1;
+  // Antialias solo en calidad alta y pantallas de densidad normal (en alta densidad apenas se
+  // nota y cuesta mucho). Es fijo al crear el contexto: cambiar de calidad recrea la escena.
+  const antialias = dpr < 2 && estado.calidad3d === 'alta';
+  const renderer = new THREE.WebGLRenderer({ antialias, alpha: false, stencil: false, powerPreference: 'high-performance' });
+  renderer.shadowMap.enabled = false;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
-  let ratio = Math.min(window.devicePixelRatio || 1, 2);
+  const RATIO_ALTA = Math.min(dpr, 1.5);
+  const ratioDeCalidad = () => (estado.calidad3d === 'rendimiento' ? 1 : RATIO_ALTA);
+  let ratio = ratioDeCalidad();
   renderer.setPixelRatio(ratio);
   renderer.domElement.className = 'topo-3d__canvas';
   renderer.domElement.setAttribute('aria-hidden', 'true');
@@ -44,8 +62,10 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
   escena.add(sol);
 
   // Suelo y cuadrícula (celdas de 4 u)
-  const suelo = new THREE.Mesh(new THREE.PlaneGeometry(800, 800), new THREE.MeshStandardMaterial({ color: ESCENARIO.suelo, roughness: 0.95, metalness: 0 }));
+  const suelo = new THREE.Mesh(new THREE.PlaneGeometry(800, 800), new THREE.MeshBasicMaterial({ color: ESCENARIO.suelo }));
   suelo.rotation.x = -Math.PI / 2;
+  suelo.matrixAutoUpdate = false;
+  suelo.updateMatrix();
   escena.add(suelo);
   let rejilla = null;
   function crearRejilla(tam) {
@@ -56,6 +76,8 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     rejilla.material.opacity = 0.35;
     rejilla.material.depthWrite = false;
     rejilla.position.y = 0.001;
+    rejilla.matrixAutoUpdate = false;
+    rejilla.updateMatrix();
     escena.add(rejilla);
   }
 
@@ -87,10 +109,16 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
   let hoverActual = null;
   const raycaster = new THREE.Raycaster();
   const puntero = new THREE.Vector2();
-  // Medición de fps de los 3 primeros segundos
+  // Medición de fps de los 3 primeros segundos con bucle continuo
   const medicion = { inicio: 0, frames: 0, hecha: false };
+  let interactuando = false; // la persona está girando/desplazando la cámara
+  let camaraSucia = true; // etiquetas y minimapa deben recalcularse
+  let ultimoRender = 0;
+  let ultimoHover = 0;
 
   function animaciones() { return estado.animaciones; }
+  /** Animación ambiental (partículas, LEDs, núcleos, halos): solo en calidad alta y sin interacción */
+  function ambiente() { return estado.animaciones && estado.calidad3d === 'alta' && !interactuando; }
   controles.enableDamping = animaciones();
 
   // ── Datos → escena ───────────────────────────────────────────────────────
@@ -118,6 +146,8 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     const tam = caja.getSize(new THREE.Vector3());
     crearRejilla(Math.max(tam.x, tam.z) + 80);
     actualizarEstilos();
+    // Compila los shaders ahora (y no en el primer hover o clic)
+    renderer.compile(escena, camara);
     if (encuadrar) encajar({ instantaneo: true });
     pedirRender();
   }
@@ -132,12 +162,13 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     nodos3d.actualizarEstilos(estiloNodo);
     etiquetas.actualizarDatos(nodos, nombreDe, estiloNodo);
     const nodoFoco = hov?.tipo === 'nodo' ? hov.id : null;
+    camaraSucia = true; // las etiquetas cambian de contenido o de nivel de detalle
     aristas3d.actualizarEstilos((e) => {
       if (estado.aristaAtenuada(e)) return 'atenuada';
       if (nodoFoco) return String(e.source) === nodoFoco || String(e.target) === nodoFoco ? 'resaltada' : 'tenue';
       if ((hov?.tipo === 'arista' && hov.id === String(e.id)) || (sel?.tipo === 'arista' && sel.id === String(e.id))) return 'resaltada';
       return 'normal';
-    }, animaciones());
+    }, animaciones() && estado.calidad3d === 'alta');
     nodos3d.fijarSeleccion(sel?.tipo === 'nodo' ? sel.id : null);
     // Escala de hover (nodo, o extremos de la arista)
     const escalados = new Set();
@@ -214,7 +245,19 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
       camara.position.x += dx; camara.position.z += dz;
     }
   }
-  controles.addEventListener('change', () => { limitarObjetivo(); pedirRender(); });
+  controles.addEventListener('change', () => { limitarObjetivo(); camaraSucia = true; pedirRender(); });
+  // Mientras se gira o desplaza: sin partículas ni animación ambiental (solo la escena estática)
+  controles.addEventListener('start', () => {
+    interactuando = true;
+    aristas3d.pausarParticulas(true);
+    hoverPendiente = null;
+    if (hoverActual) { hoverActual = null; estado.fijarHover(null); }
+  });
+  controles.addEventListener('end', () => {
+    interactuando = false;
+    aristas3d.pausarParticulas(false);
+    pedirRender();
+  });
 
   /** Centra el objetivo en un punto del lienzo 2D (px), usado por el minimapa */
   function centrarEnPx(x, y) {
@@ -264,6 +307,8 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
   const lienzo = renderer.domElement;
   let abajo = null;
   lienzo.addEventListener('pointermove', (ev) => {
+    // Nunca se hace picking mientras se arrastra la cámara
+    if (abajo || interactuando) return;
     hoverPendiente = [ev.clientX, ev.clientY];
     pedirRender();
   });
@@ -284,8 +329,11 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     if (hit?.tipo === 'nodo') enfocarNodo(hit.id);
   });
 
-  function procesarHover() {
-    if (!hoverPendiente) return;
+  function procesarHover(ahora) {
+    if (!hoverPendiente || interactuando) return false;
+    // Como mucho un raycast cada MS_HOVER ms; el pendiente se procesa en un frame posterior
+    if (ahora - ultimoHover < MS_HOVER) return true;
+    ultimoHover = ahora;
     const [x, y] = hoverPendiente;
     hoverPendiente = null;
     const hit = elegir(x, y);
@@ -295,6 +343,7 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
       hoverActual = clave;
       estado.fijarHover(hit);
     }
+    return false;
   }
 
   // ── Bucle ────────────────────────────────────────────────────────────────
@@ -308,9 +357,8 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     if (!activo) return;
     const dt = Math.min(0.1, (ahora - ultimoT) / 1000);
     ultimoT = ahora;
-    reloj += dt;
-    procesarHover();
-    let seguir = false;
+    const hoverEnEspera = procesarHover(ahora);
+    let seguir = hoverEnEspera;
     if (tween) {
       const k = Math.min(1, (ahora - tween.t0) / tween.dur);
       const e = easeInOutCubic(k);
@@ -320,42 +368,74 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
       seguir = true;
     }
     const cambio = controles.update(dt);
-    const anim = animaciones();
-    const a1 = nodos3d.animar(reloj, dt, anim);
-    const a2 = aristas3d.animar(dt, anim);
-    seguir = seguir || cambio || a1 || a2;
-    if (seguir || pedido) render();
+    const urgente = seguir || cambio || pedido || camaraSucia;
+    // La animación ambiental avanza a FPS_AMBIENTE como máximo
+    const parpadeo = nodos3d.parpadeando();
+    let ambiental = false;
+    if (ambiente() || parpadeo) {
+      ambiental = true;
+      if (urgente || ahora - ultimoRender >= 1000 / FPS_AMBIENTE - 2) {
+        const paso = Math.min(0.1, (ahora - (ultimoRender || ahora)) / 1000);
+        reloj += paso;
+        nodos3d.animar(reloj, paso, ambiente());
+        aristas3d.animar(paso, ambiente());
+        render(ahora);
+      }
+    } else if (urgente) {
+      render(ahora);
+    }
     pedido = false;
     medirFps(ahora);
-    if (seguir) raf = requestAnimationFrame(bucle);
+    if (seguir || cambio || ambiental) raf = requestAnimationFrame(bucle);
   }
 
-  function render() {
+  function render(ahora = performance.now()) {
+    ultimoRender = ahora;
+    renderer.render(escena, camara);
+    // Las etiquetas (DOM) y el minimapa solo se recalculan si la cámara o los datos cambiaron
+    if (!camaraSucia) return;
+    camaraSucia = false;
     const siempre = new Set();
     const completos = new Set();
     if (estado.seleccion?.tipo === 'nodo') { siempre.add(estado.seleccion.id); completos.add(estado.seleccion.id); }
     if (estado.hover?.tipo === 'nodo') { siempre.add(estado.hover.id); completos.add(estado.hover.id); }
-    etiquetas.nivelDetalle(camara, siempre, completos);
-    renderer.render(escena, camara);
+    etiquetas.nivelDetalle(camara, siempre, completos, { minimas: estado.calidad3d === 'rendimiento' });
     rotulos.render(escena, camara);
     if (alMoverCamara) alMoverCamara();
   }
 
+  /**
+   * Mide los fps de los primeros 3 s con animación continua. Si bajan de FPS_MINIMO y la
+   * persona no eligió la calidad, se pasa a 'rendimiento' y se avisa (una sola vez).
+   */
   function medirFps(ahora) {
     if (medicion.hecha) return;
-    if (!medicion.inicio) { medicion.inicio = ahora; return; }
+    if (!ambiente()) { medicion.inicio = 0; medicion.frames = 0; return; }
+    if (!medicion.inicio) { medicion.inicio = ahora; medicion.frames = 0; return; }
     medicion.frames++;
     const trans = ahora - medicion.inicio;
     if (trans >= 3000) {
       medicion.hecha = true;
+      // Ritmo del bucle (rAF): mide si el navegador llega a tiempo con la escena completa
       const fps = (medicion.frames * 1000) / trans;
-      if (fps < 40 && ratio > 1.25) {
-        ratio = 1.25;
-        renderer.setPixelRatio(ratio);
-        redimensionar();
+      medicion.fps = fps;
+      if (fps < FPS_MINIMO && !estado.calidad3dElegida && estado.calidad3d === 'alta') {
+        estado.fijarCalidad3d('rendimiento', { elegida: false });
+        alRendimientoBajo?.(fps);
       }
     }
   }
+
+  function aplicarCalidad() {
+    const nuevo = ratioDeCalidad();
+    if (nuevo !== ratio) {
+      ratio = nuevo;
+      renderer.setPixelRatio(ratio);
+      redimensionar();
+    }
+    actualizarEstilos();
+  }
+  const quitarOyenteCalidad = estado.on('calidad3d', aplicarCalidad);
 
   function redimensionar() {
     const w = Math.max(1, contenedor.clientWidth);
@@ -364,6 +444,7 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     rotulos.setSize(w, h);
     camara.aspect = w / h;
     camara.updateProjectionMatrix();
+    camaraSucia = true;
     pedirRender();
   }
   const observador = new ResizeObserver(redimensionar);
@@ -395,6 +476,7 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
 
   /** PNG del 3D: render y copia en el mismo tick (sin preserveDrawingBuffer) + rótulos y franja */
   function exportarCanvas(titulo) {
+    camaraSucia = true;
     render();
     const w = lienzo.width; const h = lienzo.height;
     const franja = Math.round(36 * ratio);
@@ -434,6 +516,7 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     pausar();
     observador.disconnect();
     document.removeEventListener('visibilitychange', alVisibilidad);
+    quitarOyenteCalidad();
     controles.dispose();
     nodos3d.dispose();
     aristas3d.dispose();
@@ -469,6 +552,9 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     reanudar,
     pedirRender,
     info: () => renderer.info,
+    /** true si la calidad actual pide otro antialias (hay que recrear la escena) */
+    requiereRecrear: () => antialias !== (dpr < 2 && estado.calidad3d === 'alta'),
+    fpsIniciales: () => medicion.fps ?? null,
     dispose,
   };
 }

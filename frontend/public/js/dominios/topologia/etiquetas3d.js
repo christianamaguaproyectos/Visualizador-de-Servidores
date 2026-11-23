@@ -7,6 +7,8 @@ import { CSS2DObject } from '/vendor/three/addons/renderers/CSS2DRenderer.js';
 import { ESTADOS, TIPOS_SERVIDOR, colorDeNodo, pildoraImpacto } from './constantesVisuales.js';
 
 const ALTURA = { fisicos: 2.55, virtuales: 1.95 };
+// Máximo de etiquetas visibles a la vez (las más cercanas; las importantes siempre)
+const MAX_VISIBLES = { alta: 40, minimas: 16 };
 
 export function crearEtiquetas3D(escena) {
   let registros = new Map();
@@ -73,30 +75,45 @@ export function crearEtiquetas3D(escena) {
       const reg = registros.get(String(n.id));
       if (!reg) continue;
       reg.nodo = n;
-      rellenar(reg, nombreDe);
-      reg.raiz = reg.el.raiz;
-      reg.el.raiz.classList.toggle('topo-etq--atenuada', estiloDe(n).atenuado);
+      // Solo se reescribe el DOM si cambió algo visible (el hover no cambia los datos)
+      const firma = [n.name, n.ip, n.status, n.type, n.isDown, n.downSource, n.cascadeStatus, n.impactLevel, (n.impactedByServers || []).join(',')].join('|');
+      if (reg.firma !== firma) { reg.firma = firma; rellenar(reg, nombreDe); }
+      const atenuada = estiloDe(n).atenuado;
+      if (reg.atenuada !== atenuada) { reg.atenuada = atenuada; reg.el.raiz.classList.toggle('topo-etq--atenuada', atenuada); }
     }
   }
 
   /**
-   * Nivel de detalle por distancia a la cámara.
+   * Nivel de detalle por distancia a la cámara. Solo toca el DOM cuando el nivel cambia.
    * @param {THREE.Camera} camara
    * @param {Set<string>} siempre IDs que deben mostrar al menos nombre y estado
+   * @param {Set<string>} completos IDs con etiqueta completa (hover y selección)
+   * @param {{minimas?: boolean}} opciones minimas: solo el nombre (modo rendimiento)
    */
-  function nivelDetalle(camara, siempre, completos) {
-    // Umbral de etiqueta completa: 30 u (la especificación pedía 45; con el encuadre ajustado
-    // casi toda la escena queda a <45 u y las etiquetas completas se solapaban)
-    const umbralCompleto = registros.size > 80 ? 22 : 30;
+  function nivelDetalle(camara, siempre, completos, { minimas = false } = {}) {
+    // Umbral de etiqueta completa: 30 u (22 con muchos nodos)
+    const umbralCompleto = minimas ? -1 : registros.size > 80 ? 22 : 30;
+    const lista = [];
     for (const reg of registros.values()) {
-      const d = camara.position.distanceTo(reg.obj.position);
-      const importante = siempre.has(reg.id) || reg.nodo.isDown || reg.nodo.cascadeStatus !== 'NONE';
+      reg.distancia = camara.position.distanceTo(reg.obj.position);
+      reg.importante = siempre.has(reg.id) || reg.nodo.isDown || reg.nodo.cascadeStatus !== 'NONE';
+      lista.push(reg);
+    }
+    // Las importantes primero y luego por cercanía; el resto se oculta pasado el máximo
+    lista.sort((a, b) => (b.importante - a.importante) || (a.distancia - b.distancia));
+    const maximo = minimas ? MAX_VISIBLES.minimas : MAX_VISIBLES.alta;
+    lista.forEach((reg, i) => {
+      const d = reg.distancia;
       let nivel = d < umbralCompleto ? 'completa' : d < 90 ? 'compacta' : 'oculta';
       if (completos.has(reg.id)) nivel = 'completa';
-      else if (nivel === 'oculta' && importante) nivel = 'compacta';
+      else if (nivel === 'oculta' && reg.importante) nivel = 'compacta';
+      if (i >= maximo && !reg.importante && !completos.has(reg.id)) nivel = 'oculta';
       reg.obj.visible = nivel !== 'oculta';
-      reg.el.raiz.classList.toggle('topo-etq--compacta', nivel === 'compacta');
-    }
+      if (reg.nivel !== nivel) {
+        reg.nivel = nivel;
+        reg.el.raiz.classList.toggle('topo-etq--compacta', nivel === 'compacta');
+      }
+    });
   }
 
   function limpiar() {

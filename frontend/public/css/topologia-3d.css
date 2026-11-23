@@ -24,7 +24,8 @@
   color: #f1f5ff;
   font: 400 12px/1.35 var(--font-family-sans);
   white-space: nowrap;
-  transition: opacity 150ms ease;
+  /* Sin transiciones, sombras ni desenfoque: la posición cambia en cada frame al girar */
+  contain: layout style;
 }
 .topo-etq__fila { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .topo-etq__nombre { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
@@ -44,4 +45,3 @@
 .topo-etq--arista .topo-etq__fila { justify-content: center; font-weight: 600; }
 .topo-etq__sub { color: #b6c4dc; }
 
-body.topo-sin-animaciones .topo-etq { transition: none; }

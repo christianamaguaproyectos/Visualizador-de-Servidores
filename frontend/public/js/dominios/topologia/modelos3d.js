@@ -2,6 +2,9 @@
  * Modelos 3D de los servidores (§4). Geometrías y materiales compartidos; las piezas
  * repetidas son InstancedMesh con color por instancia. Cada nodo guarda la lista de
  * sus piezas (malla, índice de instancia y matriz local) para poder escalarlo en hover.
+ *
+ * Picking: una caja invisible por nodo (una sola InstancedMesh fuera de la escena), en
+ * lugar de raycast contra todas las piezas. Halos: materiales compartidos por color.
  */
 import * as THREE from '/vendor/three/three.module.js';
 import { ESCENARIO, ESTADOS, COLOR_CAIDA, colorDeNodo } from './constantesVisuales.js';
@@ -46,17 +49,19 @@ function texturaDiscontinua() {
 
 function crearRecursos() {
   const geo = {
-    pedestalFis: new THREE.CylinderGeometry(1.5, 1.6, 0.12, 48).translate(0, 0.06, 0),
+    pedestalFis: new THREE.CylinderGeometry(1.5, 1.6, 0.12, 24).translate(0, 0.06, 0),
     pedestalVm: new THREE.CylinderGeometry(1.35, 1.45, 0.12, 6).translate(0, 0.06, 0),
-    anillo: new THREE.RingGeometry(1.42, 1.6, 64).rotateX(-Math.PI / 2),
-    seleccion: new THREE.RingGeometry(1.75, 1.85, 64).rotateX(-Math.PI / 2),
+    anillo: new THREE.RingGeometry(1.42, 1.6, 32).rotateX(-Math.PI / 2),
+    seleccion: new THREE.RingGeometry(1.75, 1.85, 40).rotateX(-Math.PI / 2),
     chasis: new THREE.BoxGeometry(1.6, 2.0, 1.2),
     bahia: new THREE.BoxGeometry(1.44, 0.36, 0.04),
     led: new THREE.BoxGeometry(0.07, 0.07, 0.02),
     rejilla: new THREE.BoxGeometry(1.2, 0.02, 0.8),
     vmCubo: new THREE.BoxGeometry(1.3, 1.3, 1.3),
     vmNucleo: new THREE.OctahedronGeometry(0.28),
-    sombra: new THREE.CircleGeometry(1.9, 32).rotateX(-Math.PI / 2),
+    sombra: new THREE.CircleGeometry(1.9, 24).rotateX(-Math.PI / 2),
+    // Volumen de picking de un nodo (cubre pedestal, chasis o cubo)
+    caja: new THREE.BoxGeometry(3.0, 2.5, 3.0).translate(0, 1.25, 0),
   };
   geo.vmAristas = new THREE.EdgesGeometry(geo.vmCubo);
   const tex = { halo: texturaRadial('255,255,255', 1), sombra: texturaRadial('0,0,0', 0.45), discontinua: texturaDiscontinua() };
@@ -75,6 +80,7 @@ function crearRecursos() {
     vmAristas: new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9, toneMapped: false }),
     vmNucleo: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }),
     sombra: new THREE.MeshBasicMaterial({ map: tex.sombra, transparent: true, depthWrite: false, color: 0xffffff }),
+    invisible: new THREE.MeshBasicMaterial({ visible: false }),
     discontinuo: new THREE.MeshBasicMaterial({
       map: tex.discontinua, color: COLOR_CAIDA, transparent: true, toneMapped: false, side: THREE.DoubleSide, depthWrite: false,
     }),
@@ -107,8 +113,10 @@ export function crearModelosNodos(escena) {
   let mallas = {};
   let info = []; // por nodo
   let infoPorId = new Map();
-  let mapaPicking = new Map(); // malla -> [infoIndex por instancia]
+  let cajas = null; // InstancedMesh de picking (instancia i = info[i]); no se dibuja
   let lineasVm = null;
+  const materialesHalo = new Map(); // `${color}|${late}` -> SpriteMaterial compartido
+  let ultimoLed = -1;
   let halos = [];
   let discontinuos = [];
   let seleccionId = null;
@@ -122,22 +130,34 @@ export function crearModelosNodos(escena) {
   function limpiar() {
     for (const m of Object.values(mallas)) { grupo.remove(m); m.dispose(); }
     if (lineasVm) { grupo.remove(lineasVm); lineasVm.geometry.dispose(); lineasVm = null; }
-    for (const h of halos) { grupo.remove(h.sprite); h.sprite.material.dispose(); }
+    for (const h of halos) grupo.remove(h.sprite);
     for (const d of discontinuos) grupo.remove(d.mesh);
-    mallas = {}; info = []; infoPorId = new Map(); mapaPicking = new Map(); halos = []; discontinuos = [];
+    if (cajas) { cajas.dispose(); cajas = null; }
+    mallas = {}; info = []; infoPorId = new Map(); halos = []; discontinuos = [];
   }
 
-  function nuevaInstanciada(nombre, geometria, material, cuenta, { picking = false, orden = 0 } = {}) {
+  function materialHalo(color, late) {
+    const clave = `${color}|${late ? 1 : 0}`;
+    let m = materialesHalo.get(clave);
+    if (!m) {
+      m = new THREE.SpriteMaterial({ map: tex.halo, color: C(color), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false });
+      materialesHalo.set(clave, m);
+    }
+    m.opacity = late ? 0.7 : 0.4;
+    return m;
+  }
+
+  function nuevaInstanciada(nombre, geometria, material, cuenta, { orden = 0 } = {}) {
     const m = new THREE.InstancedMesh(geometria, material, Math.max(1, cuenta));
     m.count = cuenta;
     m.name = nombre;
     m.renderOrder = orden;
     m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     m.frustumCulled = false;
+    m.matrixAutoUpdate = false; // la malla está en el origen; solo cambian sus instancias
     if (cuenta > 0) m.setColorAt(0, tmpColor.set(0xffffff));
     grupo.add(m);
     mallas[nombre] = m;
-    if (picking) mapaPicking.set(m, []);
     return m;
   }
 
@@ -152,16 +172,18 @@ export function crearModelosNodos(escena) {
     const vms = nodos.filter((n) => n.type !== 'fisicos');
     const nf = fis.length; const nv = vms.length; const n = nodos.length;
     nuevaInstanciada('sombra', geo.sombra, mat.sombra, n, { orden: 0 });
-    nuevaInstanciada('pedestalFis', geo.pedestalFis, mat.pedestal, nf, { picking: true });
-    nuevaInstanciada('pedestalVm', geo.pedestalVm, mat.pedestal, nv, { picking: true });
+    nuevaInstanciada('pedestalFis', geo.pedestalFis, mat.pedestal, nf);
+    nuevaInstanciada('pedestalVm', geo.pedestalVm, mat.pedestal, nv);
     nuevaInstanciada('anillo', geo.anillo, mat.anillo, n, { orden: 1 });
-    nuevaInstanciada('chasis', geo.chasis, mat.chasis, nf, { picking: true });
+    nuevaInstanciada('chasis', geo.chasis, mat.chasis, nf);
     nuevaInstanciada('bahia', geo.bahia, mat.bahia, nf * 4);
     nuevaInstanciada('ledEstado', geo.led, mat.led, nf * 4);
     nuevaInstanciada('ledActividad', geo.led, mat.led, nf * 4);
     nuevaInstanciada('rejilla', geo.rejilla, mat.rejilla, nf);
     nuevaInstanciada('vmNucleo', geo.vmNucleo, mat.vmNucleo, nv);
-    nuevaInstanciada('vmCubo', geo.vmCubo, mat.vmCubo, nv, { picking: true, orden: 2 });
+    nuevaInstanciada('vmCubo', geo.vmCubo, mat.vmCubo, nv, { orden: 2 });
+    cajas = new THREE.InstancedMesh(geo.caja, mat.invisible, Math.max(1, n));
+    cajas.count = n;
 
     const local = (x, y, z) => new THREE.Matrix4().makeTranslation(x, y, z);
     let iF = 0; let iV = 0; let iN = 0;
@@ -187,16 +209,13 @@ export function crearModelosNodos(escena) {
           reg.partes.push({ mesh: mallas.ledEstado, i: iF * 4 + b, local: local(0.58, y, 0.635) });
           reg.partes.push({ mesh: mallas.ledActividad, i: iF * 4 + b, local: local(0.46, y, 0.635) });
         }
-        mapaPicking.get(mallas.pedestalFis)[iF] = idx;
-        mapaPicking.get(mallas.chasis)[iF] = idx;
         iF++;
       } else {
         reg.iV = iV;
         reg.partes.push({ mesh: mallas.pedestalVm, i: iV, local: local(0, 0, 0) });
         reg.partes.push({ mesh: mallas.vmCubo, i: iV, local: local(0, 1.0, 0) });
         reg.partes.push({ mesh: mallas.vmNucleo, i: iV, local: local(0, 1.0, 0), nucleo: true });
-        mapaPicking.get(mallas.pedestalVm)[iV] = idx;
-        mapaPicking.get(mallas.vmCubo)[iV] = idx;
+        reg.parteNucleo = reg.partes[reg.partes.length - 1];
         reg.lineaInicio = posLineas.length / 3;
         for (let k = 0; k < vertsAristas.count; k++) {
           posLineas.push(vertsAristas.getX(k) + centro.x, vertsAristas.getY(k) + 1.0, vertsAristas.getZ(k) + centro.z);
@@ -206,6 +225,7 @@ export function crearModelosNodos(escena) {
         iV++;
       }
       iN++;
+      cajas.setMatrixAt(idx, tmpM.makeTranslation(centro.x, 0, centro.z));
       info.push(reg);
       infoPorId.set(reg.id, reg);
       aplicarMatrices(reg);
@@ -220,6 +240,17 @@ export function crearModelosNodos(escena) {
       grupo.add(lineasVm);
     }
     for (const m of Object.values(mallas)) m.instanceMatrix.needsUpdate = true;
+    cajas.computeBoundingSphere();
+  }
+
+  /** Solo la matriz del núcleo giratorio de una VM (sin tocar el resto de piezas) */
+  function girarNucleo(reg, rot) {
+    const p = reg.parteNucleo;
+    if (!p || p.oculta) return;
+    tmpS.set(reg.escala, reg.escala, reg.escala);
+    tmpM.compose(reg.centro, tmpQ.identity(), tmpS);
+    tmpM2.makeRotationY(rot).setPosition(0, 1.0, 0).premultiply(tmpM);
+    p.mesh.setMatrixAt(p.i, tmpM2);
   }
 
   function aplicarMatrices(reg, rotNucleo = 0) {
@@ -244,7 +275,7 @@ export function crearModelosNodos(escena) {
    * @param {(n) => {atenuado: boolean}} estilo
    */
   function actualizarEstilos(estilo) {
-    for (const h of halos) { grupo.remove(h.sprite); h.sprite.material.dispose(); }
+    for (const h of halos) grupo.remove(h.sprite);
     for (const d of discontinuos) grupo.remove(d.mesh);
     halos = []; discontinuos = [];
     const lineasColor = lineasVm?.geometry.attributes.color;
@@ -290,14 +321,11 @@ export function crearModelosNodos(escena) {
       // Halo: caídos (latiendo) e impacto directo (fijo)
       const conHalo = n.isDown || n.cascadeStatus === 'DIRECT_IMPACT';
       if (conHalo && !atenuado) {
-        const sm = new THREE.SpriteMaterial({
-          map: tex.halo, color: C(colorEstado), transparent: true, depthWrite: false,
-          blending: THREE.AdditiveBlending, opacity: n.isDown ? 0.7 : 0.4, toneMapped: false,
-        });
-        const sprite = new THREE.Sprite(sm);
+        const sprite = new THREE.Sprite(materialHalo(colorEstado, n.isDown));
         sprite.position.set(reg.centro.x, ALTURA_HALO, reg.centro.z);
         sprite.scale.setScalar(3.4);
         sprite.renderOrder = 4;
+        sprite.updateMatrix();
         grupo.add(sprite);
         halos.push({ sprite, late: n.isDown, fase: reg.fase });
       }
@@ -352,29 +380,38 @@ export function crearModelosNodos(escena) {
     for (const d of discontinuos) d.mesh.rotation.y -= 0.5 * dt;
     const ciclo = (t % 1.2) / 1.2;
     const pulso = 0.5 - 0.5 * Math.cos(ciclo * Math.PI * 2);
+    // Los halos que laten comparten material por color
     for (const h of halos) {
       if (!h.late) continue;
-      h.sprite.scale.setScalar(3.2 + 0.6 * pulso);
       h.sprite.material.opacity = 0.45 + 0.4 * pulso;
+      h.sprite.scale.setScalar(3.2 + 0.6 * pulso);
     }
-    // Núcleo de VM girando y LEDs de actividad parpadeando
+    // Núcleos de VM girando (solo su matriz)
+    const nucleo = mallas.vmNucleo;
+    if (nucleo?.count) {
+      for (const reg of info) if (reg.tipo !== 'fisicos') girarNucleo(reg, t * 0.4 + reg.fase);
+      nucleo.instanceMatrix.needsUpdate = true;
+    }
+    // LEDs de actividad: 8 cambios por segundo bastan (no se suben colores en cada frame)
+    const tick = Math.floor(t * 8);
     const led = mallas.ledActividad;
-    for (const reg of info) {
-      if (reg.tipo !== 'fisicos') { aplicarMatrices(reg, t * 0.4 + reg.fase); continue; }
-      for (let b = 0; b < 4; b++) {
-        const on = reg.activo && Math.sin(t * 7 + reg.fase * 3 + b * 1.7) > 0.35;
-        led.setColorAt(reg.iF * 4 + b, tmpColor.set(on ? '#12b76a' : '#0b3d26'));
+    if (led?.count && tick !== ultimoLed) {
+      ultimoLed = tick;
+      for (const reg of info) {
+        if (reg.tipo !== 'fisicos') continue;
+        for (let b = 0; b < 4; b++) {
+          const on = reg.activo && Math.sin(t * 7 + reg.fase * 3 + b * 1.7) > 0.35;
+          led.setColorAt(reg.iF * 4 + b, tmpColor.set(on ? '#12b76a' : '#0b3d26'));
+        }
       }
+      if (led.instanceColor) led.instanceColor.needsUpdate = true;
     }
-    if (led?.instanceColor) led.instanceColor.needsUpdate = true;
     return true;
   }
 
   function idDesdeInterseccion(hit) {
-    const lista = mapaPicking.get(hit.object);
-    if (!lista || hit.instanceId === undefined) return null;
-    const reg = info[lista[hit.instanceId]];
-    return reg ? reg.id : null;
+    if (hit.object !== cajas || hit.instanceId === undefined) return null;
+    return info[hit.instanceId]?.id ?? null;
   }
 
   return {
@@ -385,7 +422,8 @@ export function crearModelosNodos(escena) {
     parpadear,
     animar,
     idDesdeInterseccion,
-    objetosPicking: () => [...mapaPicking.keys()],
+    objetosPicking: () => (cajas && cajas.count ? [cajas] : []),
+    parpadeando: () => parpadeo > 0,
     centro: (id) => infoPorId.get(String(id))?.centro,
     hayHalosLatiendo: () => halos.some((h) => h.late) || discontinuos.length > 0,
     dispose() {
@@ -394,6 +432,8 @@ export function crearModelosNodos(escena) {
       Object.values(geo).forEach((g) => g.dispose());
       Object.values(mat).forEach((m) => m.dispose());
       Object.values(tex).forEach((t) => t.dispose());
+      for (const m of materialesHalo.values()) m.dispose();
+      materialesHalo.clear();
     },
   };
 }

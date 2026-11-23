@@ -50,9 +50,9 @@ export const TIPOS_DEPENDENCIA = Object.freeze({
 });
 
 export const CRITICIDADES = Object.freeze({
-  CRITICAL: { texto: 'Crítica', radio: 0.075, opacidad: 0.95, trazo2d: 3, discontinuo: false, particulas: 4 },
-  HIGH: { texto: 'Alta', radio: 0.058, opacidad: 0.85, trazo2d: 2.5, discontinuo: false, particulas: 3 },
-  MEDIUM: { texto: 'Media', radio: 0.042, opacidad: 0.75, trazo2d: 2, discontinuo: false, particulas: 2 },
+  CRITICAL: { texto: 'Crítica', radio: 0.075, opacidad: 0.95, trazo2d: 3, discontinuo: false, particulas: 2 },
+  HIGH: { texto: 'Alta', radio: 0.058, opacidad: 0.85, trazo2d: 2.5, discontinuo: false, particulas: 2 },
+  MEDIUM: { texto: 'Media', radio: 0.042, opacidad: 0.75, trazo2d: 2, discontinuo: false, particulas: 1 },
   LOW: { texto: 'Baja', radio: 0.03, opacidad: 0.6, trazo2d: 1.5, discontinuo: true, particulas: 1 },
 });
 
