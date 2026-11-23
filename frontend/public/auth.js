@@ -25,9 +25,15 @@ async function loadUserInfo() {
       }
     }
   } catch (error) {
+    // Al salir de la página el navegador cancela la petición: no es un error
+    if (paginaSaliendo) return;
     console.error('Error al cargar usuario:', error);
   }
 }
+
+let paginaSaliendo = false;
+window.addEventListener('pagehide', () => { paginaSaliendo = true; });
+window.addEventListener('beforeunload', () => { paginaSaliendo = true; });
 
 // Ocultar elementos de admin para usuarios viewer
 function hideAdminElements() {

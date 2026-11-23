@@ -20,6 +20,7 @@ export async function confirmAction({
     dialog.innerHTML = `
       <div class="ui-confirm-header">
         <h3 id="${titleId}" class="ui-confirm-title"></h3>
+        <button type="button" class="ui-confirm-close" data-action="close" aria-label="Cerrar" title="Cerrar">&times;</button>
       </div>
       <div class="ui-confirm-body">
         <p class="ui-confirm-message"></p>
@@ -54,6 +55,7 @@ export async function confirmAction({
     });
 
     dialog.querySelector('[data-action="cancel"]').addEventListener('click', () => cleanup(false));
+    dialog.querySelector('[data-action="close"]').addEventListener('click', () => cleanup(false));
     dialog.querySelector('[data-action="confirm"]').addEventListener('click', () => cleanup(true));
 
     document.addEventListener('keydown', onKeyDown);

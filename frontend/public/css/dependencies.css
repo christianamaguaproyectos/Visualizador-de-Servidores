@@ -508,3 +508,8 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 5px; border: 1px soli
 .topo-menu__cabecera { display: flex; justify-content: flex-end; padding: 0 2px; }
 .topo-menu__lista .topo-menu__cerrar { display: inline-flex; width: 28px; height: 28px; padding: 0; justify-content: center; }
 .topo-contexto__cerrar { color: #f1f5ff; }
+
+/* El minimapa nunca tapa los controles inferiores (con el inspector abierto se desplaza a la izquierda) */
+.topo-minimapa { contain: paint; }
+.topo-minimapa__svg { overflow: hidden; }
+.topo-controles { z-index: 17; }
