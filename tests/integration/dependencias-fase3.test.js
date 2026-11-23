@@ -8,6 +8,7 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+import { colocarEnRack } from '../../frontend/public/js/dominios/hosts/colocacionRack.js';
 import {
   CREDENCIALES, URL_BD, clienteHttp, crearUsuarios, iniciarApp, motivoParaOmitir, prepararBaseDeDatos,
 } from '../helpers/appDePrueba.js';
@@ -66,9 +67,9 @@ describe('Mapa de Dependencias, Fase 3 (integración)', { skip: omitir || false 
   test('seed: crea los datos marcados y una segunda ejecución no duplica nada', async () => {
     assert.match(seed(), /Datos de demostración creados/);
     const primera = await contar();
-    assert.equal(primera.servidores, 16);
+    assert.equal(primera.servidores, 30);
     assert.ok(primera.relaciones >= 20, `relaciones: ${primera.relaciones}`);
-    assert.equal(primera.hosts, 16);
+    assert.equal(primera.hosts, 30);
     assert.equal(primera.checksActivos, 0, 'los checks de los hosts demo deben quedar desactivados');
     assert.equal(primera.posiciones, 16);
     // RACK-A1 ya existía: se reutiliza y no se marca
@@ -76,6 +77,27 @@ describe('Mapa de Dependencias, Fase 3 (integración)', { skip: omitir || false 
 
     assert.match(seed(), /ya estaban cargados/);
     assert.deepEqual(await contar(), primera);
+  });
+
+  test('seed: cinco racks de 42U con equipos de 1U, 2U y 4U en su unidad (como la vista de rack)', async () => {
+    const { status, data } = await lector.api('GET', '/api/data?type=fisicos');
+    assert.equal(status, 200);
+    const racks = data.racks.filter((r) => /^RACK-A[1-5]$/.test(r.name));
+    assert.deepEqual(racks.map((r) => r.name).sort(), ['RACK-A1', 'RACK-A2', 'RACK-A3', 'RACK-A4', 'RACK-A5']);
+    const a3 = racks.find((r) => r.name === 'RACK-A3');
+    const col = colocarEnRack(a3.servers);
+    const nas = col.bloques.find((b) => b.servidor.nombre === 'srv-nas-01');
+    assert.deepEqual([nas.uInferior, nas.uSuperior], [21, 24]);
+    assert.equal(col.ocupadas, 14);
+    // El equipo sin posición ocupa el primer hueco libre
+    const a5 = colocarEnRack(racks.find((r) => r.name === 'RACK-A5').servers.filter((s) => s.nombre.startsWith('srv-')));
+    const pru = a5.bloques.find((b) => b.servidor.nombre === 'srv-pru-01');
+    assert.deepEqual([pru.uInferior, pru.uSuperior], [41, 42]);
+    const tamanos = new Set(data.servers.filter((s) => String(s.nombre).startsWith('srv-')).map((s) => s.rackUnits));
+    for (const u of [1, 2, 4]) assert.ok(tamanos.has(u), `hay equipos de ${u}U`);
+    // La sala 3D pide el grafo con todos los servidores: los del rack sin relaciones también vienen
+    const g = await lector.api('GET', '/api/topology/graph?includeIsolated=true');
+    assert.ok(g.data.nodes.some((n) => n.name === 'srv-pru-01' && n.status === 'UP'));
   });
 
   test('seed: el mapa muestra el ciclo, la cadena y el impacto real de los hosts DOWN y DEGRADED', async () => {
@@ -148,7 +170,7 @@ describe('Mapa de Dependencias, Fase 3 (integración)', { skip: omitir || false 
   });
 
   test('seed --borrar elimina solo lo marcado y deja intactos los datos propios', async () => {
-    assert.match(seed('--borrar'), /eliminados: 16 servidores/);
+    assert.match(seed('--borrar'), /eliminados: 30 servidores/);
     const despues = await contar();
     assert.deepEqual(
       { s: despues.servidores, r: despues.relaciones, h: despues.hosts, k: despues.racks, p: despues.posiciones },
@@ -157,6 +179,6 @@ describe('Mapa de Dependencias, Fase 3 (integración)', { skip: omitir || false 
     assert.deepEqual(propio.rows, [{ nombre: 'srv-propio-01', name: 'RACK-A1' }]);
     // Se puede volver a sembrar después de borrar
     assert.match(seed(), /Datos de demostración creados/);
-    assert.equal((await contar()).servidores, 16);
+    assert.equal((await contar()).servidores, 30);
   });
 });

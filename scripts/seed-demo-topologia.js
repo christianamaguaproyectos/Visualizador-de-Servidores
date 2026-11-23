@@ -3,8 +3,9 @@
 /**
  * Datos de demostración del Mapa de Dependencias.
  *
- * Crea servidores físicos y virtuales ficticios (srv-..., IPs 10.0.0.x) repartidos en
- * racks, un host con VMs y un clúster; relaciones de distintos tipos (incluido un ciclo
+ * Crea servidores físicos y virtuales ficticios (srv-..., IPs 10.0.0.x): cinco racks de 42U
+ * con equipos de 1U, 2U y 4U en su posición (con huecos libres y uno sin posición, que se
+ * apila en el primer hueco), dos hosts con VMs y un clúster; relaciones de distintos tipos (incluido un ciclo
  * A ↔ B y una cadena B → C); hosts de monitoreo enlazados (uno DOWN y uno DEGRADED, con
  * sus checks desactivados para que el estado no cambie solo) y posiciones en la vista
  * predeterminada ("Mapa General").
@@ -30,10 +31,24 @@ export const SERVIDORES = [
   ['srv-dc-01', 'fisicos', 'RACK-A1', '10.0.0.12', 'Genérica', 'Servidor 1U', 'Windows Server'],
   ['srv-hv-01', 'fisicos', 'RACK-A2', '10.0.0.13', 'Genérica', 'Servidor 2U', 'Hipervisor'],
   ['srv-hv-02', 'fisicos', 'RACK-A2', '10.0.0.14', 'Genérica', 'Servidor 2U', 'Hipervisor'],
-  ['srv-nas-01', 'fisicos', 'RACK-A3', '10.0.0.15', 'Genérica', 'NAS 2U', 'Almacenamiento'],
+  ['srv-nas-01', 'fisicos', 'RACK-A3', '10.0.0.15', 'Genérica', 'NAS 4U', 'Almacenamiento'],
   ['srv-bkp-01', 'fisicos', 'RACK-A3', '10.0.0.16', 'Genérica', 'Servidor 2U', 'Linux'],
   ['srv-sw-01', 'fisicos', 'RACK-A4', '10.0.0.17', 'Genérica', 'Switch 1U', 'Red'],
   ['srv-db-01', 'fisicos', 'RACK-A5', '10.0.0.18', 'Genérica', 'Servidor 2U', 'Linux'],
+  ['srv-dc-02', 'fisicos', 'RACK-A1', '10.0.0.31', 'Genérica', 'Servidor 1U', 'Windows Server'],
+  ['srv-mon-01', 'fisicos', 'RACK-A1', '10.0.0.32', 'Genérica', 'Servidor 1U', 'Linux'],
+  ['srv-log-01', 'fisicos', 'RACK-A1', '10.0.0.33', 'Genérica', 'Servidor 2U', 'Linux'],
+  ['srv-hv-03', 'fisicos', 'RACK-A2', '10.0.0.34', 'Genérica', 'Servidor 2U', 'Hipervisor'],
+  ['srv-mgmt-01', 'fisicos', 'RACK-A2', '10.0.0.35', 'Genérica', 'Servidor 1U', 'Linux'],
+  ['srv-nas-02', 'fisicos', 'RACK-A3', '10.0.0.36', 'Genérica', 'NAS 4U', 'Almacenamiento'],
+  ['srv-cin-01', 'fisicos', 'RACK-A3', '10.0.0.37', 'Genérica', 'Librería de cintas 4U', 'Respaldo'],
+  ['srv-sw-02', 'fisicos', 'RACK-A4', '10.0.0.38', 'Genérica', 'Switch 1U', 'Red'],
+  ['srv-sw-03', 'fisicos', 'RACK-A4', '10.0.0.39', 'Genérica', 'Switch 1U', 'Red'],
+  ['srv-rtr-01', 'fisicos', 'RACK-A4', '10.0.0.40', 'Genérica', 'Router 2U', 'Red'],
+  ['srv-db-02', 'fisicos', 'RACK-A5', '10.0.0.41', 'Genérica', 'Servidor 2U', 'Linux'],
+  ['srv-app-01', 'fisicos', 'RACK-A5', '10.0.0.42', 'Genérica', 'Servidor 1U', 'Linux'],
+  ['srv-app-02', 'fisicos', 'RACK-A5', '10.0.0.43', 'Genérica', 'Servidor 1U', 'Linux'],
+  ['srv-pru-01', 'fisicos', 'RACK-A5', '10.0.0.44', 'Genérica', 'Servidor 2U', 'Linux'],
   ['srv-web-01', 'virtuales', 'srv-hv-01', '10.0.0.21', null, null, 'Linux'],
   ['srv-api-01', 'virtuales', 'srv-hv-01', '10.0.0.22', null, null, 'Linux'],
   ['srv-portal-01', 'virtuales', 'srv-hv-01', '10.0.0.23', null, null, 'Linux'],
@@ -43,6 +58,16 @@ export const SERVIDORES = [
   ['srv-crm-01', 'virtuales', 'VCL-01', '10.0.0.27', null, null, 'Linux'],
   ['srv-intranet-01', 'virtuales', 'VCL-01', '10.0.0.28', null, null, 'Linux'],
 ];
+
+// Ubicación en el rack: [rack_position (U superior del equipo, 1-42 desde abajo), rack_units].
+// srv-pru-01 no tiene posición: la vista de rack lo coloca en el primer hueco libre.
+export const UBICACION_RACK = {
+  'srv-fw-01': [42, 1], 'srv-dc-01': [40, 1], 'srv-dc-02': [39, 1], 'srv-mon-01': [30, 1], 'srv-log-01': [20, 2],
+  'srv-hv-01': [38, 2], 'srv-hv-02': [35, 2], 'srv-hv-03': [32, 2], 'srv-mgmt-01': [28, 1],
+  'srv-nas-01': [24, 4], 'srv-bkp-01': [18, 2], 'srv-nas-02': [12, 4], 'srv-cin-01': [6, 4],
+  'srv-sw-01': [42, 1], 'srv-sw-02': [41, 1], 'srv-sw-03': [40, 1], 'srv-rtr-01': [37, 2],
+  'srv-db-01': [30, 2], 'srv-db-02': [27, 2], 'srv-app-01': [24, 1], 'srv-app-02': [23, 1], 'srv-pru-01': [null, 2],
+};
 
 // [origen (depende de) → destino, tipo, criticidad, puerto, protocolo, etiqueta]
 export const DEPENDENCIAS = [
@@ -105,12 +130,20 @@ export async function sembrar(client) {
   // Servidores (identity_key marcada: no choca con los reales y permite borrarlos)
   const idServidor = new Map();
   for (const [nombre, tipo, rack, ip, marca, modelo, so] of SERVIDORES) {
+    const [posicion = null, unidades = 2] = UBICACION_RACK[nombre] || [];
     const r = await client.query(
-      `INSERT INTO inventory.servers (type, identity_key, rack_id, rack_norm, rack_raw, nombre, ip, marca, modelo, so, estado, activo)
-       VALUES ($1::inventory.server_type_enum, $2, $3, $4, $4, $5, $6, $7, $8, $9, 'NO_CRITICO', 'SI')
+      `INSERT INTO inventory.servers (type, identity_key, rack_id, rack_norm, rack_raw, nombre, ip, marca, modelo, so, estado, activo, rack_position, rack_units)
+       VALUES ($1::inventory.server_type_enum, $2, $3, $4, $4, $5, $6, $7, $8, $9, 'NO_CRITICO', 'SI', $10, $11)
        ON CONFLICT (type, identity_key) DO NOTHING RETURNING id`,
-      [tipo, identidad(nombre), idRack.get(rack), rack, nombre, ip, marca, modelo, so]);
+      [tipo, identidad(nombre), idRack.get(rack), rack, nombre, ip, marca, modelo, so, posicion, unidades]);
     if (r.rowCount) creados.servidores += 1;
+    else if (posicion) {
+      // Datos demo de una versión anterior sin ubicación: se completa (nunca se pisa una posición)
+      await client.query(
+        `UPDATE inventory.servers SET rack_position = $3, rack_units = $4
+          WHERE type = $1::inventory.server_type_enum AND identity_key = $2 AND rack_position IS NULL`,
+        [tipo, identidad(nombre), posicion, unidades]);
+    }
     const fila = r.rows[0] || (await client.query(
       'SELECT id FROM inventory.servers WHERE type = $1::inventory.server_type_enum AND identity_key = $2', [tipo, identidad(nombre)])).rows[0];
     idServidor.set(nombre, fila.id);
