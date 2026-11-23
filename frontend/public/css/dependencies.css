@@ -472,22 +472,27 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 5px; border: 1px soli
 }
 
 /* ── Responsive ────────────────────────────────────────────── */
+/* La barra nunca recorta botones: se compacta por tramos de ancho (sin duplicar controles) */
 @media (max-width: 1499px) {
-  .topo-barra { gap: 8px; padding: 0 12px; }
+  .topo-barra { gap: 6px; padding: 0 12px; }
   .topo-barra__titulo { font-size: 17px; }
+  .topo-barra__acciones { gap: 6px; }
   .topo-barra .btn svg, .topo-barra__acciones .btn svg { display: none; }
-  .topo-barra .btn { padding: 8px 11px; }
+  .topo-barra .btn { padding: 8px 10px; }
   .topo-modo__op { padding: 0 10px; }
   .topo-select { max-width: 160px; }
+  .topo-buscar { flex-basis: 180px; min-width: 120px; }
 }
 @media (max-width: 1439px) {
   .topo-modo__largo { display: none; }
-  .topo-buscar { min-width: 150px; }
+  .topo-barra__titulo { font-size: 15px; }
   .topo-paleta:not(.es-plegada) { position: absolute; left: 0; top: 0; bottom: 0; box-shadow: 12px 0 32px rgba(16, 24, 40, 0.16); }
+}
+@media (max-width: 1299px) {
+  .topo-barra__titulo { display: none; }
 }
 @media (max-width: 1024px) {
   .topo-escenario { min-width: 0; }
-  .topo-barra__titulo { display: none; }
   .topo-inspector { top: auto; left: 0; width: auto; height: 55dvh; transform: translateY(100%); border-left: 0; }
   .topo-inspector.es-abierto { transform: translateY(0); }
   .topo-filtros { overflow-x: auto; }
