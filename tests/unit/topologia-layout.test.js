@@ -8,7 +8,7 @@ import {
 import {
   compararIds, indicesParalelas, desplazamientoLateral, normalCanonica, elegirPuertos, trazado2D, caminoSvg, puntoCubica,
 } from '../../frontend/public/js/dominios/topologia/geometriaAristas.js';
-import { disposicionSala, disposicionSalaRacks, alturaTramo, RACK, SALA } from '../../frontend/public/js/dominios/topologia/salaDatos.js';
+import { disposicionSala, disposicionSalaRacks, coberturaInventario, alturaTramo, RACK, SALA } from '../../frontend/public/js/dominios/topologia/salaDatos.js';
 import { reescribirEspecificadorThree, VENDOR_THREE_LISTA } from '../../backend/src/routes/vendorThreeRoutes.js';
 
 const nodos = (...ids) => ids.map((id) => ({ id: String(id) }));
@@ -201,4 +201,29 @@ test('sala de racks: cada rack del inventario (también vacío) es un gabinete y
   // Virtualización a la derecha de la sala de racks
   assert.ok(s.centros.get('20').x > sueltos.x + RACK.ancho);
   assert.ok(s.zonas.some((z) => z.tipo === 'host' && z.etiqueta === 'Host srv-db-01\nsrv-web-01'), 'el rótulo del host lista sus VMs');
+});
+
+test('sala de racks: dibuja todo el inventario aunque un rack esté lleno o haya muchos servidores sin rack', () => {
+  // 25 servidores sin posición en un rack: la vista de rack reparte hasta 21 (2U cada uno)
+  const lleno = Array.from({ length: 25 }, (_, i) => ({ id: String(100 + i), nombre: `srv-l-${i}` }));
+  const racks = [{ id: '1', name: 'RACK-A1', servers: lleno }];
+  const sinRack = Array.from({ length: 22 }, (_, i) => srv(200 + i, 'fisicos', `srv-s-${i}`, ''));
+  const vms = [srv(300, 'virtuales', 'srv-vm-01', 'VCL-01'), srv(301, 'virtuales', 'srv-vm-02', '')];
+  const nodos = [...lleno.map((s) => srv(s.id, 'fisicos', s.nombre, 'RACK-A1')), ...sinRack, ...vms];
+  const s = disposicionSalaRacks(nodos, racks);
+  const fisicos = nodos.filter((n) => n.type === 'fisicos');
+  for (const n of fisicos) assert.ok(s.slots.has(n.id), `${n.name} tiene unidades en la sala`);
+  assert.deepEqual(s.racks.map((r) => r.nombre), ['RACK-A1', 'Sin ubicar', 'Sin ubicar 2'], '4 del rack lleno + 22 sin rack = 26 en dos racks de 21');
+  assert.ok(s.racks.every((r) => r.ocupadas <= RACK.unidades));
+  for (const v of vms) assert.ok(s.centros.has(v.id), `${v.name} está en la virtualización`);
+
+  // Contador de verificación: inventario de /fisicos + /virtuales frente a lo dibujado
+  const inventario = {
+    fisicos: { racks, servers: fisicos.map((n) => ({ id: n.id, nombre: n.name })) },
+    virtuales: { servers: vms.map((n) => ({ id: n.id, nombre: n.name })) },
+  };
+  assert.deepEqual(coberturaInventario(nodos, inventario, { sala: true }), { inventario: 49, enMapa: 49, faltan: [] });
+  const sinUno = coberturaInventario(nodos.filter((n) => n.id !== '301'), inventario);
+  assert.deepEqual([sinUno.enMapa, sinUno.faltan], [48, ['srv-vm-02']]);
+  assert.equal(coberturaInventario(nodos, null), null);
 });

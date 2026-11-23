@@ -232,23 +232,24 @@ export function disposicionSalaRacks(nodos, racks = []) {
     };
   });
 
-  // Físicos visibles que no ocupan ninguna U de un rack: un rack aparte "Sin ubicar"
+  // Físicos visibles que no ocupan ninguna U de su rack (sin rack, rack lleno, U compartida o
+  // sin espacio): racks aparte "Sin ubicar" de 2U por servidor, tantos como hagan falta, para
+  // que la sala muestre TODO el inventario
   const sueltos = fisicos.filter((n) => !enRack.has(String(n.id))).sort(ordenNodos);
-  if (sueltos.length) {
+  const porRackSinUbicar = Math.floor(RACK.unidades / 2);
+  for (let k = 0; k * porRackSinUbicar < sueltos.length; k++) {
+    const grupo = sueltos.slice(k * porRackSinUbicar, (k + 1) * porRackSinUbicar);
     const porUnidad = new Array(RACK.unidades).fill(-1);
-    const bloques = [];
-    let u = 1;
-    for (const [i, n] of sueltos.entries()) {
+    const bloques = grupo.map((n, i) => {
       const alto = 2;
-      if (u + alto - 1 > RACK.unidades) break;
-      for (let k = 0; k < alto; k++) porUnidad[RACK.unidades - (u + k)] = i;
-      bloques.push({ nodoId: String(n.id), servidorId: String(n.id), nombre: n.name || `#${n.id}`, ip: n.ip || '', uInferior: u, uSuperior: u + alto - 1, alto });
-      u += alto;
-    }
+      const u = 1 + i * alto;
+      for (let j = 0; j < alto; j++) porUnidad[RACK.unidades - (u + j)] = i;
+      return { nodoId: String(n.id), servidorId: String(n.id), nombre: n.name || `#${n.id}`, ip: n.ip || '', uInferior: u, uSuperior: u + alto - 1, alto };
+    });
     const ocupadas = porUnidad.filter((d) => d >= 0).length;
     listaRacks.push({
-      id: ID_SIN_UBICAR, nombre: 'Sin ubicar', sinRack: true, ocupadas, libres: RACK.unidades - ocupadas, porUnidad,
-      huecos: huecosLibres(porUnidad), bloques, sinUbicar: [],
+      id: k === 0 ? ID_SIN_UBICAR : `${ID_SIN_UBICAR}-${k + 1}`, nombre: k === 0 ? 'Sin ubicar' : `Sin ubicar ${k + 1}`, sinRack: true,
+      ocupadas, libres: RACK.unidades - ocupadas, porUnidad, huecos: huecosLibres(porUnidad), bloques, sinUbicar: [],
     });
   }
 
@@ -325,4 +326,28 @@ export function disposicionSalaRacks(nodos, racks = []) {
     for (const q of zonas) { q.x0 += dx; q.x1 += dx; q.z0 += dz; q.z1 += dz; }
   }
   return { centros, slots, racks: listaRacks, zonas };
+}
+
+/** true si el id es el de un rack "Sin ubicar" (no es un rack del inventario) */
+export const esRackSinUbicar = (id) => String(id).startsWith(ID_SIN_UBICAR);
+
+/**
+ * Cobertura del inventario en el mapa: compara los servidores de /fisicos y /virtuales
+ * (misma fuente de datos) con los que el mapa dibuja.
+ *
+ * @param {Array<{id, type, name?}>} nodos todos los nodos cargados del grafo (sin filtros)
+ * @param {{fisicos?: {racks?: Array, servers?: Array}, virtuales?: {servers?: Array}}|null} inventario
+ * @param {{ sala?: boolean }} [opciones] sala=true: cuenta los servidores con sitio en la sala de racks
+ * @returns {{ inventario: number, enMapa: number, faltan: string[] } | null} null sin inventario
+ */
+export function coberturaInventario(nodos, inventario, { sala = false } = {}) {
+  if (!inventario?.fisicos?.servers && !inventario?.virtuales?.servers) return null;
+  const servidores = [...(inventario.fisicos?.servers || []), ...(inventario.virtuales?.servers || [])];
+  let presentes = new Set(nodos.map((n) => String(n.id)));
+  if (sala) {
+    const d = disposicionSalaRacks(nodos, inventario.fisicos?.racks || []);
+    presentes = new Set([...d.slots.keys(), ...nodos.filter((n) => n.type !== 'fisicos' && d.centros.has(String(n.id))).map((n) => String(n.id))]);
+  }
+  const faltan = servidores.filter((x) => !presentes.has(String(x.id))).map((x) => x.nombre || x.hostname || `#${x.id}`);
+  return { inventario: servidores.length, enMapa: servidores.length - faltan.length, faltan };
 }

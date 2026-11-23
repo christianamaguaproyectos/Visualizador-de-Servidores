@@ -20,7 +20,7 @@ import { crearModelosNodos } from './modelos3d.js';
 import { crearAristas3D } from './aristas3d.js';
 import { crearEtiquetas3D } from './etiquetas3d.js';
 import { crearZonasSuelo } from './zonasSuelo.js';
-import { disposicionSala, disposicionSalaRacks, ALTO_GABINETE, ID_SIN_UBICAR } from './salaDatos.js';
+import { disposicionSala, disposicionSalaRacks, ALTO_GABINETE, esRackSinUbicar } from './salaDatos.js';
 import { crearSalaRacks3D } from './salaRacks3d.js';
 
 // En la sala de datos los arcos suben por encima de los gabinetes (≈3,3 u de alto)
@@ -460,7 +460,7 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     const hitR = raycaster.intersectObjects(racks3d.objetosPicking(), false)[0];
     if (hitR) {
       const id = racks3d.idDesdeInterseccion(hitR);
-      if (id && id !== ID_SIN_UBICAR) return { tipo: 'rack', id };
+      if (id && !esRackSinUbicar(id)) return { tipo: 'rack', id };
     }
     return null;
   }

@@ -84,7 +84,7 @@
             <li role="none" data-modo="3d"><button type="button" role="menuitemradio" id="topo-disposicion-editor" aria-checked="false">Disposición 3D: posiciones del editor</button></li>
             <li role="none" data-modo="3d"><button type="button" role="menuitemcheckbox" id="topo-rendimiento3d" aria-checked="false">Modo rendimiento 3D</button></li>
             <li role="none"><button type="button" role="menuitemcheckbox" id="topo-ver-filtros" aria-checked="true">Mostrar filtros</button></li>
-            <li role="none"><button type="button" role="menuitem" id="topo-ver-aislados">Mostrar todos los servidores</button></li>
+            <li role="none"><button type="button" role="menuitem" id="topo-ver-aislados">Ocultar servidores sin relaciones</button></li>
             <li role="none"><button type="button" role="menuitem" id="topo-ver-ayuda">Atajos de teclado</button></li>
           </ul>
         </div>
@@ -111,6 +111,7 @@
         Solo con relaciones
       </label>
       <span class="topo-filtros__conteo" id="topo-conteo" aria-live="polite"></span>
+      <span class="topo-cobertura" id="topo-cobertura" hidden></span>
     </div>
 
     <!-- Cuerpo -->

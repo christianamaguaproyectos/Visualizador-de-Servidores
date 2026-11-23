@@ -19,6 +19,7 @@ import { exportarSVG, exportarPNGDesdeSVG, exportarCanvasPNG, exportarJSON } fro
 import { h, atraparFoco } from './dom.js';
 import { TIPOS_DEPENDENCIA, TIPOS_SERVIDOR, ESTADOS, TARJETA } from './constantesVisuales.js';
 import { confirmAction } from '../ui-system/modalConfirm.js';
+import { coberturaInventario } from './salaDatos.js';
 
 const $ = (sel) => document.querySelector(sel);
 const toast = (msg, tipo = 'info', ms) => window.showToast?.(msg, tipo, ms);
@@ -40,7 +41,8 @@ export async function iniciarPaginaDependencias() {
   let cargando3d = null;
   let pendiente3d = true;
   let catalogo = [];
-  let includeIsolated = false;
+  // Por defecto el mapa muestra todo el inventario (también los servidores sin relaciones)
+  let includeIsolated = true;
   let autoguardado = 0;
   let avisoSoloLectura = false;
   let controladorCarga = null;
@@ -426,6 +428,23 @@ export async function iniciarPaginaDependencias() {
     const n = estado.nodosVisibles();
     const e = estado.aristasVisibles(n);
     $('#topo-conteo').textContent = `${n.length} servidores · ${e.length} relaciones`;
+    pintarCobertura();
+  }
+  /** Verificación visible: servidores del inventario (/fisicos + /virtuales) que el mapa dibuja */
+  function pintarCobertura() {
+    const el = $('#topo-cobertura');
+    if (!el) return;
+    const c = coberturaInventario(estado.grafo?.nodes || [], estado.inventario, { sala: enSalaRacks() });
+    el.hidden = !c;
+    if (!c) return;
+    const completo = c.enMapa === c.inventario;
+    el.className = `topo-cobertura topo-cobertura--${completo ? 'ok' : 'aviso'}`;
+    el.textContent = `Inventario ${c.enMapa}/${c.inventario}`;
+    el.setAttribute('aria-label', `Servidores del inventario en el mapa: ${c.enMapa} de ${c.inventario}`);
+    el.title = completo ? 'El mapa muestra todos los servidores de Servidores Físicos y Servidores Virtuales'
+      : `No se muestran (${c.faltan.length}): ${c.faltan.slice(0, 15).join(', ')}${c.faltan.length > 15 ? '…' : ''}. Activa "Mostrar todos los servidores" en el menú ⋯`;
+    el.dataset.inventario = String(c.inventario);
+    el.dataset.enMapa = String(c.enMapa);
   }
 
   // ── Modo 3D / 2D ─────────────────────────────────────────────────────────
@@ -632,6 +651,7 @@ export async function iniciarPaginaDependencias() {
   function pintarAislados() {
     const li = $('#topo-ver-aislados').closest('li');
     if (li) li.hidden = enSalaRacks();
+    pintarCobertura();
   }
   $('#topo-ver-aislados').addEventListener('click', (ev) => {
     includeIsolated = !includeIsolated;
