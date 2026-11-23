@@ -9,7 +9,13 @@
 import * as THREE from '/vendor/three/three.module.js';
 import { ESCENARIO, ESTADOS, COLOR_CAIDA, colorDeNodo } from './constantesVisuales.js';
 
-const ALTURA_ANCLA = { fisicos: 1.4, virtuales: 1.0 };
+const ALTURA_ANCLA = { fisicos: 1.8, virtuales: 1.0 };
+// Gabinete de rack: armario alto con UNIDADES servidores de 2U en el frente
+const UNIDADES = 6;
+const ALTO_GABINETE = 3.2;
+const BASE_GABINETE = 0.12;
+// Fracción de la caja de picking (3,4 u) que ocupa una VM
+const ALTO_PICKING_VM = 0.62;
 export const alturaAncla = (tipo) => ALTURA_ANCLA[tipo] ?? 1.0;
 const ALTURA_HALO = 1.1;
 
@@ -49,19 +55,19 @@ function texturaDiscontinua() {
 
 function crearRecursos() {
   const geo = {
-    pedestalFis: new THREE.CylinderGeometry(1.5, 1.6, 0.12, 24).translate(0, 0.06, 0),
+    pedestalFis: new THREE.BoxGeometry(1.9, 0.12, 1.9).translate(0, 0.06, 0),
     pedestalVm: new THREE.CylinderGeometry(1.35, 1.45, 0.12, 6).translate(0, 0.06, 0),
     anillo: new THREE.RingGeometry(1.42, 1.6, 32).rotateX(-Math.PI / 2),
     seleccion: new THREE.RingGeometry(1.75, 1.85, 40).rotateX(-Math.PI / 2),
-    chasis: new THREE.BoxGeometry(1.6, 2.0, 1.2),
-    bahia: new THREE.BoxGeometry(1.44, 0.36, 0.04),
+    chasis: new THREE.BoxGeometry(1.5, ALTO_GABINETE, 1.5),
+    bahia: new THREE.BoxGeometry(1.3, 0.34, 0.04),
     led: new THREE.BoxGeometry(0.07, 0.07, 0.02),
-    rejilla: new THREE.BoxGeometry(1.2, 0.02, 0.8),
+    rejilla: new THREE.BoxGeometry(1.3, 0.03, 1.3),
     vmCubo: new THREE.BoxGeometry(1.3, 1.3, 1.3),
     vmNucleo: new THREE.OctahedronGeometry(0.28),
     sombra: new THREE.CircleGeometry(1.9, 24).rotateX(-Math.PI / 2),
     // Volumen de picking de un nodo (cubre pedestal, chasis o cubo)
-    caja: new THREE.BoxGeometry(3.0, 2.5, 3.0).translate(0, 1.25, 0),
+    caja: new THREE.BoxGeometry(3.0, 3.4, 3.0).translate(0, 1.7, 0),
   };
   geo.vmAristas = new THREE.EdgesGeometry(geo.vmCubo);
   const tex = { halo: texturaRadial('255,255,255', 1), sombra: texturaRadial('0,0,0', 0.45), discontinua: texturaDiscontinua() };
@@ -69,8 +75,8 @@ function crearRecursos() {
     pedestal: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.3, roughness: 0.7 }),
     anillo: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, side: THREE.DoubleSide }),
     seleccion: new THREE.MeshBasicMaterial({ color: ESCENARIO.seleccion, transparent: true, opacity: 0.9, toneMapped: false, side: THREE.DoubleSide }),
-    chasis: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.6, roughness: 0.45 }),
-    bahia: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.4, roughness: 0.6 }),
+    chasis: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.25, roughness: 0.6 }),
+    bahia: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.2, roughness: 0.55 }),
     led: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }),
     rejilla: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.5, roughness: 0.6 }),
     vmCubo: new THREE.MeshStandardMaterial({
@@ -176,9 +182,9 @@ export function crearModelosNodos(escena) {
     nuevaInstanciada('pedestalVm', geo.pedestalVm, mat.pedestal, nv);
     nuevaInstanciada('anillo', geo.anillo, mat.anillo, n, { orden: 1 });
     nuevaInstanciada('chasis', geo.chasis, mat.chasis, nf);
-    nuevaInstanciada('bahia', geo.bahia, mat.bahia, nf * 4);
-    nuevaInstanciada('ledEstado', geo.led, mat.led, nf * 4);
-    nuevaInstanciada('ledActividad', geo.led, mat.led, nf * 4);
+    nuevaInstanciada('bahia', geo.bahia, mat.bahia, nf * UNIDADES);
+    nuevaInstanciada('ledEstado', geo.led, mat.led, nf * UNIDADES);
+    nuevaInstanciada('ledActividad', geo.led, mat.led, nf * UNIDADES);
     nuevaInstanciada('rejilla', geo.rejilla, mat.rejilla, nf);
     nuevaInstanciada('vmNucleo', geo.vmNucleo, mat.vmNucleo, nv);
     nuevaInstanciada('vmCubo', geo.vmCubo, mat.vmCubo, nv, { orden: 2 });
@@ -201,13 +207,14 @@ export function crearModelosNodos(escena) {
       if (nodo.type === 'fisicos') {
         reg.iF = iF;
         reg.partes.push({ mesh: mallas.pedestalFis, i: iF, local: local(0, 0, 0) });
-        reg.partes.push({ mesh: mallas.chasis, i: iF, local: local(0, 1.12, 0) });
-        reg.partes.push({ mesh: mallas.rejilla, i: iF, local: local(0, 2.13, 0) });
-        for (let b = 0; b < 4; b++) {
-          const y = 0.12 + 0.36 + b * 0.44; // base del chasis en y=0,12
-          reg.partes.push({ mesh: mallas.bahia, i: iF * 4 + b, local: local(0, y, 0.61) });
-          reg.partes.push({ mesh: mallas.ledEstado, i: iF * 4 + b, local: local(0.58, y, 0.635) });
-          reg.partes.push({ mesh: mallas.ledActividad, i: iF * 4 + b, local: local(0.46, y, 0.635) });
+        reg.partes.push({ mesh: mallas.chasis, i: iF, local: local(0, BASE_GABINETE + ALTO_GABINETE / 2, 0) });
+        reg.partes.push({ mesh: mallas.rejilla, i: iF, local: local(0, BASE_GABINETE + ALTO_GABINETE + 0.015, 0) });
+        for (let b = 0; b < UNIDADES; b++) {
+          const y = BASE_GABINETE + 0.42 + b * 0.47; // unidades de abajo arriba en el frente
+          const u = iF * UNIDADES + b;
+          reg.partes.push({ mesh: mallas.bahia, i: u, local: local(0, y, 0.76) });
+          reg.partes.push({ mesh: mallas.ledEstado, i: u, local: local(0.52, y, 0.785) });
+          reg.partes.push({ mesh: mallas.ledActividad, i: u, local: local(0.4, y, 0.785) });
         }
         iF++;
       } else {
@@ -225,7 +232,8 @@ export function crearModelosNodos(escena) {
         iV++;
       }
       iN++;
-      cajas.setMatrixAt(idx, tmpM.makeTranslation(centro.x, 0, centro.z));
+      // Volumen de picking a la altura de cada modelo: el de una VM no tapa al gabinete de detrás
+      cajas.setMatrixAt(idx, tmpM.makeScale(1, nodo.type === 'fisicos' ? 1 : ALTO_PICKING_VM, 1).setPosition(centro.x, 0, centro.z));
       info.push(reg);
       infoPorId.set(reg.id, reg);
       aplicarMatrices(reg);
@@ -298,10 +306,10 @@ export function crearModelosNodos(escena) {
         else if (n.cascadeStatus === 'TRANSITIVE_IMPACT') base = base.lerp(C(colorEstado), 0.15);
         mallas.chasis.setColorAt(reg.iF, atenuado ? atenuar(base) : base);
         mallas.rejilla.setColorAt(reg.iF, f(ESCENARIO.rejillaSuperior));
-        for (let b = 0; b < 4; b++) {
-          mallas.bahia.setColorAt(reg.iF * 4 + b, f(ESCENARIO.bahia));
-          mallas.ledEstado.setColorAt(reg.iF * 4 + b, f(n.isDown ? colorEstado : colorLedEstado));
-          mallas.ledActividad.setColorAt(reg.iF * 4 + b, f('#0b3d26'));
+        for (let b = 0; b < UNIDADES; b++) {
+          mallas.bahia.setColorAt(reg.iF * UNIDADES + b, f(ESCENARIO.bahia));
+          mallas.ledEstado.setColorAt(reg.iF * UNIDADES + b, f(n.isDown ? colorEstado : colorLedEstado));
+          mallas.ledActividad.setColorAt(reg.iF * UNIDADES + b, f('#0b3d26'));
         }
       } else {
         mallas.pedestalVm.setColorAt(reg.iV, f(ESCENARIO.pedestal));
@@ -399,9 +407,9 @@ export function crearModelosNodos(escena) {
       ultimoLed = tick;
       for (const reg of info) {
         if (reg.tipo !== 'fisicos') continue;
-        for (let b = 0; b < 4; b++) {
+        for (let b = 0; b < UNIDADES; b++) {
           const on = reg.activo && Math.sin(t * 7 + reg.fase * 3 + b * 1.7) > 0.35;
-          led.setColorAt(reg.iF * 4 + b, tmpColor.set(on ? '#12b76a' : '#0b3d26'));
+          led.setColorAt(reg.iF * UNIDADES + b, tmpColor.set(on ? '#12b76a' : '#0b3d26'));
         }
       }
       if (led.instanceColor) led.instanceColor.needsUpdate = true;

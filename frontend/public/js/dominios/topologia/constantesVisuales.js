@@ -12,8 +12,8 @@ export const ESCENARIO = Object.freeze({
   suelo: 0x0e1a2f,
   rejillaMayor: 0x1d5ed8,
   rejillaMenor: 0x1a2742,
-  chasis: 0x2a3852, // algo más claro que #1f2a3d: con ACES el chasis se perdía en el fondo
-  bahia: 0x3a4a66,
+  chasis: 0x34445f, // gabinete: claro para que se distinga del fondo con ACES
+  bahia: 0x56698c,
   rejillaSuperior: 0x121b2c,
   pedestal: 0x16223a,
   vm: 0x2f6fe6,

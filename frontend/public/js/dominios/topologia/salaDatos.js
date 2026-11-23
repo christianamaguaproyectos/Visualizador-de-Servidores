@@ -21,8 +21,10 @@ export const SALA = Object.freeze({
   separacionBloques: 3, // hueco entre bloques de una misma fila
   bloquesPorFila: 4,
   pasillo: 6, // separación entre filas de bloques
-  separacionAreas: 9, // entre Infraestructura y Virtualización
+  separacionAreas: 11, // entre Infraestructura y Virtualización
   margenArea: 1.6,
+  anchoMinimo: 9, // ancho mínimo de un bloque (rack, host o clúster)
+  frenteArea: 3.8, // franja frontal de cada área, donde va su rótulo
 });
 
 const SIN_RACK = 'Sin rack';
@@ -39,21 +41,24 @@ const letraFila = (i) => (i < LETRAS.length ? LETRAS[i] : `${LETRAS[Math.floor(i
  * @returns {{ancho:number, fondo:number, celdas:Array<{id:string, x:number, z:number}>}} coords locales
  */
 function bloque(miembros, cabecera = null) {
-  const { paso, porFila, margen } = SALA;
+  const { paso, porFila, margen, anchoMinimo } = SALA;
   const columnas = Math.max(1, Math.min(porFila, miembros.length || 1));
   const filas = Math.ceil(miembros.length / porFila);
   const anchoCentros = (columnas - 1) * paso;
+  // Ancho mínimo para que el rótulo frontal quepa completo; los equipos quedan centrados
+  const ancho = Math.max(anchoMinimo, anchoCentros + margen * 2);
+  const dx = (ancho - margen * 2 - anchoCentros) / 2;
   const celdas = [];
   let z = 0;
   if (cabecera) {
-    celdas.push({ id: String(cabecera.id), x: anchoCentros / 2, z: 0 });
+    celdas.push({ id: String(cabecera.id), x: dx + anchoCentros / 2, z: 0 });
     z = paso;
   }
   miembros.forEach((n, i) => {
-    celdas.push({ id: String(n.id), x: (i % porFila) * paso, z: z + Math.floor(i / porFila) * paso });
+    celdas.push({ id: String(n.id), x: dx + (i % porFila) * paso, z: z + Math.floor(i / porFila) * paso });
   });
   const fondoCentros = (cabecera ? paso : 0) + Math.max(0, filas - 1) * paso;
-  return { ancho: anchoCentros + margen * 2, fondo: fondoCentros + margen * 2, celdas, anchoCentros, fondoCentros };
+  return { ancho, fondo: fondoCentros + margen * 2, celdas, anchoCentros, fondoCentros };
 }
 
 /**
@@ -127,19 +132,19 @@ export function disposicionSala(nodos) {
 
   const centros = new Map();
   const zonas = [];
-  const { margenArea, separacionAreas } = SALA;
+  const { margenArea, separacionAreas, frenteArea } = SALA;
   let z = 0;
   if (bloquesRack.length) {
     const r = colocarFilas(bloquesRack, z, (b, f) => `Fila ${letraFila(f)} · ${b.nombre}`);
     r.centros.forEach((v, k) => centros.set(k, v));
-    zonas.push({ tipo: 'area', etiqueta: 'Infraestructura', x0: -margenArea, z0: z - margenArea - 2.4, x1: r.xMax + margenArea, z1: r.zFin + margenArea + 1.6 });
+    zonas.push({ tipo: 'area', etiqueta: 'Infraestructura', x0: -margenArea, z0: z - margenArea, x1: r.xMax + margenArea, z1: r.zFin + frenteArea });
     zonas.push(...r.zonas);
     z = r.zFin + separacionAreas;
   }
   if (bloquesVirt.length) {
     const r = colocarFilas(bloquesVirt, z, (b) => (b.zona.tipo === 'host' ? `Host ${b.nombre}` : `Clúster ${b.nombre}`));
     r.centros.forEach((v, k) => centros.set(k, v));
-    zonas.push({ tipo: 'area', etiqueta: 'Virtualización', x0: -margenArea, z0: z - margenArea - 2.4, x1: r.xMax + margenArea, z1: r.zFin + margenArea + 1.6 });
+    zonas.push({ tipo: 'area', etiqueta: 'Virtualización', x0: -margenArea, z0: z - margenArea, x1: r.xMax + margenArea, z1: r.zFin + frenteArea });
     zonas.push(...r.zonas);
   }
 
