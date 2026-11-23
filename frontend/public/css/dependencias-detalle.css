@@ -1,5 +1,20 @@
 /* Bloque "Dependencias e impacto" del detalle de servidor (/fisicos y /virtuales) */
-.dep-detalle-contenedor { margin-top: 16px; }
+.dep-detalle-contenedor { margin-top: 16px; scroll-margin-top: 16px; }
+.dep-detalle__titulo:focus { outline: none; }
+
+/* Acceso directo en la fila superior de la ficha */
+.dep-detalle-ancla {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border-radius: 6px; border: 1px solid #93c5fd;
+  background: #eff6ff; color: #1d4ed8; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.dep-detalle-ancla:hover { background: #dbeafe; }
+.dep-detalle-ancla:focus-visible { outline: 2px solid var(--accent, #2563eb); outline-offset: 2px; }
+.dep-detalle-ancla__conteo {
+  min-width: 20px; padding: 1px 7px; border-radius: 999px;
+  background: #1d4ed8; color: #fff; font-size: 12px; text-align: center;
+}
+.dep-detalle-ancla__conteo[hidden] { display: none; }
 .dep-detalle .topo-icono { display: inline-flex; vertical-align: -2px; }
 
 .dep-detalle__cabecera { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
@@ -59,3 +74,9 @@
 .dep-detalle__form-campos { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
 .dep-detalle__campo { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #475569; }
 .dep-detalle__campo select { min-width: 160px; max-width: 320px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; font: inherit; font-size: 13px; }
+
+/* La ficha del servidor ocupa el ancho disponible junto al menú lateral (sin desplazamiento
+   horizontal): la columna de la página no crece con la cabecera y sus botones pasan a otra línea. */
+body.has-global-nav { grid-template-columns: minmax(0, 1fr); }
+body.has-global-nav > header { gap: 12px; }
+body.has-global-nav > header .meta { flex-wrap: wrap; justify-content: flex-end; row-gap: 8px; min-width: 0; }

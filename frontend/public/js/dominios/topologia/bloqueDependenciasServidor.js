@@ -13,9 +13,9 @@ const toast = (msg, tipo = 'info') => window.showToast?.(msg, tipo);
 
 /**
  * Monta el bloque dentro de `contenedor` para el servidor `serverId`.
- * @param {{ esAdmin: () => boolean }} opciones
+ * @param {{ esAdmin: () => boolean, alCargar?: (r: { relaciones: number, afectados: number }) => void }} opciones
  */
-export function montarBloqueDependencias(contenedor, serverId, { esAdmin = () => false } = {}) {
+export function montarBloqueDependencias(contenedor, serverId, { esAdmin = () => false, alCargar = null } = {}) {
   const id = String(serverId);
   let formularioAbierto = false;
   let catalogo = null;
@@ -29,6 +29,8 @@ export function montarBloqueDependencias(contenedor, serverId, { esAdmin = () =>
     try {
       datos = await analisisImpacto(id);
       pintar();
+      const relaciones = [...datos.dependsOnDirect, ...datos.dependentsDirect].reduce((n, s) => n + (s.dependencies || []).length, 0);
+      alCargar?.({ relaciones, afectados: Number(datos.totalAffected || 0) });
     } catch (err) {
       datos = null;
       pintar({ error: err?.status === 404 ? 'El servidor no existe.' : 'No se pudieron cargar las dependencias.' });
@@ -45,7 +47,7 @@ export function montarBloqueDependencias(contenedor, serverId, { esAdmin = () =>
       h('a', { class: 'dep-detalle__btn dep-detalle__btn--primario', href: `/dependencias?focus=${encodeURIComponent(id)}` }, icono('enlace', 14), 'Abrir en el mapa'));
 
     const cabecera = h('div', { class: 'dep-detalle__cabecera' },
-      h('h3', { id: `dep-detalle-titulo-${id}`, class: 'dep-detalle__titulo' }, '🔗 Dependencias e impacto'), acciones);
+      h('h3', { id: `dep-detalle-titulo-${id}`, class: 'dep-detalle__titulo', tabindex: '-1' }, '🔗 Dependencias e impacto'), acciones);
 
     if (cargando) { seccion.replaceChildren(cabecera, h('p', { class: 'dep-detalle__vacio' }, 'Cargando dependencias…')); return; }
     if (error) { seccion.replaceChildren(cabecera, h('p', { class: 'dep-detalle__error', role: 'alert' }, error)); return; }

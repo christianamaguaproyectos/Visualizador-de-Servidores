@@ -3745,13 +3745,31 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-    const back = `<div class="u-fila-derecha"><button class="back-btn" id="btnBackView">← Volver</button>${crudButtons}</div>`;
+    // Acceso directo al bloque "Dependencias e impacto" (más abajo en la ficha)
+    const accesoDependencias = '<button type="button" class="dep-detalle-ancla u-ml-10" id="btnVerDependencias" aria-controls="serverDependencias">🔗 Dependencias e impacto<span class="dep-detalle-ancla__conteo" hidden></span></button>';
+
+    const back = `<div class="u-fila-derecha"><button class="back-btn" id="btnBackView">← Volver</button>${accesoDependencias}${crudButtons}</div>`;
 
     app.innerHTML = `<div class="scrollable">${renderErrorBlock(DATA.meta?.error)}${back}${serverCard(s)}<div id="serverDependencias" class="dep-detalle-contenedor"></div></div>`;
 
     // Dependencias e impacto (Mapa de Dependencias): de quién depende, quién depende de él y cascada
     const contDependencias = document.getElementById('serverDependencias');
-    if (contDependencias) montarBloqueDependencias(contDependencias, s.id, { esAdmin: () => !isReadOnlyUser() });
+    if (contDependencias) {
+      const conteo = document.querySelector('#btnVerDependencias .dep-detalle-ancla__conteo');
+      montarBloqueDependencias(contDependencias, s.id, {
+        esAdmin: () => !isReadOnlyUser(),
+        alCargar: ({ relaciones }) => { if (conteo) { conteo.textContent = String(relaciones); conteo.hidden = false; } },
+      });
+      document.getElementById('btnVerDependencias')?.addEventListener('click', () => {
+        // Solo desplazamiento vertical (scrollIntoView movería también la página en horizontal)
+        let scroller = contDependencias.parentElement;
+        while (scroller && !(scroller.scrollHeight > scroller.clientHeight && /auto|scroll/.test(getComputedStyle(scroller).overflowY))) scroller = scroller.parentElement;
+        scroller = scroller || document.scrollingElement;
+        const base = scroller === document.scrollingElement ? 0 : scroller.getBoundingClientRect().top;
+        scroller.scrollBy({ top: contDependencias.getBoundingClientRect().top - base - 16, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+        contDependencias.querySelector('.dep-detalle__titulo')?.focus({ preventScroll: true });
+      });
+    }
 
     document.getElementById('btnBackView')?.addEventListener('click', () => {
 
