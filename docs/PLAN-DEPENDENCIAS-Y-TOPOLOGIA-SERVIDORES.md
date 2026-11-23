@@ -244,7 +244,7 @@ Implementar usando el pool compartido ([db.js](../backend/src/config/db.js) / Pr
 | Fase | Estado | Rama |
 | :--- | :--- | :--- |
 | **Fase 1** — Backend, esquema y API | ✅ Completada (1.1, 1.2, 1.3) | `feat/dependencias-fase1-backend` |
-| **Fase 2** — Lienzo interactivo `/dependencias` | ⏳ Pendiente | `feat/dependencias-fase2-canvas-drawio` |
+| **Fase 2** — Lienzo interactivo `/dependencias` | ✅ Completada (2.1, 2.2, 2.3) | `feat/dependencias-fase2-canvas-drawio` |
 | **Fase 3** — Impacto, vistas, exportación e integración en inventario | ⏳ Pendiente | `feat/dependencias-fase3-impacto-vistas-export` |
 
 ### Fase 1: entregado
@@ -254,7 +254,7 @@ Implementar usando el pool compartido ([db.js](../backend/src/config/db.js) / Pr
 - **1.3 API:** `backend/src/controllers/topologyController.js`, `backend/src/routes/topologyRoutes.js` y validación en `backend/src/dtos/topologyDto.js`; los 11 endpoints de la sección 1.3 montados en `server.js`. Referencia completa en [API-REST.md](./API-REST.md#-dependencias-y-topología).
 - **Pruebas:** unitarias del grafo y la validación (`tests/unit/topologia-grafo.test.js`) e integración de la API con PostgreSQL (`tests/integration/dependencies.test.js`), que cubren los puntos 1 a 6 de la sección 3.4. Los puntos 7 y 8 se completan con las Fases 2 y 3.
 
-### Decisiones y diferencias respecto al plan
+### Decisiones y diferencias respecto al plan (Fase 1)
 
 1. **IDs como string.** Todos los IDs se devuelven como string de dígitos (`"1"`) para no perder precisión con `BIGINT`; por eso los ciclos se ven como `["1","2","1"]` y no `[1, 2, 1]`.
 2. **`cycles` solo incluye los ciclos del propio servidor**, como indica 1.2. En el escenario de 3.4.3 el impacto de `S3` devuelve `cycles: []`, porque `S3` no participa en el ciclo `S1 ↔ S2`; el recorrido atraviesa ese ciclo sin bucles y el ciclo sí aparece en el análisis de `S1` y `S2`. La búsqueda de ciclos tiene un tope (`cyclesTruncated`).
@@ -273,3 +273,20 @@ Implementar usando el pool compartido ([db.js](../backend/src/config/db.js) / Pr
    - Respuestas de error del cuerpo de la petición en toda la API: JSON inválido → 400 `VALIDATION_ERROR`; cuerpo de más de 256 KB → 413 `PAYLOAD_TOO_LARGE`.
 9. **Acceso a datos con `pg`** (pool compartido) en lugar de Prisma, porque las consultas usan `LATERAL`, `unnest` y `ON CONFLICT`. Los modelos Prisma quedan alineados con las tablas.
 
+### Fase 2: entregado
+
+- **2.1 Página y navegación:** `GET /dependencias` sirve `frontend/public/dependencies.html` (sin scripts, estilos ni atributos `style` en línea). Enlace **Mapa de Dependencias** en la barra lateral (`nav.js`) y tarjeta en el panel de inicio; cada entrada de navegación lleva a un destino distinto y solo se marca activa la de la página actual. three.js `0.170.0` es dependencia de producción y se sirve auto-alojado en `/vendor/three` (`backend/src/routes/vendorThreeRoutes.js`, lista cerrada de tres módulos). Referencia en [API-REST.md](./API-REST.md#página-del-mapa-y-recursos-de-la-vista-3d).
+- **2.2 Lienzo:** dos modos sobre los mismos datos de `GET /api/topology/graph`:
+  - **Vista 3D** (por defecto, `escena3d.js`, `modelos3d.js`, `aristas3d.js`, `etiquetas3d.js`, `zonasSuelo.js`): servidores físicos como equipos de rack y VMs como cubos translúcidos, relaciones como arcos con flecha y partículas de flujo, color por estado de monitoreo e impacto, etiquetas con nivel de detalle, inspector al hacer clic.
+  - **Editor 2D** (`lienzoDrawio.js`): tarjetas arrastrables con ajuste a cuadrícula de 10 px, puertos N/S/E/O para crear relaciones arrastrando, curvas Bézier con punta de flecha, separación de relaciones mutuas (`isBidirectionalPair`) y paralelas, formulario rápido con buscadores, ⇅ e inversa opcional, inspector con edición y eliminación (con confirmación) para administradores.
+- **2.3 Auto-layout** (`autoLayout.js`, funciones puras): componentes fuertemente conexas (Tarjan iterativo) para que los ciclos formen un bloque, niveles por el camino más largo hasta un proveedor y orden por baricentro; disposiciones *Por capas* (280 × 150 px) y *Anillos*.
+- **Pruebas:** `tests/unit/topologia-layout.test.js` (auto-layout, geometría de aristas, disposición de sala de datos, reescritura del especificador de three) y `tests/integration/dependencias-pagina.test.js` (página con la CSP estricta, `/vendor/three` con lista cerrada y 404 al resto, sin sesión no se sirve nada). Verificación en navegador real (Chromium) con la app y PostgreSQL en Docker: sin errores de consola ni violaciones de CSP.
+- **Adelantado de la Fase 3** sobre la API real: simulación de caída e indicador de impacto, exportación (SVG, PNG 2D/3D, JSON), minimapa y selector/creación de vistas.
+
+### Decisiones de la Fase 2
+
+1. **3D por defecto con disposición "Sala de datos"** (`salaDatos.js`, función pura): físicos agrupados por rack en filas rotuladas (`Fila A · <rack>`) separadas por pasillos; cada host encabeza un bloque con sus VMs en cuadrícula (el campo `rack` de una VM es su host o clúster); clústeres sin host físico en su propio bloque; zonas rotuladas en el suelo y relaciones elevadas sobre los equipos. El menú **⋯** permite usar en 3D las posiciones del Editor 2D. El 2D conserva el auto-layout por capas.
+2. **Rendimiento en gráficos integrados:** render bajo demanda; etiquetas y minimapa solo se recalculan cuando cambia la cámara o los datos; animación ambiental a 30 fps como máximo y en pausa durante el giro; partículas en un solo `THREE.Points`; picking contra una caja por nodo con hover limitado a uno cada 30 ms; shaders compilados al cargar. **Modo rendimiento** automático si los fps iniciales bajan de 40 (o elegido en **⋯**): resolución 1×, sin antialias, partículas ni animación ambiental.
+3. **Interfaz:** una acción por control visible; toda ventana o panel flotante (modales, inspector, indicador de impacto, leyenda, minimapa, menú **⋯**, banda de simulación, confirmaciones) se cierra con **×** además de `Esc`/Cancelar. El impacto de las caídas reales se muestra como un indicador compacto plegable que recuerda su estado.
+4. **El auto-layout guarda `pinned: false`** en los nodos que coloca, como pide la API de la Fase 1.
+5. **Permisos en la interfaz:** el rol `viewer` no ve controles de edición, puertos ni paleta; la API rechaza igualmente cualquier escritura (403).

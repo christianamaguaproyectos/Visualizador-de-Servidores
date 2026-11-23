@@ -46,6 +46,7 @@ La aplicación tiene las siguientes secciones accesibles desde el menú de naveg
 | 🖥️ **Racks Físicos** | Visualización y gestión de servidores físicos en racks         |
 | 💻 **Virtuales**      | Gestión de máquinas virtuales agrupadas por host/cluster       |
 | 👥 **Usuarios**       | Gestión de usuarios del sistema (solo superadmin)              |
+| 🔗 **Mapa de Dependencias** | Relaciones entre servidores en 3D y editor 2D, con impacto de caídas |
 | 📡 **Monitoreo**      | Panel de monitoreo con checks de disponibilidad y alertas      |
 
 ---
@@ -146,6 +147,91 @@ La vista de **Virtuales** organiza las máquinas virtuales por **hosts ESXi** y/
 - Puedes agregar VMs directamente dentro de un host.
 
 Los filtros de estado (**Críticos**, **No Críticos**, **En Mantenimiento**) también están disponibles en esta vista.
+
+---
+
+## Mapa de Dependencias
+
+Accede desde **🔗 Mapa de Dependencias** en el menú lateral o desde su tarjeta en el panel de inicio (`/dependencias`). El mapa muestra qué servidores **dependen de** otros (por ejemplo, una aplicación que necesita su base de datos) y qué se vería afectado si uno de ellos cae.
+
+> La flecha va del servidor que depende (origen) al servidor del que depende (destino). Si el destino cae, el impacto se propaga hacia el origen.
+
+### Vista 3D (por defecto)
+
+La vista 3D representa el centro de datos como una **sala ordenada**:
+
+- **Infraestructura:** los servidores físicos se agrupan por su rack en bloques alineados, organizados en filas (`Fila A · RACK-01`, `Fila B · …`).
+- **Virtualización:** cada host aparece al frente de su bloque con sus máquinas virtuales en cuadrícula detrás (`Host …`); las VMs de un clúster sin host físico en el mapa se agrupan en su propio bloque (`Clúster …`).
+- Los servidores físicos se dibujan como equipos de rack y las VMs como cubos translúcidos. Las relaciones son arcos que pasan por encima de los equipos, con partículas que avanzan del origen al destino.
+
+| Acción | Cómo |
+|--------|------|
+| Girar la vista | Arrastrar con el botón izquierdo |
+| Desplazar | Arrastrar con el botón derecho (o flechas del teclado) |
+| Acercar / alejar | Rueda del ratón, botones **+** / **−** o teclas `+` / `−` |
+| Ver todo | Botón **Encajar** o tecla `F`; **100%** restablece el zoom |
+| Detalle de un servidor o relación | Clic sobre él: se abre el panel lateral (inspector) |
+| Acercarse a un servidor | Doble clic, o **Enfocar** en el inspector |
+| Buscar un servidor | Cuadro **Buscar…** (nombre, IP o hostname) y `Enter` |
+
+En el menú **⋯ (Más opciones)**:
+
+- **Disposición 3D:** *sala de datos* (por defecto) o *posiciones del editor*, que coloca los servidores donde los dejaste en el Editor 2D.
+- **Modo rendimiento 3D:** menor resolución y sin animaciones de fondo para que el giro sea fluido en equipos modestos. Se activa solo (con un aviso) si el equipo no alcanza unos 40 fps al abrir el mapa; puedes cambiarlo cuando quieras y se recuerda en tu navegador.
+- **Animaciones**, **Mostrar filtros**, **Mostrar todos los servidores** (incluye los que aún no tienen relaciones) y **Atajos de teclado**.
+
+Si el navegador no admite WebGL, el mapa se abre directamente en el Editor 2D.
+
+### Editor 2D
+
+Pulsa **Editor 2D** en la barra superior para ver el mapa como un diagrama editable:
+
+- Cada servidor es una tarjeta con su tipo (FÍSICO / VM), nombre, IP, rack o host, estado de monitoreo y número de relaciones.
+- **Mover:** arrastra las tarjetas (se ajustan a una cuadrícula de 10 px).
+- **Auto-ordenar ▾:** *Por capas* (proveedores arriba, aplicaciones abajo) o *Anillos*.
+- **Guardar:** el botón inferior indica si hay cambios sin guardar; las posiciones también se guardan solas poco después de mover algo.
+- **Paleta de servidores** (izquierda): arrastra al lienzo los servidores que todavía no están en el mapa.
+- **Exportar:** SVG o PNG del diagrama 2D, PNG de la vista 3D, o JSON con los datos del mapa.
+
+### Crear y editar relaciones (administradores)
+
+- **Con el formulario:** botón **Nueva relación**. Elige el **origen** (el que depende) y el **destino** (proveedor) con los buscadores, el **tipo** (base de datos, red, almacenamiento, API, autenticación, hipervisor, respaldo, DNS/infraestructura o servicio), la **criticidad**, y opcionalmente puerto, protocolo, etiqueta y notas. El botón ⇅ invierte la dirección; **Relación mutua** crea también la relación inversa.
+- **Arrastrando en el Editor 2D:** pasa el ratón sobre una tarjeta, arrastra desde uno de sus puntos de conexión (aparecen en los bordes) hasta otro servidor y suelta: se abre el mismo formulario con origen y destino ya elegidos.
+- **Desde el inspector:** *Relación desde aquí* en un servidor; *Editar* o *Eliminar* (con confirmación) en una relación.
+
+### Simular una caída e impacto en cascada
+
+- Si Monitoreo detecta servidores caídos o degradados, aparece arriba a la derecha un indicador compacto (por ejemplo, *2 caídas · 4 afectados*). Haz clic para ver el detalle (qué servidores se ven afectados y a qué nivel) y en **×** para plegarlo; el mapa recuerda si lo dejaste abierto.
+- **Simular caída:** activa el modo simulación y haz clic en uno o varios servidores para ver qué pasaría si cayeran. No modifica datos ni envía alertas. Sales con el mismo botón, con la **×** de la banda superior o con `Esc`.
+- **Ver solo impacto** (en el detalle del indicador) atenúa todo lo que no está afectado.
+
+### Leyenda de colores
+
+| Color | Estado del servidor (Monitoreo) |
+|-------|---------------------------------|
+| 🟢 Verde | UP — operativo |
+| 🔴 Rojo | DOWN — caído |
+| 🟡 Ámbar | DEGRADED — degradado |
+| 🟣 Violeta | MAINT — en mantenimiento |
+| ⚪ Gris | Sin monitoreo |
+
+| Color | Impacto |
+|-------|---------|
+| 🟠 Naranja | Impacto directo: depende de un servidor caído |
+| 🟡 Amarillo | En cascada: afectado a través de otro servidor (nivel 2 o más) |
+
+El grosor de cada relación indica su criticidad (crítica, alta, media o baja) y su color, el tipo de dependencia. La leyenda completa está en el botón **Leyenda** de la esquina superior izquierda del mapa.
+
+### Permisos
+
+| Rol | Qué puede hacer en el mapa |
+|-----|----------------------------|
+| **Viewer** | Ver el 3D y el 2D, buscar, filtrar, inspeccionar, simular caídas, exportar y usar la lista. No ve controles de edición ni puntos de conexión. |
+| **Admin / Superadmin** | Todo lo anterior y además crear, editar y eliminar relaciones, mover servidores, guardar posiciones y crear vistas. |
+
+### Accesibilidad
+
+El botón **Lista** muestra todos los servidores y relaciones en una tabla. Todas las ventanas y paneles se cierran con su botón **×** o con `Esc`. Los atajos de teclado completos están en **⋯ → Atajos de teclado**.
 
 ---
 

@@ -987,6 +987,19 @@ X-CSRF-Token: <token>
 
 > Al eliminar un servidor del inventario se eliminan también sus dependencias (como origen y como destino) y sus posiciones en todas las vistas.
 
+### Página del mapa y recursos de la vista 3D
+
+No son endpoints de datos, pero también requieren sesión:
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/dependencias` | Página del Mapa de Dependencias (`dependencies.html`). Sin sesión redirige al login. |
+| GET | `/vendor/three/three.module.js` | three.js (r170) auto-alojado desde el paquete npm `three`. |
+| GET | `/vendor/three/addons/controls/OrbitControls.js` | Controles de cámara de la vista 3D. |
+| GET | `/vendor/three/addons/renderers/CSS2DRenderer.js` | Etiquetas HTML de la vista 3D. |
+
+- `/vendor/three` sirve **solo** esos tres módulos (lista cerrada); cualquier otra ruta bajo `/vendor/three` responde `404`. Los módulos se entregan como `text/javascript` con `ETag` (`304` si no cambiaron) y con el especificador `'three'` ya reescrito a `/vendor/three/three.module.js`, así el navegador los carga sin CDN ni *import map*, compatible con la CSP (`script-src 'self'`).
+
 ---
 
 ## 📡 Eventos en Tiempo Real (SSE)
