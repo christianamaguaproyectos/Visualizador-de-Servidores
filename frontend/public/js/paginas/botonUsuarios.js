@@ -3,6 +3,10 @@
 document.addEventListener('DOMContentLoaded', () => {
   const btnUsers = document.getElementById('btnUsers');
   if (!btnUsers) return;
+  // Al salir de la página el navegador cancela la petición: no es un error real
+  let saliendo = false;
+  window.addEventListener('pagehide', () => { saliendo = true; });
+  window.addEventListener('beforeunload', () => { saliendo = true; });
 
   fetch('/api/auth/user')
     .then((response) => response.json())
@@ -13,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     })
     .catch((e) => {
+      if (e?.name === 'AbortError' || (saliendo && e instanceof TypeError)) return;
       console.error('Error checking superadmin role:', e);
     });
 });
