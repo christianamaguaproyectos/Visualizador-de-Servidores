@@ -10,7 +10,7 @@ const ANCHO = 200;
 const ALTO = 130;
 const MARGEN = 8;
 
-export function crearMinimapa({ raiz, estado, centrar }) {
+export function crearMinimapa({ raiz, estado, centrar, posicionDe = (id) => estado.posiciones.get(String(id)) }) {
   const svg = document.createElementNS(SVG, 'svg');
   svg.setAttribute('viewBox', `0 0 ${ANCHO} ${ALTO}`);
   svg.setAttribute('width', ANCHO);
@@ -28,15 +28,18 @@ export function crearMinimapa({ raiz, estado, centrar }) {
   encuadre.setAttribute('stroke-width', '1.2');
   svg.append(gAristas, gNodos, encuadre);
 
-  raiz.querySelector('.topo-minimapa__plegar').addEventListener('click', (ev) => {
-    const plegado = raiz.classList.toggle('es-plegado');
-    ev.currentTarget.setAttribute('aria-expanded', plegado ? 'false' : 'true');
-  });
+  const botonPlegar = raiz.querySelector('.topo-minimapa__plegar');
+  function fijarPlegado(plegado) {
+    raiz.classList.toggle('es-plegado', plegado);
+    botonPlegar.setAttribute('aria-expanded', plegado ? 'false' : 'true');
+  }
+  botonPlegar.addEventListener('click', () => fijarPlegado(!raiz.classList.contains('es-plegado')));
+  raiz.querySelector('.topo-minimapa__cerrar').addEventListener('click', () => { fijarPlegado(true); botonPlegar.focus(); });
 
   let trans = { s: 1, ox: 0, oy: 0 };
 
   function centroNodo(id) {
-    const p = estado.posiciones.get(String(id));
+    const p = posicionDe(String(id));
     return p ? [p.x + TARJETA.ancho / 2, p.y + TARJETA.alto / 2] : null;
   }
 

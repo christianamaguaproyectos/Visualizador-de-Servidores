@@ -75,7 +75,10 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
           </button>
           <ul id="topo-mas-menu" class="topo-menu__lista topo-menu__lista--derecha" role="menu" hidden>
+            <li role="none" class="topo-menu__cabecera"><button type="button" class="topo-icon-btn topo-menu__cerrar" aria-label="Cerrar menú" title="Cerrar (Esc)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg></button></li>
             <li role="none"><button type="button" role="menuitemcheckbox" id="topo-animaciones" aria-checked="true">Animaciones</button></li>
+            <li role="none" data-modo="3d"><button type="button" role="menuitemradio" id="topo-disposicion-sala" aria-checked="true">Disposición 3D: sala de datos</button></li>
+            <li role="none" data-modo="3d"><button type="button" role="menuitemradio" id="topo-disposicion-editor" aria-checked="false">Disposición 3D: posiciones del editor</button></li>
             <li role="none" data-modo="3d"><button type="button" role="menuitemcheckbox" id="topo-rendimiento3d" aria-checked="false">Modo rendimiento 3D</button></li>
             <li role="none"><button type="button" role="menuitemcheckbox" id="topo-ver-filtros" aria-checked="true">Mostrar filtros</button></li>
             <li role="none"><button type="button" role="menuitem" id="topo-ver-aislados">Mostrar todos los servidores</button></li>
@@ -129,9 +132,11 @@
 
         <div class="topo-banda-sim" id="topo-banda-sim" hidden>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-          <span><strong>Modo simulación:</strong> haz clic en servidores para simular su caída. No modifica datos ni dispara alertas. Para salir, pulsa de nuevo «Simular caída» o Esc.</span>
+          <span><strong>Modo simulación:</strong> haz clic en servidores para simular su caída. No modifica datos ni dispara alertas.</span>
+          <button type="button" class="topo-icon-btn topo-banda-sim__cerrar" data-accion="salir-simulacion" aria-label="Salir de la simulación" title="Salir de la simulación (Esc)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
         </div>
-        <div class="topo-aviso" id="topo-aviso" role="alert" hidden></div>
 
         <div class="topo-resumen" id="topo-resumen" aria-live="polite" hidden></div>
 
@@ -141,6 +146,9 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="topo-leyenda__cuerpo" id="topo-leyenda-cuerpo" hidden></div>
+          <button type="button" class="topo-icon-btn topo-leyenda__cerrar" aria-label="Cerrar leyenda" title="Cerrar leyenda" hidden>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
         </div>
 
         <div class="topo-controles" role="toolbar" aria-label="Controles del lienzo">
@@ -166,13 +174,21 @@
         </div>
 
         <div class="topo-minimapa" id="topo-minimapa">
-          <button type="button" class="topo-minimapa__plegar" aria-expanded="true" aria-controls="topo-minimapa-cuerpo">Minimapa</button>
+          <div class="topo-minimapa__cabecera">
+            <button type="button" class="topo-minimapa__plegar" aria-expanded="true" aria-controls="topo-minimapa-cuerpo">Minimapa</button>
+            <button type="button" class="topo-icon-btn topo-minimapa__cerrar" aria-label="Plegar minimapa" title="Plegar minimapa">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
           <div class="topo-minimapa__cuerpo" id="topo-minimapa-cuerpo"></div>
         </div>
 
         <div class="topo-estado" id="topo-estado" role="status"></div>
 
         <div class="topo-contexto" id="topo-contexto" hidden>
+          <button type="button" class="topo-icon-btn topo-contexto__cerrar" data-accion="cerrar-contexto" aria-label="Cerrar aviso" title="Cerrar">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
           <p>Se perdió el contexto gráfico. Reintenta la vista 3D o cambia al Editor 2D desde la barra superior.</p>
           <div class="topo-contexto__acciones">
             <button type="button" class="btn btn-primary" data-accion="reintentar-3d">Reintentar</button>
@@ -200,6 +216,9 @@
     <div class="topo-modal__dialogo" role="dialog" aria-modal="true" aria-labelledby="topo-modal-relacion-titulo">
       <div class="topo-modal__cabecera">
         <h2 class="topo-modal__titulo" id="topo-modal-relacion-titulo">Nueva relación</h2>
+        <button type="button" class="topo-icon-btn" data-accion="cancelar" aria-label="Cerrar" title="Cerrar (Esc)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
       </div>
       <form class="topo-form" novalidate>
         <p class="topo-form__error-general" role="alert" hidden></p>
@@ -269,6 +288,9 @@
     <div class="topo-modal__dialogo topo-modal__dialogo--sm" role="dialog" aria-modal="true" aria-labelledby="topo-modal-vista-titulo">
       <div class="topo-modal__cabecera">
         <h2 class="topo-modal__titulo" id="topo-modal-vista-titulo">Nueva vista</h2>
+        <button type="button" class="topo-icon-btn" data-accion="cancelar" aria-label="Cerrar" title="Cerrar (Esc)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
       </div>
       <form class="topo-form" novalidate>
         <p class="topo-form__error-general" role="alert" hidden></p>
@@ -313,6 +335,9 @@
     <div class="topo-modal__dialogo topo-modal__dialogo--sm" role="dialog" aria-modal="true" aria-labelledby="topo-modal-ayuda-titulo">
       <div class="topo-modal__cabecera">
         <h2 class="topo-modal__titulo" id="topo-modal-ayuda-titulo">Atajos de teclado</h2>
+        <button type="button" class="topo-icon-btn" data-accion="cancelar" aria-label="Cerrar" title="Cerrar (Esc)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
       </div>
       <dl class="topo-atajos">
         <dt><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Desplazar</dd>

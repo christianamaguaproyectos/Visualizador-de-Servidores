@@ -7,12 +7,15 @@ import { ESTADOS, IMPACTO, TIPOS_DEPENDENCIA, CRITICIDADES } from './constantesV
 export function crearLeyenda({ raiz, estado }) {
   const boton = raiz.querySelector('.topo-leyenda__boton');
   const cuerpo = raiz.querySelector('.topo-leyenda__cuerpo');
+  const cerrar = raiz.querySelector('.topo-leyenda__cerrar');
 
   function fijarAbierta(v) {
     cuerpo.hidden = !v;
+    cerrar.hidden = !v;
     boton.setAttribute('aria-expanded', v ? 'true' : 'false');
   }
   boton.addEventListener('click', () => fijarAbierta(cuerpo.hidden));
+  cerrar.addEventListener('click', () => { fijarAbierta(false); boton.focus(); });
   // Abierta por defecto solo en pantallas anchas (≥1600): a 1440 tapaba la primera columna de nodos
   fijarAbierta(window.innerWidth >= 1600);
 

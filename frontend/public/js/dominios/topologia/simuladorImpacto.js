@@ -10,6 +10,8 @@ export function crearSimulador({ banda, resumen, boton, estado, recargar }) {
   let expandido = false;
   const nombreDe = (id) => estado.nodoPorId.get(String(id))?.name || `#${id}`;
 
+  banda.querySelector('[data-accion="salir-simulacion"]').addEventListener('click', () => { desactivar(); boton.focus(); });
+
   function activar() {
     if (estado.simulando) return;
     estado.simulando = true;

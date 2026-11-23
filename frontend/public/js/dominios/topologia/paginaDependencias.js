@@ -87,6 +87,8 @@ export async function iniciarPaginaDependencias() {
   const minimapa = crearMinimapa({
     raiz: $('#topo-minimapa'), estado,
     centrar: (x, y) => { if (estado.modo === '3d') escena?.centrarEnPx(x, y); else lienzo.centrarEnPx(x, y); },
+    // En 3D el minimapa refleja la disposición de la escena (sala de datos o editor)
+    posicionDe: (id) => (estado.modo === '3d' && escena?.posicionPlano(id)) || estado.posiciones.get(String(id)),
   });
 
   const leyenda = crearLeyenda({ raiz: $('#topo-leyenda'), estado });
@@ -406,6 +408,7 @@ export async function iniciarPaginaDependencias() {
           alClicVacio: () => estado.seleccionar(null),
           alPerderContexto: () => { $('#topo-contexto').hidden = false; },
           alMoverCamara: actualizarEncuadre,
+          alReconstruir: () => { minimapa.renderizar(); actualizarEncuadre(); },
           alRendimientoBajo: () => toast('La vista 3D pasó a modo rendimiento para moverse con fluidez. Puedes cambiarlo en el menú «Más opciones».', 'info', 6000),
         });
         pendiente3d = true;
@@ -454,9 +457,7 @@ export async function iniciarPaginaDependencias() {
   }
 
   function avisoSinWebgl(texto) {
-    const aviso = $('#topo-aviso');
-    aviso.textContent = texto;
-    aviso.hidden = false;
+    toast(texto, 'warning', 8000);
     const b = $('#topo-modo-3d');
     b.setAttribute('aria-disabled', 'true');
     b.title = 'Tu navegador no admite WebGL';
@@ -474,6 +475,7 @@ export async function iniciarPaginaDependencias() {
     $(`#topo-modo-${destino}`).focus();
   });
 
+  $('#topo-contexto [data-accion="cerrar-contexto"]').addEventListener('click', () => { $('#topo-contexto').hidden = true; });
   $('#topo-contexto [data-accion="reintentar-3d"]').addEventListener('click', async () => {
     $('#topo-contexto').hidden = true;
     escena?.dispose();
@@ -519,6 +521,12 @@ export async function iniciarPaginaDependencias() {
     }
     return habia;
   }
+  document.querySelectorAll('.topo-menu__cerrar').forEach((x) => x.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    const boton = $(`[aria-controls="${ev.currentTarget.closest('[role="menu"]').id}"]`);
+    cerrarMenus();
+    boton?.focus();
+  }));
   for (const [b, m] of menus) {
     $(b).addEventListener('click', (ev) => {
       ev.stopPropagation();
@@ -556,6 +564,18 @@ export async function iniciarPaginaDependencias() {
   const botonCalidad = $('#topo-rendimiento3d');
   const pintarCalidad = () => botonCalidad.setAttribute('aria-checked', estado.calidad3d === 'rendimiento' ? 'true' : 'false');
   botonCalidad.addEventListener('click', () => estado.fijarCalidad3d(estado.calidad3d === 'rendimiento' ? 'alta' : 'rendimiento'));
+  // Disposición 3D: sala de datos ordenada o posiciones del editor 2D
+  const pintarDisposicion = () => {
+    $('#topo-disposicion-sala').setAttribute('aria-checked', estado.disposicion3d === 'sala' ? 'true' : 'false');
+    $('#topo-disposicion-editor').setAttribute('aria-checked', estado.disposicion3d === 'editor' ? 'true' : 'false');
+  };
+  $('#topo-disposicion-sala').addEventListener('click', () => { cerrarMenus(); estado.fijarDisposicion3d('sala'); });
+  $('#topo-disposicion-editor').addEventListener('click', () => { cerrarMenus(); estado.fijarDisposicion3d('editor'); });
+  estado.on('disposicion3d', () => {
+    pintarDisposicion();
+    if (escena) escena.reconstruir({ encuadrar: true }); else pendiente3d = true;
+  });
+  pintarDisposicion();
   estado.on('calidad3d', () => {
     pintarCalidad();
     // El antialias se fija al crear el contexto WebGL: si cambia, se recrea la escena
@@ -583,11 +603,11 @@ export async function iniciarPaginaDependencias() {
     cerrarMenus();
     modalAyuda.hidden = false;
     liberarAyuda = atraparFoco(modalAyuda);
-    modalAyuda.querySelector('[data-accion="cancelar"]').focus();
+    modalAyuda.querySelector('.topo-modal__acciones [data-accion="cancelar"]').focus();
   }
   function cerrarAyuda() { modalAyuda.hidden = true; liberarAyuda?.(); escenario.focus(); }
   $('#topo-ver-ayuda').addEventListener('click', abrirAyuda);
-  modalAyuda.querySelector('[data-accion="cancelar"]').addEventListener('click', cerrarAyuda);
+  modalAyuda.querySelectorAll('[data-accion="cancelar"]').forEach((b) => b.addEventListener('click', cerrarAyuda));
   modalAyuda.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); cerrarAyuda(); } });
 
   // Nueva vista
@@ -601,7 +621,7 @@ export async function iniciarPaginaDependencias() {
     modalVista.querySelector('input').focus();
   });
   const cerrarVista = () => { modalVista.hidden = true; liberarVista?.(); };
-  modalVista.querySelector('[data-accion="cancelar"]').addEventListener('click', cerrarVista);
+  modalVista.querySelectorAll('[data-accion="cancelar"]').forEach((b) => b.addEventListener('click', cerrarVista));
   modalVista.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); cerrarVista(); } });
   modalVista.querySelector('form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
