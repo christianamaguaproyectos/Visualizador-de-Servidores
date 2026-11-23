@@ -18,7 +18,8 @@ const LARGO_PUNTA = 0.34;
 const RADIO_SALIDA = 1.0;
 const RADIO_LLEGADA = 1.1;
 const VELOCIDAD = 2.5;
-const ESTADO_OPACIDAD = { normal: 1, resaltada: 1 / 0.6, tenue: 0.4, atenuada: 0 };
+// En reposo las relaciones quedan algo translúcidas; con un foco, las ajenas casi desaparecen
+const ESTADO_OPACIDAD = { normal: 0.75, resaltada: 1 / 0.6, tenue: 0.22, atenuada: 0 };
 // Segmentos de los tubos: a lo largo y alrededor (los tubos son finos: 4 lados bastan)
 const SEG_TUBO = 24;
 const LADOS_TUBO = 4;
@@ -231,7 +232,7 @@ export function crearAristas3D(escena) {
       reg.estado = estado;
       reg.tubo.material = material(reg.arista.dependencyType, reg.arista.criticality, estado, reg.arista.carriesImpact);
       const colorBase = tmpColor.set(reg.arista.carriesImpact ? COLOR_CAIDA : (TIPOS_DEPENDENCIA[reg.arista.dependencyType]?.color || '#cbd5e1'));
-      const factor = estado === 'atenuada' ? 0.12 : estado === 'tenue' ? 0.45 : 1;
+      const factor = estado === 'atenuada' ? 0.12 : estado === 'tenue' ? 0.25 : 1;
       const c = colorBase.clone().multiplyScalar(factor);
       puntas.setColorAt(i, c);
       for (let j = 0; j < 3; j++) conos.setColorAt(i * 3 + j, c);
@@ -239,7 +240,7 @@ export function crearAristas3D(escena) {
     const colores = particulas?.geometry.attributes.color;
     listaParticulas.forEach((p, i) => {
       const a = p.reg.arista;
-      const factor = p.reg.estado === 'atenuada' ? 0 : p.reg.estado === 'tenue' ? 0.35 : 1;
+      const factor = p.reg.estado === 'atenuada' ? 0 : p.reg.estado === 'tenue' ? 0.15 : 1;
       tmpColor.set(a.carriesImpact ? COLOR_CAIDA : (TIPOS_DEPENDENCIA[a.dependencyType]?.color || '#cbd5e1')).multiplyScalar(factor);
       colores.setXYZ(i, tmpColor.r, tmpColor.g, tmpColor.b);
     });

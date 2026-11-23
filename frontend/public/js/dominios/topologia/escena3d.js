@@ -22,8 +22,16 @@ import { crearEtiquetas3D } from './etiquetas3d.js';
 import { crearZonasSuelo } from './zonasSuelo.js';
 import { disposicionSala } from './salaDatos.js';
 
-// En la sala de datos los arcos suben por encima de los equipos (≈2,6 u de alto)
-const ELEVACION_SALA = 3.2;
+// En la sala de datos los arcos suben por encima de los gabinetes (≈3,3 u de alto)
+const ELEVACION_SALA = 2.6;
+// Vista inicial isométrica suave: algo girada y a ~40° de elevación
+const DIR_CAMARA = new THREE.Vector3(0.2, 0.92, 1).normalize();
+// Altura que debe caber en el encuadre (gabinetes y sus etiquetas)
+const ALTO_CONTENIDO = 4.6;
+// Medio lado (u) del espacio de cada equipo en el encuadre
+const RADIO_ENCUADRE = 2;
+// Márgenes del encuadre en px: barra superior (leyenda y resumen) e inferior (zoom)
+const MARGEN_ENCUADRE = { arriba: 64, abajo: 76, lado: 24 };
 
 const GRADOS = Math.PI / 180;
 const easeInOutCubic = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
@@ -103,6 +111,7 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
   const zonas = crearZonasSuelo(escena);
 
   let caja = new THREE.Box3(new THREE.Vector3(-10, 0, -10), new THREE.Vector3(10, 0, 10));
+  let puntosEncuadre = [];
   let centros = new Map();
   let tipos = new Map();
   let raf = 0;
@@ -154,6 +163,19 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     for (const c of centros.values()) caja.expandByPoint(c);
     // En la sala de datos el encuadre abarca también las zonas rotuladas del suelo
     for (const q of sala?.zonas || []) { caja.expandByPoint(new THREE.Vector3(q.x0, 0, q.z0)); caja.expandByPoint(new THREE.Vector3(q.x1, 0, q.z1)); }
+    // Puntos del encuadre inicial: los equipos, los bloques con su rótulo frontal y el rótulo de
+    // cada área (no las esquinas vacías de las áreas, que con la vista girada dejan franjas vacías)
+    puntosEncuadre = [];
+    const R = RADIO_ENCUADRE;
+    for (const c of centros.values()) for (const [dx, dz] of [[-R, -R], [R, -R], [R, R], [-R, R]]) puntosEncuadre.push(new THREE.Vector3(c.x + dx, 0, c.z + dz));
+    for (const q of sala?.zonas || []) {
+      if (q.tipo === 'area') {
+        puntosEncuadre.push(new THREE.Vector3(q.x0, 0, q.z1), new THREE.Vector3(Math.min(q.x1, q.x0 + 14), 0, q.z1));
+      } else {
+        const zFrente = q.z1 + 1.8; // rótulo del bloque
+        puntosEncuadre.push(new THREE.Vector3(q.x0, 0, q.z0), new THREE.Vector3(q.x1, 0, q.z0), new THREE.Vector3(q.x0, 0, zFrente), new THREE.Vector3(q.x1, 0, zFrente));
+      }
+    }
     if (caja.isEmpty()) caja.set(new THREE.Vector3(-10, 0, -10), new THREE.Vector3(10, 0, 10));
     const tam = caja.getSize(new THREE.Vector3());
     crearRejilla(Math.max(tam.x, tam.z) + 80);
@@ -181,7 +203,8 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     const estiloNodo = (n) => ({ atenuado: estado.nodoAtenuado(n) });
     nodos3d.actualizarEstilos(estiloNodo);
     etiquetas.actualizarDatos(nodos, nombreDe, estiloNodo);
-    const nodoFoco = hov?.tipo === 'nodo' ? hov.id : null;
+    // Foco: nodo bajo el puntero o, si no hay, el seleccionado (sus relaciones destacan)
+    const nodoFoco = hov?.tipo === 'nodo' ? hov.id : (sel?.tipo === 'nodo' ? sel.id : null);
     camaraSucia = true; // las etiquetas cambian de contenido o de nivel de detalle
     aristas3d.actualizarEstilos((e) => {
       if (estado.aristaAtenuada(e)) return 'atenuada';
@@ -205,21 +228,56 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
   }
 
   // ── Cámara ───────────────────────────────────────────────────────────────
+  /**
+   * Encuadre ajustado al contenido: proyecta los puntos del contenido (suelo y altura de los
+   * gabinetes con sus etiquetas) y busca la distancia mínima a la que caben dentro del lienzo,
+   * descontando la barra superior (leyenda, resumen) y la inferior (zoom). Luego recentra.
+   */
   function encajar({ instantaneo = false } = {}) {
-    // Encaje por ancho (fov horizontal) y por fondo (fov vertical, con la inclinación de la cámara);
-    // la esfera envolvente de la especificación dejaba la escena a la mitad del escenario.
-    const esfera = caja.getBoundingSphere(new THREE.Sphere());
-    const tam = caja.getSize(new THREE.Vector3());
+    const { width: w, height: h } = rotulos.getSize();
+    const base = puntosEncuadre.length ? puntosEncuadre : [caja.min, caja.max, new THREE.Vector3(caja.min.x, 0, caja.max.z), new THREE.Vector3(caja.max.x, 0, caja.min.z)];
+    const puntos = [];
+    for (const p of base) puntos.push(p.clone().setY(0), p.clone().setY(ALTO_CONTENIDO));
+    // Zona útil del lienzo en coordenadas normalizadas (-1..1)
+    const util = {
+      x0: -1 + (2 * MARGEN_ENCUADRE.lado) / w, x1: 1 - (2 * MARGEN_ENCUADRE.lado) / w,
+      y0: -1 + (2 * MARGEN_ENCUADRE.abajo) / h, y1: 1 - (2 * MARGEN_ENCUADRE.arriba) / h,
+    };
+    const cam = camara.clone();
+    const v = new THREE.Vector3();
+    const limites = (objetivo, d) => {
+      cam.position.copy(objetivo).addScaledVector(DIR_CAMARA, d);
+      cam.lookAt(objetivo);
+      cam.updateMatrixWorld();
+      const r = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
+      for (const p of puntos) {
+        v.copy(p).project(cam);
+        r.x0 = Math.min(r.x0, v.x); r.x1 = Math.max(r.x1, v.x);
+        r.y0 = Math.min(r.y0, v.y); r.y1 = Math.max(r.y1, v.y);
+      }
+      return r;
+    };
+    const cabe = (r) => (r.x1 - r.x0) <= (util.x1 - util.x0) && (r.y1 - r.y0) <= (util.y1 - util.y0);
+    const objetivo = caja.getCenter(new THREE.Vector3()).setY(1);
+    const derecha = new THREE.Vector3(DIR_CAMARA.z, 0, -DIR_CAMARA.x).normalize();
+    const fondo = new THREE.Vector3(-DIR_CAMARA.x, 0, -DIR_CAMARA.z).normalize();
     const mediaV = (camara.fov / 2) * GRADOS;
     const mediaH = Math.atan(Math.tan(mediaV) * camara.aspect);
-    const ancho = tam.x / 2 + 3.5;
-    const fondo = tam.z / 2 + 3.5;
-    // El fondo se ve escorzado por la inclinación (~40°): basta ~0,8 de su tamaño
-    const dist = Math.max(18, Math.max(ancho / Math.tan(mediaH), (fondo * 0.8 + 2) / Math.tan(mediaV)) * 1.15);
-    const dir = new THREE.Vector3(0, 0.85, 1).normalize();
-    // Objetivo algo detrás del centro: la escena baja y deja sitio al resumen superior
-    const objetivo = new THREE.Vector3(esfera.center.x, 1, esfera.center.z - tam.z * 0.05);
-    moverCamara(objetivo, objetivo.clone().addScaledVector(dir, Math.min(dist, controles.maxDistance)), instantaneo);
+    const senoElev = DIR_CAMARA.y;
+    let d = 30;
+    for (let iter = 0; iter < 3; iter++) {
+      // Distancia mínima que hace caber el contenido (búsqueda binaria)
+      let lo = controles.minDistance; let hi = controles.maxDistance;
+      for (let k = 0; k < 24; k++) { const m = (lo + hi) / 2; if (cabe(limites(objetivo, m))) hi = m; else lo = m; }
+      d = hi;
+      // Recentrar: desplaza el objetivo para que el contenido quede en el centro de la zona útil
+      const r = limites(objetivo, d);
+      const dx = (r.x0 + r.x1) / 2 - (util.x0 + util.x1) / 2;
+      const dy = (r.y0 + r.y1) / 2 - (util.y0 + util.y1) / 2;
+      objetivo.addScaledVector(derecha, dx * d * Math.tan(mediaH));
+      objetivo.addScaledVector(fondo, (dy * d * Math.tan(mediaV)) / senoElev);
+    }
+    moverCamara(objetivo, objetivo.clone().addScaledVector(DIR_CAMARA, d * 1.03), instantaneo);
   }
 
   function enfocarNodo(id, { parpadeo = false } = {}) {
@@ -428,7 +486,8 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     const completos = new Set();
     if (estado.seleccion?.tipo === 'nodo') { siempre.add(estado.seleccion.id); completos.add(estado.seleccion.id); }
     if (estado.hover?.tipo === 'nodo') { siempre.add(estado.hover.id); completos.add(estado.hover.id); }
-    etiquetas.nivelDetalle(camara, siempre, completos, { minimas: estado.calidad3d === 'rendimiento' });
+    const { width: ancho, height: alto } = rotulos.getSize();
+    etiquetas.nivelDetalle(camara, siempre, completos, { minimas: estado.calidad3d === 'rendimiento', ancho, alto });
     rotulos.render(escena, camara);
     if (alMoverCamara) alMoverCamara();
   }
