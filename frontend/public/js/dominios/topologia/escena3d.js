@@ -20,10 +20,13 @@ import { crearModelosNodos } from './modelos3d.js';
 import { crearAristas3D } from './aristas3d.js';
 import { crearEtiquetas3D } from './etiquetas3d.js';
 import { crearZonasSuelo } from './zonasSuelo.js';
-import { disposicionSala } from './salaDatos.js';
+import { disposicionSala, disposicionSalaRacks, ALTO_GABINETE, ID_SIN_UBICAR } from './salaDatos.js';
+import { crearSalaRacks3D } from './salaRacks3d.js';
 
 // En la sala de datos los arcos suben por encima de los gabinetes (≈3,3 u de alto)
 const ELEVACION_SALA = 2.6;
+// En la sala de racks los arcos salen de la unidad del servidor y pasan por encima de los gabinetes
+const ELEVACION_RACKS = 8.5;
 // Vista inicial isométrica suave: algo girada y a ~40° de elevación
 const DIR_CAMARA = new THREE.Vector3(0.2, 0.92, 1).normalize();
 // Altura que debe caber en el encuadre (gabinetes y sus etiquetas)
@@ -44,7 +47,7 @@ const FPS_AMBIENTE = 30;
 const MS_HOVER = 30;
 const FPS_MINIMO = 40;
 
-export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alClicNodo, alClicArista, alClicVacio, alPerderContexto, alMoverCamara, alRendimientoBajo, alReconstruir }) {
+export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alClicNodo, alClicArista, alClicRack, alClicVacio, alPerderContexto, alMoverCamara, alRendimientoBajo, alReconstruir }) {
   const dpr = window.devicePixelRatio || 1;
   // Antialias solo en calidad alta y pantallas de densidad normal (en alta densidad apenas se
   // nota y cuesta mucho). Es fijo al crear el contexto: cambiar de calidad recrea la escena.
@@ -109,11 +112,14 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
   const aristas3d = crearAristas3D(escena);
   const etiquetas = crearEtiquetas3D(escena);
   const zonas = crearZonasSuelo(escena);
+  const racks3d = crearSalaRacks3D(escena);
 
   let caja = new THREE.Box3(new THREE.Vector3(-10, 0, -10), new THREE.Vector3(10, 0, 10));
   let puntosEncuadre = [];
   let centros = new Map();
   let tipos = new Map();
+  let slots = new Map(); // servidores montados en rack (sala de racks)
+  let altoContenido = ALTO_CONTENIDO;
   let raf = 0;
   let pedido = false;
   let activo = true;
@@ -147,8 +153,13 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     const aristas = estado.aristasVisibles(nodos);
     centros = new Map();
     tipos = new Map();
-    // Sala de datos (por defecto) o las posiciones del editor 2D
-    const sala = estado.disposicion3d === 'editor' ? null : disposicionSala(nodos);
+    // Sala de racks (por defecto, con el inventario de racks), sala sin inventario o las
+    // posiciones del editor 2D
+    const inventario = estado.disposicion3d === 'editor' ? null : estado.racksSala?.();
+    let sala = null;
+    if (estado.disposicion3d !== 'editor') sala = inventario ? disposicionSalaRacks(nodos, inventario) : disposicionSala(nodos);
+    slots = sala?.slots || new Map();
+    altoContenido = sala?.racks?.length ? ALTO_GABINETE + 0.4 : ALTO_CONTENIDO;
     for (const n of nodos) {
       const id = String(n.id);
       const c = sala?.centros.get(id);
@@ -156,9 +167,17 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
       tipos.set(id, n.type);
     }
     zonas.construir(sala ? sala.zonas : []);
-    nodos3d.construir(nodos, centros);
-    aristas3d.construir(aristas, (id) => centros.get(String(id)), (id) => tipos.get(String(id)), { elevacion: sala ? ELEVACION_SALA : 0 });
-    etiquetas.construir(nodos, (id) => centros.get(String(id)), nombreDe);
+    racks3d.construir(sala?.racks || []);
+    nodos3d.construir(nodos, centros, slots);
+    aristas3d.construir(aristas, (id) => centros.get(String(id)), (id) => tipos.get(String(id)), {
+      elevacion: sala ? (sala.racks ? ELEVACION_RACKS : ELEVACION_SALA) : 0,
+      anclaDe: (id) => nodos3d.anclaDe(id),
+    });
+    etiquetas.construir(nodos, (id) => centros.get(String(id)), nombreDe, {
+      anclaDe: (id) => { const s = slots.get(String(id)); return s ? [s.x, s.y + s.alto / 2, s.z + s.fondo / 2 + 0.06] : null; },
+      detalleDe,
+      discreta: (id) => slots.has(String(id)),
+    });
     caja = new THREE.Box3();
     for (const c of centros.values()) caja.expandByPoint(c);
     // En la sala de datos el encuadre abarca también las zonas rotuladas del suelo
@@ -196,6 +215,18 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
 
   function nombreDe(id) { return estado.nodoPorId.get(String(id))?.name || `#${id}`; }
 
+  /** Resumen de hover: rack y unidades (montados) o host; más el modelo o el SO del inventario */
+  function detalleDe(n) {
+    const inv = estado.inventarioPorId?.get(String(n.id));
+    const s = slots.get(String(n.id));
+    const partes = [];
+    if (s) partes.push(`${s.rackNombre} · U${s.uInferior}${s.uSuperior > s.uInferior ? `–${s.uSuperior}` : ''}`);
+    else if (n.type !== 'fisicos' && n.rack) partes.push(`Host ${n.rack}`);
+    const extra = n.type === 'fisicos' ? (inv?.modelo || inv?.marca) : inv?.so;
+    if (extra) partes.push(extra);
+    return partes.join(' · ');
+  }
+
   function actualizarEstilos() {
     const nodos = estado.nodosVisibles();
     const sel = estado.seleccion;
@@ -213,6 +244,7 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
       return 'normal';
     }, animaciones() && estado.calidad3d === 'alta');
     nodos3d.fijarSeleccion(sel?.tipo === 'nodo' ? sel.id : null);
+    racks3d.fijarSeleccion(sel?.tipo === 'rack' ? sel.id : null);
     // Escala de hover (nodo, o extremos de la arista)
     const escalados = new Set();
     if (hov?.tipo === 'nodo') escalados.add(hov.id);
@@ -237,7 +269,7 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     const { width: w, height: h } = rotulos.getSize();
     const base = puntosEncuadre.length ? puntosEncuadre : [caja.min, caja.max, new THREE.Vector3(caja.min.x, 0, caja.max.z), new THREE.Vector3(caja.max.x, 0, caja.min.z)];
     const puntos = [];
-    for (const p of base) puntos.push(p.clone().setY(0), p.clone().setY(ALTO_CONTENIDO));
+    for (const p of base) puntos.push(p.clone().setY(0), p.clone().setY(altoContenido));
     // Zona útil del lienzo en coordenadas normalizadas (-1..1)
     const util = {
       x0: -1 + (2 * MARGEN_ENCUADRE.lado) / w, x1: 1 - (2 * MARGEN_ENCUADRE.lado) / w,
@@ -283,9 +315,11 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
   function enfocarNodo(id, { parpadeo = false } = {}) {
     const c = centros.get(String(id));
     if (!c) return false;
-    const objetivo = new THREE.Vector3(c.x, 1, c.z);
-    const dir = camara.position.clone().sub(controles.target).normalize();
-    moverCamara(objetivo, objetivo.clone().addScaledVector(dir, 14), false);
+    // Un servidor montado se mira de frente y de cerca, a la altura de su unidad
+    const s = slots.get(String(id));
+    const objetivo = s ? new THREE.Vector3(s.x, s.y, s.z + s.fondo / 2) : new THREE.Vector3(c.x, 1, c.z);
+    const dir = s ? new THREE.Vector3(0.18, 0.32, 1).normalize() : camara.position.clone().sub(controles.target).normalize();
+    moverCamara(objetivo, objetivo.clone().addScaledVector(dir, s ? 13 : 14), false);
     if (parpadeo) nodos3d.parpadear();
     return true;
   }
@@ -310,6 +344,15 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     }
     tween = { t0: performance.now(), dur: 600, desdeT: controles.target.clone(), desdeP: camara.position.clone(), aT: objetivo, aP: posicion };
     pedirRender();
+  }
+
+  /** Vista frontal y cercana de un rack completo */
+  function enfocarRack(id) {
+    const r = racks3d.rack(id);
+    if (!r) return false;
+    const objetivo = new THREE.Vector3(r.x, ALTO_GABINETE / 2, r.z);
+    moverCamara(objetivo, objetivo.clone().addScaledVector(new THREE.Vector3(0.2, 0.3, 1).normalize(), 19), false);
+    return true;
   }
 
   function reiniciarCamara() { encajar(); }
@@ -388,6 +431,12 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
       const id = aristas3d.idDesdeInterseccion(hitE);
       if (id) return { tipo: 'arista', id };
     }
+    // Un clic en el gabinete (fuera de un servidor) selecciona el rack
+    const hitR = raycaster.intersectObjects(racks3d.objetosPicking(), false)[0];
+    if (hitR) {
+      const id = racks3d.idDesdeInterseccion(hitR);
+      if (id && id !== ID_SIN_UBICAR) return { tipo: 'rack', id };
+    }
     return null;
   }
 
@@ -409,11 +458,13 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     const hit = elegir(ev.clientX, ev.clientY);
     if (hit?.tipo === 'nodo') alClicNodo(hit.id, ev);
     else if (hit?.tipo === 'arista') alClicArista(hit.id, ev);
+    else if (hit?.tipo === 'rack') alClicRack?.(hit.id, ev);
     else alClicVacio();
   });
   lienzo.addEventListener('dblclick', (ev) => {
     const hit = elegir(ev.clientX, ev.clientY);
     if (hit?.tipo === 'nodo') enfocarNodo(hit.id);
+    else if (hit?.tipo === 'rack') enfocarRack(hit.id);
   });
 
   function procesarHover(ahora) {
@@ -610,6 +661,7 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     aristas3d.dispose();
     etiquetas.dispose();
     zonas.dispose();
+    racks3d.dispose();
     if (rejilla) { rejilla.geometry.dispose(); rejilla.material.dispose(); }
     suelo.geometry.dispose(); suelo.material.dispose();
     renderer.dispose();
@@ -621,9 +673,26 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
   function proyectar(id) {
     const c = centros.get(String(id));
     if (!c) return null;
-    const v = new THREE.Vector3(c.x, tipos.get(String(id)) === 'fisicos' ? 1.1 : 1.0, c.z).project(camara);
+    const s = slots.get(String(id));
+    const p = s ? new THREE.Vector3(s.x, s.y, s.z + s.fondo / 2) : new THREE.Vector3(c.x, tipos.get(String(id)) === 'fisicos' ? 1.1 : 1.0, c.z);
+    return aPantalla(p);
+  }
+
+  function aPantalla(p) {
+    const v = p.clone().project(camara);
     const r = lienzo.getBoundingClientRect();
     return { x: r.left + (v.x * 0.5 + 0.5) * r.width, y: r.top + (-v.y * 0.5 + 0.5) * r.height };
+  }
+
+  /** Datos de la sala de racks (pruebas y accesibilidad) */
+  function salaInfo() {
+    return {
+      racks: racks3d.racks().map((r) => ({
+        id: r.id, nombre: r.nombre, ocupadas: r.ocupadas, libres: r.libres, sinRack: Boolean(r.sinRack),
+        bloques: r.bloques.map((b) => ({ ...b })), pantalla: aPantalla(new THREE.Vector3(r.x, ALTO_GABINETE / 2, r.z)),
+      })),
+      slots: Object.fromEntries([...slots].map(([k, s]) => [k, { rackId: s.rackId, rackNombre: s.rackNombre, uInferior: s.uInferior, uSuperior: s.uSuperior }])),
+    };
   }
 
   return {
@@ -633,6 +702,8 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     actualizarEstilos,
     encajar,
     enfocarNodo,
+    enfocarRack,
+    salaInfo,
     reiniciarCamara,
     zoom,
     centrarEnPx,

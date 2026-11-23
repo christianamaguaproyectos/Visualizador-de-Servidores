@@ -18,6 +18,8 @@ const LARGO_PUNTA = 0.34;
 const RADIO_SALIDA = 1.0;
 const RADIO_LLEGADA = 1.1;
 const VELOCIDAD = 2.5;
+// Los arcos que salen del frente de un rack se abren hacia el pasillo (+z) para no rozar los gabinetes
+const ADELANTE_RACK = 4;
 // En reposo las relaciones quedan algo translúcidas; con un foco, las ajenas casi desaparecen
 const ESTADO_OPACIDAD = { normal: 0.75, resaltada: 1 / 0.6, tenue: 0.22, atenuada: 0 };
 // Segmentos de los tubos: a lo largo y alrededor (los tubos son finos: 4 lados bastan)
@@ -130,9 +132,10 @@ export function crearAristas3D(escena) {
    * @param {Array} lista aristas visibles
    * @param {(id) => THREE.Vector3|undefined} centroDe
    * @param {(id) => string} tipoDe tipo de servidor ('fisicos'|'virtuales')
-   * @param {{elevacion?: number}} opciones elevacion: altura extra de los arcos
+   * @param {{elevacion?: number, anclaDe?: (id) => number[]|null}} opciones elevacion: altura extra
+   *   de los arcos; anclaDe: punto de salida fijo (frente de la unidad de un servidor montado en rack)
    */
-  function construir(lista, centroDe, tipoDe, { elevacion = 0 } = {}) {
+  function construir(lista, centroDe, tipoDe, { elevacion = 0, anclaDe = null } = {}) {
     limpiar();
     const paralelas = indicesParalelas(lista);
     for (const e of lista) {
@@ -141,8 +144,9 @@ export function crearAristas3D(escena) {
       const k = paralelas.get(String(e.id)) || 0;
       const off = desplazamientoLateral(e, k, { base: SEPARACION.bidireccional3d, paso: SEPARACION.paralela3d });
       const n = normalCanonica([cs.x, cs.z], [ct.x, ct.z], e.source, e.target);
-      const p0 = anclaHacia([cs.x, 0, cs.z], [ct.x, 0, ct.z], RADIO_SALIDA, alturaAncla(tipoDe(e.source)));
-      const p1 = anclaHacia([ct.x, 0, ct.z], [cs.x, 0, cs.z], RADIO_LLEGADA, alturaAncla(tipoDe(e.target)));
+      const fijoS = anclaDe?.(e.source); const fijoT = anclaDe?.(e.target);
+      const p0 = fijoS ? [...fijoS] : anclaHacia([cs.x, 0, cs.z], [ct.x, 0, ct.z], RADIO_SALIDA, alturaAncla(tipoDe(e.source)));
+      const p1 = fijoT ? [...fijoT] : anclaHacia([ct.x, 0, ct.z], [cs.x, 0, cs.z], RADIO_LLEGADA, alturaAncla(tipoDe(e.target)));
       // El desplazamiento lateral también separa los extremos de un par bidireccional
       if (off) {
         const f = Math.max(-0.6, Math.min(0.6, off * 0.55));
@@ -150,6 +154,7 @@ export function crearAristas3D(escena) {
         p1[0] += n[0] * f; p1[2] += n[1] * f;
       }
       const c = puntoControl3D(p0, p1, n, off, k, SEPARACION.alturaParalela3d, elevacion);
+      if (fijoS || fijoT) c[2] += ADELANTE_RACK;
       const base = new THREE.QuadraticBezierCurve3(new THREE.Vector3(...p0), new THREE.Vector3(...c), new THREE.Vector3(...p1));
       const largo = base.getLength();
       const tFin = Math.max(0.5, 1 - LARGO_PUNTA / largo);

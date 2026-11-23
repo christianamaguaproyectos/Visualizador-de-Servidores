@@ -17,6 +17,10 @@ const tmpV = new Vector3();
 
 export function crearEtiquetas3D(escena) {
   let registros = new Map();
+  // Opciones de la sala de racks: ancla en la unidad del servidor, línea de detalle (rack/U o
+  // host) y etiquetas "discretas" (el frente del rack ya rotula el nombre: solo se muestran
+  // con hover, selección, caída o impacto)
+  let opciones = {};
 
   function crearElemento() {
     const raiz = document.createElement('div');
@@ -29,6 +33,8 @@ export function crearEtiquetas3D(escena) {
     fila.append(badge, nombre);
     const ip = document.createElement('div');
     ip.className = 'topo-etq__ip';
+    const detalle = document.createElement('div');
+    detalle.className = 'topo-etq__detalle';
     const estado = document.createElement('div');
     estado.className = 'topo-etq__estado';
     const punto = document.createElement('span');
@@ -36,21 +42,26 @@ export function crearEtiquetas3D(escena) {
     const textoEstado = document.createElement('span');
     const pildora = document.createElement('span');
     estado.append(punto, textoEstado);
-    raiz.append(fila, ip, estado, pildora);
-    return { raiz, badge, nombre, ip, estado, punto, textoEstado, pildora };
+    raiz.append(fila, ip, detalle, estado, pildora);
+    return { raiz, badge, nombre, ip, detalle, estado, punto, textoEstado, pildora };
   }
 
-  function construir(nodos, centroDe, nombreDe) {
+  /**
+   * @param {{anclaDe?: (id) => number[]|null, detalleDe?: (n) => string, discreta?: (id) => boolean}} [opc]
+   */
+  function construir(nodos, centroDe, nombreDe, opc = {}) {
     limpiar();
+    opciones = opc;
     for (const n of nodos) {
       const c = centroDe(n.id);
       if (!c) continue;
       const el = crearElemento();
       const obj = new CSS2DObject(el.raiz);
       obj.center.set(0.5, 1); // la etiqueta queda por encima del ancla
-      obj.position.set(c.x, ALTURA[n.type] ?? 1.95, c.z);
+      const ancla = opciones.anclaDe?.(n.id);
+      if (ancla) obj.position.set(...ancla); else obj.position.set(c.x, ALTURA[n.type] ?? 1.95, c.z);
       escena.add(obj);
-      const reg = { id: String(n.id), obj, el, nodo: n, centro: c };
+      const reg = { id: String(n.id), obj, el, nodo: n, centro: c, discreta: Boolean(opciones.discreta?.(n.id)) };
       registros.set(reg.id, reg);
       rellenar(reg, nombreDe);
     }
@@ -64,6 +75,9 @@ export function crearEtiquetas3D(escena) {
     el.badge.textContent = tipo.badge;
     el.nombre.textContent = n.name || `Servidor ${n.id}`;
     el.ip.textContent = n.ip || '—';
+    const detalle = opciones.detalleDe?.(n) || '';
+    el.detalle.textContent = detalle;
+    el.detalle.hidden = !detalle;
     const estado = ESTADOS[n.status] || ESTADOS.UNKNOWN;
     el.textoEstado.textContent = estado.texto;
     const color = n.isDown ? colorDeNodo(n) : estado.color;
@@ -74,6 +88,8 @@ export function crearEtiquetas3D(escena) {
     el.pildora.className = p ? `topo-pildora topo-pildora--${p.clase}` : 'topo-pildora';
     el.pildora.textContent = p ? p.texto : '';
     el.pildora.hidden = !p;
+    // Caída real: la etiqueta entera en rojo, legible sin hover
+    el.raiz.classList.toggle('topo-etq--caida', p?.clase === 'caido');
   }
 
   function actualizarDatos(nodos, nombreDe, estiloDe) {
@@ -82,7 +98,7 @@ export function crearEtiquetas3D(escena) {
       if (!reg) continue;
       reg.nodo = n;
       // Solo se reescribe el DOM si cambió algo visible (el hover no cambia los datos)
-      const firma = [n.name, n.ip, n.status, n.type, n.isDown, n.downSource, n.cascadeStatus, n.impactLevel, (n.impactedByServers || []).join(',')].join('|');
+      const firma = [n.name, n.ip, n.status, n.type, n.isDown, n.downSource, n.cascadeStatus, n.impactLevel, (n.impactedByServers || []).join(','), opciones.detalleDe?.(n) || ''].join('|');
       if (reg.firma !== firma) { reg.firma = firma; rellenar(reg, nombreDe); }
       const atenuada = estiloDe(n).atenuado;
       if (reg.atenuada !== atenuada) { reg.atenuada = atenuada; reg.el.raiz.classList.toggle('topo-etq--atenuada', atenuada); }
@@ -118,6 +134,7 @@ export function crearEtiquetas3D(escena) {
       if (completos.has(reg.id)) nivel = 'completa';
       else if (nivel === 'oculta' && reg.importante) nivel = 'compacta';
       if (i >= maximo && !reg.importante && !completos.has(reg.id)) nivel = 'oculta';
+      if (reg.discreta && !reg.importante) nivel = 'oculta';
       let escalon = 0;
       if (nivel !== 'oculta' && ancho > 0 && alto > 0) [nivel, escalon] = colocarSinSolape(reg, nivel, camara, ancho, alto, ocupados, completos.has(reg.id));
       reg.obj.visible = nivel !== 'oculta';

@@ -3,6 +3,12 @@
  * repetidas son InstancedMesh con color por instancia. Cada nodo guarda la lista de
  * sus piezas (malla, índice de instancia y matriz local) para poder escalarlo en hover.
  *
+ * Dos formas de dibujar un servidor físico:
+ *  - montado en un rack (sala de racks): un chasis del alto de sus U, con frontal y LEDs de
+ *    estado, dentro del gabinete (el gabinete lo dibuja salaRacks3d.js);
+ *  - suelto (posiciones del editor): gabinete propio sobre un pedestal.
+ * Las VMs son cubos translúcidos con un núcleo que gira.
+ *
  * Picking: una caja invisible por nodo (una sola InstancedMesh fuera de la escena), en
  * lugar de raycast contra todas las piezas. Halos: materiales compartidos por color.
  */
@@ -16,8 +22,12 @@ const ALTO_GABINETE = 3.2;
 const BASE_GABINETE = 0.12;
 // Fracción de la caja de picking (3,4 u) que ocupa una VM
 const ALTO_PICKING_VM = 0.62;
+// Medidas de la caja de picking (geo.caja)
+const CAJA = { ancho: 3.0, alto: 3.4 };
 export const alturaAncla = (tipo) => ALTURA_ANCLA[tipo] ?? 1.0;
 const ALTURA_HALO = 1.1;
+// Frontal del servidor montado según su estado (sin luz: el color se lee igual desde lejos)
+const FRONTAL = { normal: '#2e4266', DOWN: '#c0281c', DEGRADED: '#8a5a00', MAINTENANCE: '#5b3aa8', UNKNOWN: '#2a3242' };
 
 /** Textura radial (blanco → transparente) para halos y sombras */
 function texturaRadial(colorCentro, alfaCentro) {
@@ -66,10 +76,13 @@ function crearRecursos() {
     vmCubo: new THREE.BoxGeometry(1.3, 1.3, 1.3),
     vmNucleo: new THREE.OctahedronGeometry(0.28),
     sombra: new THREE.CircleGeometry(1.9, 24).rotateX(-Math.PI / 2),
+    // Caja unidad: se escala por instancia (servidores montados en rack)
+    unidad: new THREE.BoxGeometry(1, 1, 1),
     // Volumen de picking de un nodo (cubre pedestal, chasis o cubo)
-    caja: new THREE.BoxGeometry(3.0, 3.4, 3.0).translate(0, 1.7, 0),
+    caja: new THREE.BoxGeometry(CAJA.ancho, CAJA.alto, CAJA.ancho).translate(0, CAJA.alto / 2, 0),
   };
   geo.vmAristas = new THREE.EdgesGeometry(geo.vmCubo);
+  geo.marco = new THREE.EdgesGeometry(geo.unidad);
   const tex = { halo: texturaRadial('255,255,255', 1), sombra: texturaRadial('0,0,0', 0.45), discontinua: texturaDiscontinua() };
   const mat = {
     pedestal: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.3, roughness: 0.7 }),
@@ -79,6 +92,9 @@ function crearRecursos() {
     bahia: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.2, roughness: 0.55 }),
     led: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }),
     rejilla: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.5, roughness: 0.6 }),
+    srvChasis: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.35, roughness: 0.5 }),
+    srvFrente: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }),
+    marco: new THREE.LineBasicMaterial({ color: ESCENARIO.seleccion, toneMapped: false, transparent: true, opacity: 0.95 }),
     vmCubo: new THREE.MeshStandardMaterial({
       color: 0xffffff, transparent: true, opacity: 0.22, depthWrite: false,
       emissive: new THREE.Color(ESCENARIO.vm), emissiveIntensity: 0.25, metalness: 0.1, roughness: 0.4,
@@ -115,6 +131,11 @@ export function crearModelosNodos(escena) {
   anilloSel.visible = false;
   anilloSel.renderOrder = 3;
   grupo.add(anilloSel);
+  // Selección de un servidor montado: contorno de su chasis
+  const marcoSel = new THREE.LineSegments(geo.marco, mat.marco);
+  marcoSel.visible = false;
+  marcoSel.renderOrder = 5;
+  grupo.add(marcoSel);
 
   let mallas = {};
   let info = []; // por nodo
@@ -171,40 +192,70 @@ export function crearModelosNodos(escena) {
    * Construye todas las instancias.
    * @param {Array} nodos nodos visibles del grafo
    * @param {Map<string, THREE.Vector3>} centros centro en el suelo de cada nodo
+   * @param {Map<string, {x,y,z,ancho,alto,fondo}>} [slots] hueco de rack de los servidores montados
    */
-  function construir(nodos, centros) {
+  function construir(nodos, centros, slots = new Map()) {
     limpiar();
-    const fis = nodos.filter((n) => n.type === 'fisicos');
+    const montado = (n) => n.type === 'fisicos' && slots.has(String(n.id));
+    const rack = nodos.filter(montado);
+    const fis = nodos.filter((n) => n.type === 'fisicos' && !montado(n));
     const vms = nodos.filter((n) => n.type !== 'fisicos');
-    const nf = fis.length; const nv = vms.length; const n = nodos.length;
-    nuevaInstanciada('sombra', geo.sombra, mat.sombra, n, { orden: 0 });
+    const nf = fis.length; const nv = vms.length; const nr = rack.length; const ns = nf + nv;
+    nuevaInstanciada('sombra', geo.sombra, mat.sombra, ns, { orden: 0 });
     nuevaInstanciada('pedestalFis', geo.pedestalFis, mat.pedestal, nf);
     nuevaInstanciada('pedestalVm', geo.pedestalVm, mat.pedestal, nv);
-    nuevaInstanciada('anillo', geo.anillo, mat.anillo, n, { orden: 1 });
+    nuevaInstanciada('anillo', geo.anillo, mat.anillo, ns, { orden: 1 });
     nuevaInstanciada('chasis', geo.chasis, mat.chasis, nf);
     nuevaInstanciada('bahia', geo.bahia, mat.bahia, nf * UNIDADES);
     nuevaInstanciada('ledEstado', geo.led, mat.led, nf * UNIDADES);
     nuevaInstanciada('ledActividad', geo.led, mat.led, nf * UNIDADES);
     nuevaInstanciada('rejilla', geo.rejilla, mat.rejilla, nf);
+    nuevaInstanciada('srvChasis', geo.unidad, mat.srvChasis, nr);
+    nuevaInstanciada('srvFrente', geo.unidad, mat.srvFrente, nr, { orden: 1 });
+    nuevaInstanciada('srvLed', geo.unidad, mat.led, nr, { orden: 2 });
+    nuevaInstanciada('srvLedAct', geo.unidad, mat.led, nr, { orden: 2 });
     nuevaInstanciada('vmNucleo', geo.vmNucleo, mat.vmNucleo, nv);
     nuevaInstanciada('vmCubo', geo.vmCubo, mat.vmCubo, nv, { orden: 2 });
+    const n = nodos.length;
     cajas = new THREE.InstancedMesh(geo.caja, mat.invisible, Math.max(1, n));
     cajas.count = n;
 
     const local = (x, y, z) => new THREE.Matrix4().makeTranslation(x, y, z);
-    let iF = 0; let iV = 0; let iN = 0;
+    const pieza = (x, y, z, sx, sy, sz) => new THREE.Matrix4().makeScale(sx, sy, sz).setPosition(x, y, z);
+    let iF = 0; let iV = 0; let iN = 0; let iR = 0;
     const posLineas = [];
     const coloresLineas = [];
     const vertsAristas = geo.vmAristas.attributes.position;
 
-    for (const nodo of [...fis, ...vms]) {
-      const centro = centros.get(String(nodo.id)) || new THREE.Vector3();
-      const reg = { id: String(nodo.id), nodo, tipo: nodo.type, centro: centro.clone(), escala: 1, partes: [], fase: Math.random() * 10 };
+    for (const nodo of [...rack, ...fis, ...vms]) {
+      const id = String(nodo.id);
+      const slot = montado(nodo) ? slots.get(id) : null;
+      const centro = slot ? new THREE.Vector3(slot.x, slot.y, slot.z) : (centros.get(id) || new THREE.Vector3());
+      const reg = { id, nodo, tipo: nodo.type, centro: centro.clone(), escala: 1, partes: [], fase: Math.random() * 10, slot };
       const idx = info.length;
-      reg.partes.push({ mesh: mallas.sombra, i: iN, local: local(0, 0.002, 0) });
-      reg.partes.push({ mesh: mallas.anillo, i: iN, local: local(0, 0.125, 0), anillo: true });
-      reg.iN = iN;
-      if (nodo.type === 'fisicos') {
+      if (slot) {
+        // Chasis del alto de sus U; frontal, LED de estado y LED de actividad en la cara frontal
+        reg.iR = iR;
+        const { ancho, alto, fondo } = slot;
+        const frente = fondo / 2;
+        const altoLed = Math.min(0.1, alto * 0.42);
+        reg.partes.push({ mesh: mallas.srvChasis, i: iR, local: pieza(0, 0, 0, ancho, alto - 0.024, fondo) });
+        reg.partes.push({ mesh: mallas.srvFrente, i: iR, local: pieza(0, 0, frente + 0.01, ancho - 0.05, alto - 0.04, 0.02) });
+        reg.partes.push({ mesh: mallas.srvLed, i: iR, local: pieza(ancho / 2 - 0.18, 0, frente + 0.028, 0.13, altoLed, 0.02) });
+        reg.partes.push({ mesh: mallas.srvLedAct, i: iR, local: pieza(ancho / 2 - 0.36, 0, frente + 0.028, 0.09, altoLed, 0.02) });
+        iR++;
+        cajas.setMatrixAt(idx, tmpM.makeScale(ancho / CAJA.ancho, alto / CAJA.alto, (fondo + 0.1) / CAJA.ancho).setPosition(slot.x, slot.y - alto / 2, slot.z));
+      } else {
+        reg.partes.push({ mesh: mallas.sombra, i: iN, local: local(0, 0.002, 0) });
+        reg.partes.push({ mesh: mallas.anillo, i: iN, local: local(0, 0.125, 0), anillo: true });
+        reg.iN = iN;
+        iN++;
+        // Volumen de picking a la altura de cada modelo: el de una VM no tapa al gabinete de detrás
+        cajas.setMatrixAt(idx, tmpM.makeScale(1, nodo.type === 'fisicos' ? 1 : ALTO_PICKING_VM, 1).setPosition(centro.x, 0, centro.z));
+      }
+      if (slot) {
+        // Montado en rack: sus piezas ya están
+      } else if (nodo.type === 'fisicos') {
         reg.iF = iF;
         reg.partes.push({ mesh: mallas.pedestalFis, i: iF, local: local(0, 0, 0) });
         reg.partes.push({ mesh: mallas.chasis, i: iF, local: local(0, BASE_GABINETE + ALTO_GABINETE / 2, 0) });
@@ -231,9 +282,6 @@ export function crearModelosNodos(escena) {
         reg.lineaFin = posLineas.length / 3;
         iV++;
       }
-      iN++;
-      // Volumen de picking a la altura de cada modelo: el de una VM no tapa al gabinete de detrás
-      cajas.setMatrixAt(idx, tmpM.makeScale(1, nodo.type === 'fisicos' ? 1 : ALTO_PICKING_VM, 1).setPosition(centro.x, 0, centro.z));
       info.push(reg);
       infoPorId.set(reg.id, reg);
       aplicarMatrices(reg);
@@ -278,6 +326,12 @@ export function crearModelosNodos(escena) {
     }
   }
 
+  /** Posición del halo y del anillo de simulación de un nodo */
+  function puntoFrontal(reg) {
+    if (reg.slot) return new THREE.Vector3(reg.centro.x, reg.centro.y, reg.centro.z + reg.slot.fondo / 2 + 0.2);
+    return new THREE.Vector3(reg.centro.x, ALTURA_HALO, reg.centro.z);
+  }
+
   /**
    * Aplica colores de estado, atenuación, halos y anillos discontinuos.
    * @param {(n) => {atenuado: boolean}} estilo
@@ -293,12 +347,28 @@ export function crearModelosNodos(escena) {
       const f = (hex) => (atenuado ? atenuar(C(hex)) : C(hex));
       const colorEstado = colorDeNodo(n);
       const colorLedEstado = (ESTADOS[n.status] || ESTADOS.UNKNOWN).color;
-      mallas.sombra.setColorAt(reg.iN, C(0xffffff));
-      mallas.anillo.setColorAt(reg.iN, f(colorEstado));
       const simulado = n.downSource === 'SIMULATED';
-      const parteAnillo = reg.partes.find((p) => p.anillo);
-      parteAnillo.oculta = simulado;
-      if (reg.tipo === 'fisicos') {
+      if (reg.slot) {
+        let chasis = C(ESCENARIO.chasis);
+        if (n.isDown) chasis = chasis.lerp(C(colorEstado), 0.3);
+        else if (n.cascadeStatus === 'DIRECT_IMPACT') chasis = chasis.lerp(C(colorEstado), 0.22);
+        else if (n.cascadeStatus === 'TRANSITIVE_IMPACT') chasis = chasis.lerp(C(colorEstado), 0.12);
+        mallas.srvChasis.setColorAt(reg.iR, atenuado ? atenuar(chasis) : chasis);
+        let frontal = FRONTAL[n.isDown ? 'DOWN' : n.status] || FRONTAL.normal;
+        if (n.status === 'UP' && !n.isDown) frontal = FRONTAL.normal;
+        if (n.isDown && simulado) frontal = colorEstado;
+        mallas.srvFrente.setColorAt(reg.iR, f(frontal));
+        mallas.srvLed.setColorAt(reg.iR, f(n.isDown ? colorEstado : colorLedEstado));
+        mallas.srvLedAct.setColorAt(reg.iR, f('#0b3d26'));
+      } else {
+        mallas.sombra.setColorAt(reg.iN, C(0xffffff));
+        mallas.anillo.setColorAt(reg.iN, f(colorEstado));
+        const parteAnillo = reg.partes.find((p) => p.anillo);
+        parteAnillo.oculta = simulado;
+      }
+      if (reg.slot) {
+        // Montado en rack: colores ya aplicados
+      } else if (reg.tipo === 'fisicos') {
         mallas.pedestalFis.setColorAt(reg.iF, f(ESCENARIO.pedestal));
         let base = C(ESCENARIO.chasis);
         if (n.isDown) base = base.lerp(C(colorEstado), 0.35);
@@ -328,21 +398,30 @@ export function crearModelosNodos(escena) {
 
       // Halo: caídos (latiendo) e impacto directo (fijo)
       const conHalo = n.isDown || n.cascadeStatus === 'DIRECT_IMPACT';
+      const punto = puntoFrontal(reg);
       if (conHalo && !atenuado) {
         const sprite = new THREE.Sprite(materialHalo(colorEstado, n.isDown));
-        sprite.position.set(reg.centro.x, ALTURA_HALO, reg.centro.z);
-        sprite.scale.setScalar(3.4);
+        sprite.position.copy(punto);
+        const escala = reg.slot ? reg.slot.ancho * 1.05 : 3.4;
+        sprite.scale.setScalar(escala);
         sprite.renderOrder = 4;
         sprite.updateMatrix();
         grupo.add(sprite);
-        halos.push({ sprite, late: n.isDown, fase: reg.fase });
+        halos.push({ sprite, late: n.isDown, fase: reg.fase, escala });
       }
       if (simulado) {
         const mesh = new THREE.Mesh(geo.anillo, mat.discontinuo);
-        mesh.position.set(reg.centro.x, 0.13, reg.centro.z);
+        if (reg.slot) {
+          // Anillo vertical delante del servidor montado
+          mesh.position.copy(punto);
+          mesh.rotation.x = Math.PI / 2;
+          mesh.scale.setScalar(Math.max(0.3, reg.slot.alto * 1.6));
+        } else {
+          mesh.position.set(reg.centro.x, 0.13, reg.centro.z);
+        }
         mesh.renderOrder = 3;
         grupo.add(mesh);
-        discontinuos.push({ mesh });
+        discontinuos.push({ mesh, vertical: Boolean(reg.slot) });
       }
     }
     for (const m of Object.values(mallas)) if (m.instanceColor) m.instanceColor.needsUpdate = true;
@@ -364,8 +443,12 @@ export function crearModelosNodos(escena) {
   }
   function actualizarSeleccion() {
     const reg = seleccionId ? infoPorId.get(seleccionId) : null;
-    anilloSel.visible = Boolean(reg);
-    if (reg) anilloSel.position.set(reg.centro.x, 0.13, reg.centro.z);
+    anilloSel.visible = Boolean(reg && !reg.slot);
+    marcoSel.visible = Boolean(reg?.slot);
+    if (reg?.slot) {
+      marcoSel.position.copy(reg.centro);
+      marcoSel.scale.set(reg.slot.ancho + 0.12, reg.slot.alto + 0.05, reg.slot.fondo + 0.12);
+    } else if (reg) anilloSel.position.set(reg.centro.x, 0.13, reg.centro.z);
   }
   /** El anillo de selección parpadea 2 veces (búsqueda) */
   function parpadear() { parpadeo = 0.9; }
@@ -377,14 +460,17 @@ export function crearModelosNodos(escena) {
     let activo = false;
     if (parpadeo > 0) {
       parpadeo -= dt;
-      anilloSel.visible = Boolean(seleccionId) && (parpadeo <= 0 || Math.floor(parpadeo / 0.225) % 2 === 0);
+      const reg = seleccionId ? infoPorId.get(seleccionId) : null;
+      const visible = Boolean(reg) && (parpadeo <= 0 || Math.floor(parpadeo / 0.225) % 2 === 0);
+      if (reg?.slot) marcoSel.visible = visible; else anilloSel.visible = visible;
       activo = true;
     }
     if (!animaciones) {
-      for (const h of halos) if (h.late) { h.sprite.material.opacity = 0.7; h.sprite.scale.setScalar(3.4); }
+      for (const h of halos) if (h.late) { h.sprite.material.opacity = 0.7; h.sprite.scale.setScalar(h.escala); }
       return activo;
     }
     anilloSel.rotation.y += 0.3 * dt;
+    // Gira sobre su eje (también el anillo vertical de un servidor montado)
     for (const d of discontinuos) d.mesh.rotation.y -= 0.5 * dt;
     const ciclo = (t % 1.2) / 1.2;
     const pulso = 0.5 - 0.5 * Math.cos(ciclo * Math.PI * 2);
@@ -392,7 +478,7 @@ export function crearModelosNodos(escena) {
     for (const h of halos) {
       if (!h.late) continue;
       h.sprite.material.opacity = 0.45 + 0.4 * pulso;
-      h.sprite.scale.setScalar(3.2 + 0.6 * pulso);
+      h.sprite.scale.setScalar(h.escala * (0.94 + 0.18 * pulso));
     }
     // Núcleos de VM girando (solo su matriz)
     const nucleo = mallas.vmNucleo;
@@ -402,17 +488,24 @@ export function crearModelosNodos(escena) {
     }
     // LEDs de actividad: 8 cambios por segundo bastan (no se suben colores en cada frame)
     const tick = Math.floor(t * 8);
-    const led = mallas.ledActividad;
-    if (led?.count && tick !== ultimoLed) {
+    if (tick !== ultimoLed) {
       ultimoLed = tick;
+      const led = mallas.ledActividad;
+      const ledR = mallas.srvLedAct;
       for (const reg of info) {
         if (reg.tipo !== 'fisicos') continue;
+        if (reg.slot) {
+          const on = reg.activo && Math.sin(t * 7 + reg.fase * 3) > 0.35;
+          ledR.setColorAt(reg.iR, tmpColor.set(on ? '#12b76a' : '#0b3d26'));
+          continue;
+        }
         for (let b = 0; b < UNIDADES; b++) {
           const on = reg.activo && Math.sin(t * 7 + reg.fase * 3 + b * 1.7) > 0.35;
           led.setColorAt(reg.iF * UNIDADES + b, tmpColor.set(on ? '#12b76a' : '#0b3d26'));
         }
       }
-      if (led.instanceColor) led.instanceColor.needsUpdate = true;
+      if (led?.instanceColor) led.instanceColor.needsUpdate = true;
+      if (ledR?.instanceColor) ledR.instanceColor.needsUpdate = true;
     }
     return true;
   }
@@ -420,6 +513,13 @@ export function crearModelosNodos(escena) {
   function idDesdeInterseccion(hit) {
     if (hit.object !== cajas || hit.instanceId === undefined) return null;
     return info[hit.instanceId]?.id ?? null;
+  }
+
+  /** Punto de salida de los arcos de un servidor montado (frente de su unidad) o null */
+  function anclaDe(id) {
+    const reg = infoPorId.get(String(id));
+    if (!reg?.slot) return null;
+    return [reg.centro.x, reg.centro.y, reg.centro.z + reg.slot.fondo / 2 + 0.05];
   }
 
   return {
@@ -430,6 +530,7 @@ export function crearModelosNodos(escena) {
     parpadear,
     animar,
     idDesdeInterseccion,
+    anclaDe,
     objetosPicking: () => (cajas && cajas.count ? [cajas] : []),
     parpadeando: () => parpadeo > 0,
     centro: (id) => infoPorId.get(String(id))?.centro,

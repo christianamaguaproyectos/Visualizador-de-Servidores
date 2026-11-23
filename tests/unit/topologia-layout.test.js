@@ -8,7 +8,7 @@ import {
 import {
   compararIds, indicesParalelas, desplazamientoLateral, normalCanonica, elegirPuertos, trazado2D, caminoSvg, puntoCubica,
 } from '../../frontend/public/js/dominios/topologia/geometriaAristas.js';
-import { disposicionSala, SALA } from '../../frontend/public/js/dominios/topologia/salaDatos.js';
+import { disposicionSala, disposicionSalaRacks, alturaTramo, RACK, SALA } from '../../frontend/public/js/dominios/topologia/salaDatos.js';
 import { reescribirEspecificadorThree, VENDOR_THREE_LISTA } from '../../backend/src/routes/vendorThreeRoutes.js';
 
 const nodos = (...ids) => ids.map((id) => ({ id: String(id) }));
@@ -167,4 +167,38 @@ test('sala de datos: determinista, centrada y robusta con muchos racks o sin dat
   const xs = [...a.centros.values()].map((c) => c.x);
   assert.ok(Math.abs(Math.min(...xs) + Math.max(...xs)) < SALA.paso * 2, 'centrada en x');
   assert.equal(disposicionSala([]).centros.size, 0);
+});
+
+// ── Sala de racks (inventario real) ────────────────────────────────────────
+
+test('sala de racks: cada rack del inventario (también vacío) es un gabinete y cada servidor queda en su U', () => {
+  const racks = [
+    { id: '2', name: 'RACK-A2', servers: [] },
+    { id: '1', name: 'RACK-A1', servers: [
+      { id: '10', nombre: 'srv-fw-01', ip: '10.0.0.11', rackPosition: 42, rackUnits: 1 },
+      { id: '11', nombre: 'srv-db-01', ip: '10.0.0.18', rackPosition: 20, rackUnits: 2 },
+      { id: '12', nombre: 'srv-oculto', ip: '10.0.0.19', rackPosition: 10, rackUnits: 4 },
+    ] },
+  ];
+  const nodos = [
+    srv(10, 'fisicos', 'srv-fw-01', 'RACK-A1'), srv(11, 'fisicos', 'srv-db-01', 'RACK-A1'),
+    srv(13, 'fisicos', 'srv-suelto', ''), srv(20, 'virtuales', 'srv-web-01', 'srv-db-01'),
+  ];
+  const s = disposicionSalaRacks(nodos, racks);
+  assert.deepEqual(s.racks.map((r) => r.nombre), ['RACK-A1', 'RACK-A2', 'Sin ubicar']);
+  const [a1, a2, sueltos] = s.racks;
+  assert.equal(a1.ocupadas, 7);
+  assert.equal(a2.ocupadas, 0, 'el rack vacío también se dibuja');
+  assert.deepEqual([s.slots.get('11').uInferior, s.slots.get('11').uSuperior], [19, 20]);
+  assert.equal(s.slots.get('10').uSuperior, 42);
+  assert.ok(s.slots.get('10').y > s.slots.get('11').y, 'la U42 queda más alta que la U20');
+  assert.equal(s.slots.get('11').y, alturaTramo(19, 2));
+  // Un servidor del rack fuera del filtro ocupa su U, sin nodo
+  assert.deepEqual(a1.bloques.filter((b) => !b.nodoId).map((b) => [b.nombre, b.uInferior]), [['srv-oculto', 7]]);
+  assert.deepEqual(sueltos.bloques.map((b) => b.nodoId), ['13']);
+  assert.ok(Math.abs(a2.x - a1.x - RACK.paso) < 1e-9, 'racks contiguos en la fila');
+  assert.ok(s.zonas.some((z) => z.tipo === 'gabinete' && z.etiqueta === 'RACK-A1\n7/42U'));
+  // Virtualización a la derecha de la sala de racks
+  assert.ok(s.centros.get('20').x > sueltos.x + RACK.ancho);
+  assert.ok(s.zonas.some((z) => z.tipo === 'host' && z.etiqueta === 'Host srv-db-01'));
 });

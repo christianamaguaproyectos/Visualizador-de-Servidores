@@ -57,3 +57,9 @@
 .topo-etq--arista .topo-etq__fila { justify-content: center; font-weight: 600; }
 .topo-etq__sub { color: #b6c4dc; }
 
+
+/* Sala de racks: línea de detalle (rack y U, o host) y caídas reales en rojo sin hover */
+.topo-etq__detalle { font-size: 11.5px; color: #c9d6ee; }
+.topo-etq--compacta .topo-etq__detalle { display: none; }
+.topo-etq--caida { background: rgba(122, 18, 12, 0.94); border-color: #f04438; }
+.topo-etq--caida .topo-etq__nombre { color: #fff; }

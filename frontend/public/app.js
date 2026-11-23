@@ -1,5 +1,6 @@
 import { inicializarGestorDiscos } from '/js/dominios/hosts/gestorDiscos.js';
 import { construirResumenRacksHtml } from '/js/dominios/hosts/resumenRacks.js';
+import { colocarEnRack, normalizarUnidades, formatearDiscos } from '/js/dominios/hosts/colocacionRack.js';
 import { confirmAction } from '/js/dominios/ui-system/modalConfirm.js';
 import { trackUIEvent } from '/js/dominios/ui-system/uxTelemetry.js';
 import { escapeHtml, textoSeguro } from '/js/dominios/ui-system/seguridadHtml.js';
@@ -170,41 +171,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // Función para formatear discos en la vista de detalles
 
   function formatDiscosDisplay(discosValue) {
-
-    if (!discosValue) return '—';
-
-    try {
-
-      const discos = JSON.parse(discosValue);
-
-      if (Array.isArray(discos) && discos.length > 0) {
-
-        return discos.map(d => {
-
-          const parts = [];
-
-          if (d.slot) parts.push(`Slot ${d.slot}:`);
-
-          if (d.cantidad) parts.push(`${d.cantidad}x`);
-
-          if (d.capacidad) parts.push(d.capacidad);
-
-          if (d.fru) parts.push(`(FRU: ${d.fru})`);
-
-          return parts.join(' ');
-
-        }).join('\n');
-
-      }
-
-    } catch (e) {
-
-      // Si no es JSON, devolver el valor original
-
-    }
-
-    return discosValue;
-
+    return formatearDiscos(discosValue);
   }
 
   window.formatDiscosDisplay = formatDiscosDisplay;
@@ -2914,282 +2881,33 @@ document.addEventListener('DOMContentLoaded', function () {
     // Rack 1 muestra numeración 1→42; los demás 42→1
     const isReversedRack = /^rack\s*1$/i.test((rackName || '').trim());
 
-    const serverHeight = 2; // Cada servidor ocupa 2U
-
-
-
-    // Crear array para marcar qué unidades están ocupadas por servidores
-
+    // Colocación por unidades: regla compartida con la sala de racks 3D (colocacionRack.js)
     const occupiedUnits = new Array(totalUnits).fill(false);
-
     const serverColors = new Array(totalUnits).fill('off');
-
     const serverInfo = new Array(totalUnits).fill(null);
-
     const serverIds = new Array(totalUnits).fill(null);
-
     const serverIPs = new Array(totalUnits).fill('');
-
     const serverHNs = new Array(totalUnits).fill('');
-    const serverOrderByUnit = new Array(totalUnits).fill(-1);
     const serverSpanByUnit = new Array(totalUnits).fill(0);
 
-    const normalizeRackUnits = (value, fallback = 2) => {
-      if (value == null || value === '') return fallback;
-      const parsed = Number(value);
-      if (!Number.isFinite(parsed)) return fallback;
-      const normalized = Math.floor(parsed);
-      if (normalized <= 0) return 0;
-      return normalized;
-    };
-
-
-
-    if (servers && servers.length > 0) {
-
-      // Verificar si los servidores tienen rack_position definido
-
-      const hasPositions = servers.some(s => s.rackPosition != null && s.rackPosition > 0);
-
-
-
-      if (hasPositions) {
-
-        // MODO POSICIONADO: Usar las posiciones exactas de la base de datos
-        let serverOrder = 0;
-
-        servers.forEach((serverData, i) => {
-
-          const position = serverData.rackPosition || null;
-
-          const units = normalizeRackUnits(serverData.rackUnits ?? serverData.rack_units, 2);
-          if (units <= 0) return;
-
-
-
-          // Convertir posición de rack a índice de array (42 -> índice 0, 41 -> índice 1, etc.)
-
-          let startIndex;
-
-          if (position && position > 0 && position <= totalUnits) {
-
-            startIndex = totalUnits - position; // Posición 42 = índice 0, posición 1 = índice 41
-
-          } else {
-
-            // Si no tiene posición, buscar primer espacio disponible
-
-            startIndex = -1;
-
-            for (let j = 0; j < totalUnits - units + 1; j++) {
-
-              let canFit = true;
-
-              for (let k = 0; k < units; k++) {
-
-                if (occupiedUnits[j + k]) {
-
-                  canFit = false;
-
-                  break;
-
-                }
-
-              }
-
-              if (canFit) {
-
-                startIndex = j;
-
-                break;
-
-              }
-
-            }
-
-          }
-
-
-
-          if (startIndex >= 0 && startIndex < totalUnits) {
-
-            // Determinar el color del servidor basado en el estado real
-
-            let serverColor;
-
-            const estadoNorm = normalizeEstado(serverData.estado || serverData.activo || '');
-
-            if (estadoNorm === 'critico') {
-
-              serverColor = 'red';  // Crítico (servidor importante)
-
-            } else if (estadoNorm === 'inactivo') {
-
-              serverColor = 'gray';  // Inactivo
-
-            } else if (estadoNorm === 'mantenimiento') {
-
-              serverColor = 'orange';  // En mantenimiento
-
-            } else {
-
-              serverColor = 'green';  // Activo/Normal
-
-            }
-
-
-
-            const tooltipInfo = `IP: ${fmt(serverData.ip)}&#10;Hostname: ${fmt(serverData.hostname || serverData.nombre)}`;
-
-            const sid = serverData.id;
-
-            const ipVal = serverData.ip || '';
-
-            const hnVal = serverData.hostname || serverData.nombre || '';
-
-
-
-            // Marcar las unidades ocupadas por este servidor
-            let placedUnits = 0;
-
-            for (let u = 0; u < units; u++) {
-
-              const idx = startIndex + u;
-
-              if (idx < totalUnits) {
-
-                occupiedUnits[idx] = true;
-
-                serverColors[idx] = serverColor;
-
-                serverInfo[idx] = tooltipInfo;
-
-                serverIds[idx] = sid;
-
-                serverIPs[idx] = ipVal;
-
-                serverHNs[idx] = hnVal;
-                serverOrderByUnit[idx] = serverOrder;
-                serverSpanByUnit[idx] = units;
-                placedUnits++;
-
-              }
-            }
-
-            if (placedUnits > 0) {
-              serverOrder++;
-            }
-
-          }
-
-        });
-
-      } else {
-
-        // MODO LEGACY: Distribuir uniformemente (sin rack_position)
-
-        const activeServers = Math.min(servers.length, Math.floor(totalUnits / serverHeight));
-
-        const totalServerUnits = activeServers * serverHeight;
-
-        const availableSpace = totalUnits - totalServerUnits;
-
-        const gaps = activeServers + 1;
-
-        const baseGapSize = Math.floor(availableSpace / gaps);
-
-        const extraSpaces = availableSpace % gaps;
-
-
-
-        let currentPos = baseGapSize;
-    let serverOrder = 0;
-
-
-
-        for (let i = 0; i < activeServers; i++) {
-
-          if (i < extraSpaces) {
-
-            currentPos += 1;
-
-          }
-
-
-
-          const serverData = servers[i] || { id: `missing-${i + 1}`, ip: '', hostname: '', nombre: '' };
-          const units = normalizeRackUnits(serverData.rackUnits ?? serverData.rack_units, serverHeight);
-          if (units <= 0) {
-            continue;
-          }
-
-
-
-          // Determinar el color del servidor basado en el estado real
-
-          let serverColor;
-
-          const estadoNorm = normalizeEstado(serverData.estado || serverData.activo || '');
-
-          if (estadoNorm === 'critico') {
-
-            serverColor = 'red';  // Crítico (servidor importante)
-
-          } else if (estadoNorm === 'inactivo') {
-
-            serverColor = 'gray';  // Inactivo
-
-          } else if (estadoNorm === 'mantenimiento') {
-
-            serverColor = 'orange';  // En mantenimiento
-
-          } else {
-
-            serverColor = 'green';  // Activo/Normal
-
-          }
-
-
-
-          const tooltipInfo = serverData ? `IP: ${fmt(serverData.ip)}&#10;Hostname: ${fmt(serverData.hostname || serverData.nombre)}` : '';
-
-
-
-          if (currentPos < totalUnits) {
-            const sid = serverData ? serverData.id : null;
-            const ipVal = serverData?.ip || '';
-            const hnVal = serverData?.hostname || serverData?.nombre || '';
-            let placed = 0;
-
-            for (let u = 0; u < units; u++) {
-              const idx = currentPos + u;
-              if (idx >= totalUnits) break;
-              occupiedUnits[idx] = true;
-              serverColors[idx] = serverColor;
-              serverInfo[idx] = tooltipInfo;
-              serverIds[idx] = sid;
-              serverIPs[idx] = ipVal;
-              serverHNs[idx] = hnVal;
-              serverOrderByUnit[idx] = serverOrder;
-              serverSpanByUnit[idx] = units;
-              placed++;
-            }
-
-            if (placed > 0) {
-              serverOrder++;
-            }
-
-            currentPos += units + baseGapSize;
-
-          }
-
-        }
-
-      }
-
-    }
-
-
+    const colocacion = colocarEnRack(servers || [], totalUnits);
+    colocacion.porUnidad.forEach((dueno, idx) => {
+      if (dueno < 0) return;
+      const serverData = servers[dueno];
+      // Color del servidor según su estado de inventario
+      const estadoNorm = normalizeEstado(serverData.estado || serverData.activo || '');
+      let serverColor = 'green'; // Activo/Normal
+      if (estadoNorm === 'critico') serverColor = 'red';
+      else if (estadoNorm === 'inactivo') serverColor = 'gray';
+      else if (estadoNorm === 'mantenimiento') serverColor = 'orange';
+      occupiedUnits[idx] = true;
+      serverColors[idx] = serverColor;
+      serverInfo[idx] = `IP: ${fmt(serverData.ip)}&#10;Hostname: ${fmt(serverData.hostname || serverData.nombre)}`;
+      serverIds[idx] = serverData.id;
+      serverIPs[idx] = serverData.ip || '';
+      serverHNs[idx] = serverData.hostname || serverData.nombre || '';
+      serverSpanByUnit[idx] = normalizarUnidades(serverData.rackUnits ?? serverData.rack_units);
+    });
 
     // Alternancia robusta basada en el orden visual final dentro del rack.
     const visualServerOrderByUnit = new Array(totalUnits).fill(-1);
@@ -3875,14 +3593,44 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (view === 'rack') {
 
-      return renderRackByParams({ idx: params.get('idx'), name: params.get('name') });
+      renderRackByParams({ idx: params.get('idx'), name: params.get('name') });
+      return ejecutarAccionInventario(params);
 
     }
 
-    if (view === 'server') return renderServer(params.get('id'));
+    if (view === 'server') {
+      renderServer(params.get('id'));
+      return ejecutarAccionInventario(params);
+    }
 
     renderHome();
 
+  }
+
+  /**
+   * Accesos directos desde la sala de racks 3D (/dependencias): abren el MISMO formulario de
+   * alta/edición de esta página. `#view=server&id=N&accion=editar` edita el servidor;
+   * `#view=rack&name=R&accion=agregar&posicion=P` abre el alta con el rack y la posición U.
+   * La acción se consume una sola vez (se quita del hash) para que un refresco no la repita.
+   */
+  async function ejecutarAccionInventario(params) {
+    const accion = params.get('accion');
+    if (!accion) return;
+    const limpio = new URLSearchParams(params);
+    limpio.delete('accion');
+    limpio.delete('posicion');
+    history.replaceState(null, '', `${location.pathname}${location.search}#${limpio.toString()}`);
+    if (isReadOnlyUser()) { showReadOnlyToast(); return; }
+    const gestor = window.serverManager;
+    if (!gestor) return;
+    if (accion === 'editar' && params.get('id')) {
+      await gestor.openServerModalForEdit(params.get('id'));
+    } else if (accion === 'agregar' && params.get('name')) {
+      await gestor.openServerModal(params.get('name'));
+      const posicion = Number(params.get('posicion'));
+      const campo = document.getElementById('serverPosition');
+      if (campo && Number.isInteger(posicion) && posicion >= 1 && posicion <= 42) campo.value = String(posicion);
+    }
   }
 
 

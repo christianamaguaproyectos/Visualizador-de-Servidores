@@ -13,6 +13,7 @@
  * Todo queda alineado a una cuadrícula de PASO unidades y centrado en el origen.
  */
 import { compararIds } from './geometriaAristas.js';
+import { colocarEnRack, huecosLibres, UNIDADES_RACK } from '../hosts/colocacionRack.js';
 
 export const SALA = Object.freeze({
   paso: 4, // distancia entre centros de servidores vecinos
@@ -65,8 +66,8 @@ function bloque(miembros, cabecera = null) {
  * Coloca bloques en filas (izquierda a derecha, SALA.bloquesPorFila por fila) a partir de z0.
  * @returns {{zonas: object[], centros: Map<string,{x,z}>, zFin: number, xMax: number}}
  */
-function colocarFilas(bloques, z0, rotular) {
-  const { separacionBloques, bloquesPorFila, pasillo, margen } = SALA;
+function colocarFilas(bloques, z0, rotular, bloquesPorFila = SALA.bloquesPorFila) {
+  const { separacionBloques, pasillo, margen } = SALA;
   const centros = new Map();
   const zonas = [];
   let z = z0;
@@ -159,4 +160,163 @@ export function disposicionSala(nodos) {
     for (const q of zonas) { q.x0 += dx; q.x1 += dx; q.z0 += dz; q.z1 += dz; }
   }
   return { centros, zonas };
+}
+
+// ── Sala de racks (inventario real) ─────────────────────────────────────────
+
+/**
+ * Medidas del gabinete de 42U en unidades del mundo 3D (1U = 0,2 u; proporciones de un rack
+ * de 600 × 1070 mm). Los racks forman filas con el frente hacia la cámara (+z), uno junto a
+ * otro, como en una sala de datos.
+ */
+export const RACK = Object.freeze({
+  unidades: UNIDADES_RACK,
+  alturaU: 0.2,
+  base: 0.24, // zócalo bajo la U1
+  cabecera: 0.62, // franja superior con el rótulo del rack
+  ancho: 3.4,
+  fondo: 5.2,
+  paso: 3.75, // distancia entre centros de racks vecinos
+  porFila: 8,
+  pasilloFilas: 10, // entre filas de racks (de frente a espalda)
+  anchoServidor: 3.0,
+  fondoServidor: 4.8,
+  separacionVirtualizacion: 7,
+});
+export const ALTO_GABINETE = RACK.base + RACK.unidades * RACK.alturaU + RACK.cabecera;
+export const ID_SIN_UBICAR = 'sin-ubicar';
+
+/** Altura (centro) de un tramo de unidades sobre el suelo */
+export const alturaTramo = (uInferior, alto) => RACK.base + (uInferior - 1) * RACK.alturaU + (alto * RACK.alturaU) / 2;
+
+/**
+ * Sala de racks fiel al inventario: cada rack físico (también los vacíos) es un gabinete de
+ * 42U y cada servidor ocupa sus unidades reales (misma regla que la vista de rack de /fisicos).
+ *
+ * @param {Array} nodos nodos visibles del grafo
+ * @param {Array<{id, name, servers: Array}>} racks racks físicos del inventario (con sus
+ *   servidores en el orden de la vista de rack); los servidores que no están entre los
+ *   nodos visibles se dibujan como "fuera del filtro"
+ * @returns {{
+ *   centros: Map<string,{x:number,z:number}>,
+ *   slots: Map<string,{x,y,z,ancho,alto,fondo,rackId,uInferior,uSuperior}>,
+ *   racks: Array<{id, nombre, x, z, ocupadas, libres, porUnidad, huecos, bloques, sinUbicar, sinRack?: boolean}>,
+ *   zonas: Array
+ * }}
+ */
+export function disposicionSalaRacks(nodos, racks = []) {
+  const visibles = new Map(nodos.map((n) => [String(n.id), n]));
+  const fisicos = nodos.filter((n) => n.type === 'fisicos');
+  const vms = nodos.filter((n) => n.type !== 'fisicos').sort(ordenNodos);
+  const enRack = new Set();
+
+  const listaRacks = [...racks].sort((a, b) => ordenTexto(String(a.name), String(b.name)) || compararIds(a.id, b.id)).map((r) => {
+    const servidores = (r.servers || []).map((s) => ({ ...s, id: String(s.id) }));
+    const col = colocarEnRack(servidores);
+    const bloques = col.bloques.map((b) => {
+      const id = String(b.servidor.id);
+      if (visibles.has(id)) enRack.add(id);
+      return {
+        nodoId: visibles.has(id) ? id : null,
+        servidorId: id,
+        nombre: b.servidor.nombre || b.servidor.hostname || `#${id}`,
+        ip: b.servidor.ip || '',
+        uInferior: b.uInferior,
+        uSuperior: b.uSuperior,
+        alto: b.alto,
+      };
+    });
+    return {
+      id: String(r.id), nombre: String(r.name), ocupadas: col.ocupadas, libres: col.libres, porUnidad: col.porUnidad,
+      huecos: huecosLibres(col.porUnidad), bloques, sinUbicar: col.sinUbicar.map((s) => s.nombre || `#${s.id}`),
+    };
+  });
+
+  // Físicos visibles que no ocupan ninguna U de un rack: un rack aparte "Sin ubicar"
+  const sueltos = fisicos.filter((n) => !enRack.has(String(n.id))).sort(ordenNodos);
+  if (sueltos.length) {
+    const porUnidad = new Array(RACK.unidades).fill(-1);
+    const bloques = [];
+    let u = 1;
+    for (const [i, n] of sueltos.entries()) {
+      const alto = 2;
+      if (u + alto - 1 > RACK.unidades) break;
+      for (let k = 0; k < alto; k++) porUnidad[RACK.unidades - (u + k)] = i;
+      bloques.push({ nodoId: String(n.id), servidorId: String(n.id), nombre: n.name || `#${n.id}`, ip: n.ip || '', uInferior: u, uSuperior: u + alto - 1, alto });
+      u += alto;
+    }
+    const ocupadas = porUnidad.filter((d) => d >= 0).length;
+    listaRacks.push({
+      id: ID_SIN_UBICAR, nombre: 'Sin ubicar', sinRack: true, ocupadas, libres: RACK.unidades - ocupadas, porUnidad,
+      huecos: huecosLibres(porUnidad), bloques, sinUbicar: [],
+    });
+  }
+
+  const centros = new Map();
+  const slots = new Map();
+  const zonas = [];
+  let xMaxInfra = -Infinity;
+  let zMinInfra = Infinity;
+  listaRacks.forEach((r, i) => {
+    const fila = Math.floor(i / RACK.porFila);
+    r.x = (i % RACK.porFila) * RACK.paso + RACK.ancho / 2;
+    r.z = -fila * (RACK.fondo + RACK.pasilloFilas); // frente del gabinete
+    r.fila = letraFila(fila);
+    xMaxInfra = Math.max(xMaxInfra, r.x + RACK.ancho / 2);
+    zMinInfra = Math.min(zMinInfra, r.z - RACK.fondo);
+    const zServidor = r.z - 0.08 - RACK.fondoServidor / 2;
+    for (const b of r.bloques) {
+      b.y = alturaTramo(b.uInferior, b.alto);
+      if (!b.nodoId) continue;
+      slots.set(b.nodoId, {
+        x: r.x, y: b.y, z: zServidor, ancho: RACK.anchoServidor, alto: b.alto * RACK.alturaU, fondo: RACK.fondoServidor,
+        rackId: r.id, rackNombre: r.nombre, uInferior: b.uInferior, uSuperior: b.uSuperior,
+      });
+      centros.set(b.nodoId, { x: r.x, z: r.z });
+    }
+    zonas.push({
+      tipo: r.sinRack ? 'sinRack' : 'gabinete', etiqueta: `${r.nombre}\n${r.ocupadas}/${RACK.unidades}U`, rackId: r.id,
+      x0: r.x - RACK.ancho / 2, x1: r.x + RACK.ancho / 2, z0: r.z - RACK.fondo, z1: r.z, anchoRotulo: RACK.paso - 0.4,
+    });
+  });
+  const { margenArea, frenteArea } = SALA;
+  if (listaRacks.length) {
+    zonas.push({ tipo: 'area', etiqueta: 'Sala de racks', x0: -margenArea, z0: zMinInfra - margenArea, x1: xMaxInfra + margenArea, z1: frenteArea + 1.2 });
+  }
+
+  // Virtualización: un bloque por host o clúster, a la derecha de la sala de racks
+  const nombresFisicos = new Set(fisicos.map((n) => clave(n.name)));
+  const vmsPorHost = new Map();
+  for (const v of vms) {
+    const host = String(v.rack || '').trim() || SIN_HOST;
+    if (!vmsPorHost.has(host)) vmsPorHost.set(host, []);
+    vmsPorHost.get(host).push(v);
+  }
+  const bloquesVirt = [...vmsPorHost.keys()].sort(ordenTexto).map((host) => ({
+    nombre: host, bloque: bloque(vmsPorHost.get(host)), zona: { tipo: nombresFisicos.has(clave(host)) ? 'host' : 'cluster' },
+  }));
+  if (bloquesVirt.length) {
+    // Dos bloques por fila; las filas crecen hacia el fondo y la delantera queda a la altura
+    // del frente de los racks (la sala se ve compacta y los racks siguen siendo protagonistas)
+    const x0 = listaRacks.length ? xMaxInfra + RACK.separacionVirtualizacion : 0;
+    const r = colocarFilas(bloquesVirt, 0, (b) => (b.zona.tipo === 'host' ? `Host ${b.nombre}` : `Clúster ${b.nombre}`), listaRacks.length ? 2 : SALA.bloquesPorFila);
+    const dz = listaRacks.length ? -r.zFin : 0;
+    r.centros.forEach((v, k) => centros.set(k, { x: v.x + x0, z: v.z + dz }));
+    for (const q of r.zonas) { q.x0 += x0; q.x1 += x0; q.z0 += dz; q.z1 += dz; }
+    zonas.push({ tipo: 'area', etiqueta: 'Virtualización', x0: x0 - margenArea, z0: dz - margenArea, x1: x0 + r.xMax + margenArea, z1: r.zFin + dz + frenteArea + (listaRacks.length ? 1.2 : 0) });
+    zonas.push(...r.zonas);
+  }
+
+  // Centrar en el origen
+  if (zonas.length) {
+    const x0 = Math.min(...zonas.map((q) => q.x0)); const x1 = Math.max(...zonas.map((q) => q.x1));
+    const z0 = Math.min(...zonas.map((q) => q.z0)); const z1 = Math.max(...zonas.map((q) => q.z1));
+    const dx = -Math.round(((x0 + x1) / 2) * 10) / 10;
+    const dz = -Math.round(((z0 + z1) / 2) * 10) / 10;
+    for (const c of centros.values()) { c.x += dx; c.z += dz; }
+    for (const s of slots.values()) { s.x += dx; s.z += dz; }
+    for (const r of listaRacks) { r.x += dx; r.z += dz; }
+    for (const q of zonas) { q.x0 += dx; q.x1 += dx; q.z0 += dz; q.z1 += dz; }
+  }
+  return { centros, slots, racks: listaRacks, zonas };
 }

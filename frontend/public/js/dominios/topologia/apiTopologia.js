@@ -21,6 +21,8 @@ export function obtenerGrafo({ vista = null, includeIsolated = false, simulateDo
 }
 
 export const listarVistas = () => apiJson('/api/topology/views');
+/** Inventario de la vista de racks (/fisicos o /virtuales): racks, también vacíos, con sus servidores */
+export const obtenerInventario = (tipo) => apiJson(`/api/data?type=${enc(tipo)}`);
 export const crearVista = (datos) => apiJson('/api/topology/views', json('POST', datos));
 export const editarVista = (id, datos) => apiJson(`/api/topology/views/${enc(id)}`, json('PUT', datos));
 export const eliminarVista = (id) => apiJson(`/api/topology/views/${enc(id)}`, { method: 'DELETE' });

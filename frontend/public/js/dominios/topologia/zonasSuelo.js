@@ -6,20 +6,26 @@
  */
 import * as THREE from '/vendor/three/three.module.js';
 
-const COLORES = { area: '#5b7fb8', rack: '#3d8bfd', host: '#9b7bff', cluster: '#9b7bff' };
+const COLORES = { area: '#5b7fb8', rack: '#3d8bfd', host: '#9b7bff', cluster: '#9b7bff', gabinete: '#3d8bfd', sinRack: '#8a94a6' };
 // Texto claro sobre placa oscura: legible sobre el suelo, la cuadrícula y los arcos
-const TEXTO = { area: '#c9d8f2', rack: '#a9caff', host: '#cdbfff', cluster: '#cdbfff' };
-const ALTO_ROTULO = { area: 1.9, rack: 1.35, host: 1.35, cluster: 1.35 };
+const TEXTO = { area: '#c9d8f2', rack: '#a9caff', host: '#cdbfff', cluster: '#cdbfff', gabinete: '#dce8ff', sinRack: '#d0d5dd' };
+const ALTO_ROTULO = { area: 1.9, rack: 1.35, host: 1.35, cluster: 1.35, gabinete: 1.5, sinRack: 1.5 };
+// Gabinetes de la sala de racks: solo el rótulo (nombre y ocupación) delante de cada rack
+const SIN_CONTORNO = new Set(['gabinete', 'sinRack']);
 const Y_SUELO = 0.015;
 
+/** Placa con texto; varias líneas separadas por salto de línea (la primera en negrita) */
 function texturaTexto(texto, color, colorTexto) {
-  const alto = 96;
+  const lineas = String(texto).split('\n');
+  const altoLinea = (i) => (i === 0 ? 72 : 58);
+  const alto = 24 + lineas.reduce((a, _, i) => a + altoLinea(i), 0);
   const pad = 22;
   const c = document.createElement('canvas');
   const g = c.getContext('2d');
-  const fuente = `700 58px Inter, "Segoe UI", sans-serif`;
-  g.font = fuente;
-  const ancho = Math.min(2048, Math.ceil(g.measureText(texto).width) + pad * 2);
+  const fuenteDe = (i) => (i === 0 ? '700 58px Inter, "Segoe UI", sans-serif' : '600 46px Inter, "Segoe UI", sans-serif');
+  let medida = 0;
+  lineas.forEach((l, i) => { g.font = fuenteDe(i); medida = Math.max(medida, g.measureText(l).width); });
+  const ancho = Math.min(2048, Math.ceil(medida) + pad * 2);
   c.width = ancho; c.height = alto;
   g.fillStyle = 'rgba(10, 18, 34, 0.78)';
   g.strokeStyle = color;
@@ -28,10 +34,16 @@ function texturaTexto(texto, color, colorTexto) {
   g.roundRect(2, 2, ancho - 4, alto - 4, 16);
   g.fill();
   g.stroke();
-  g.font = fuente;
   g.textBaseline = 'middle';
-  g.fillStyle = colorTexto;
-  g.fillText(texto, pad, alto / 2 + 3);
+  let y = 12;
+  lineas.forEach((l, i) => {
+    g.font = fuenteDe(i);
+    g.fillStyle = i === 0 ? colorTexto : color;
+    // Varias líneas: centradas (rótulo de gabinete); una sola: alineada a la izquierda
+    const x = lineas.length > 1 ? (ancho - g.measureText(l).width) / 2 : pad;
+    g.fillText(l, x, y + altoLinea(i) / 2 + 3);
+    y += altoLinea(i);
+  });
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 4;
@@ -74,26 +86,27 @@ export function crearZonasSuelo(escena) {
       col.set(COLORES[z.tipo] || COLORES.rack);
       const y = z.tipo === 'area' ? Y_SUELO : Y_SUELO + 0.005;
       const p = [[z.x0, z.z0], [z.x1, z.z0], [z.x1, z.z1], [z.x0, z.z1]];
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < 4 && !SIN_CONTORNO.has(z.tipo); i++) {
         const a = p[i]; const b = p[(i + 1) % 4];
         lineas.push(a[0], y, a[1], b[0], y, b[1]);
         coloresL.push(col.r, col.g, col.b, col.r, col.g, col.b);
       }
-      if (z.tipo !== 'area') {
+      if (z.tipo !== 'area' && !SIN_CONTORNO.has(z.tipo)) {
         for (const v of [p[0], p[2], p[1], p[0], p[3], p[2]]) { tris.push(v[0], y - 0.002, v[1]); coloresT.push(col.r, col.g, col.b); }
       }
       // Rótulo en el borde frontal (el más cercano a la cámara), para que los equipos no lo
       // tapen: el de cada bloque justo delante de él y el del área en su franja frontal
       const alto = ALTO_ROTULO[z.tipo] || 1.35;
       const { textura, aspecto } = texturaTexto(z.etiqueta, COLORES[z.tipo] || COLORES.rack, TEXTO[z.tipo] || TEXTO.rack);
-      const ancho = Math.min(alto * aspecto, Math.max(4, z.x1 - z.x0 - 0.3));
+      const ancho = z.anchoRotulo ? Math.min(alto * aspecto, z.anchoRotulo) : Math.min(alto * aspecto, Math.max(4, z.x1 - z.x0 - 0.3));
       const plano = new THREE.Mesh(
         new THREE.PlaneGeometry(ancho, ancho / aspecto).rotateX(-Math.PI / 2),
         new THREE.MeshBasicMaterial({ map: textura, transparent: true, depthWrite: false, toneMapped: false }),
       );
       const altoReal = ancho / aspecto;
       const zRotulo = z.tipo === 'area' ? z.z1 - altoReal * 0.5 - 0.5 : z.z1 + altoReal * 0.5 + 0.2;
-      plano.position.set(z.x0 + ancho / 2 + (z.tipo === 'area' ? 0.4 : 0.15), y + 0.004, zRotulo);
+      const xRotulo = SIN_CONTORNO.has(z.tipo) ? (z.x0 + z.x1) / 2 : z.x0 + ancho / 2 + (z.tipo === 'area' ? 0.4 : 0.15);
+      plano.position.set(xRotulo, y + 0.004, zRotulo);
       plano.renderOrder = 1;
       agregar(plano);
     }

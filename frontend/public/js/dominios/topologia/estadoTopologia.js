@@ -22,6 +22,9 @@ export function crearEstadoTopologia() {
     vistas: [],
     vista: null,
     grafo: { nodes: [], edges: [], impact: null },
+    // Inventario de /fisicos y /virtuales (racks con sus servidores y todos los campos de la ficha)
+    inventario: { fisicos: null, virtuales: null },
+    inventarioPorId: new Map(),
     nodoPorId: new Map(),
     aristaPorId: new Map(),
     posiciones: new Map(),
@@ -69,7 +72,8 @@ export function crearEstadoTopologia() {
         if (sinPosicion.length) {
           const auto = capas(grafo.nodes, grafo.edges);
           for (const n of sinPosicion) st.posiciones.set(String(n.id), auto[String(n.id)] || { x: 0, y: 0 });
-          if (st.esAdmin) st.marcarCambios();
+          const conRelaciones = (n) => (n.dependsOnServerCount || 0) + (n.dependentServerCount || 0) > 0;
+          if (st.esAdmin && sinPosicion.some(conRelaciones)) st.marcarCambios();
         } else {
           st.cambiosSinGuardar = false;
           st.estadoGuardado = 'Sin cambios';
@@ -83,10 +87,31 @@ export function crearEstadoTopologia() {
         }
       }
       if (st.seleccion) {
-        const mapa = st.seleccion.tipo === 'nodo' ? st.nodoPorId : st.aristaPorId;
-        if (!mapa.has(st.seleccion.id)) st.seleccion = null;
+        const existe = st.seleccion.tipo === 'rack' ? Boolean(st.rackPorId(st.seleccion.id))
+          : (st.seleccion.tipo === 'nodo' ? st.nodoPorId : st.aristaPorId).has(st.seleccion.id);
+        if (!existe) st.seleccion = null;
       }
       st.emitir('grafo', grafo);
+    },
+
+    /** @param {{fisicos?: object, virtuales?: object}} inv respuestas de /api/data por tipo */
+    fijarInventario(inv) {
+      st.inventario = { fisicos: inv.fisicos || null, virtuales: inv.virtuales || null };
+      st.inventarioPorId = new Map();
+      for (const d of [st.inventario.fisicos, st.inventario.virtuales]) for (const s of d?.servers || []) st.inventarioPorId.set(String(s.id), s);
+    },
+
+    rackPorId(id) {
+      return st.inventario.fisicos?.racks?.find((r) => String(r.id) === String(id)) || null;
+    },
+
+    /** Racks físicos que muestra la sala (también los vacíos), según los filtros; null sin inventario */
+    racksSala() {
+      const racks = st.inventario.fisicos?.racks;
+      if (!racks) return null;
+      const f = st.filtros;
+      if (f.tipo === 'virtuales') return [];
+      return f.rack ? racks.filter((r) => r.name === f.rack || (r.servers || []).some((s) => (s.rackNorm || s.rack) === f.rack)) : racks;
     },
 
     moverNodo(id, x, y, { emitir = true } = {}) {
