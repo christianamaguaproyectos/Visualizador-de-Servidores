@@ -72,10 +72,11 @@ const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
  * @param {number[]} p0 [x,y,z]  @param {number[]} p1 [x,y,z]
  * @param {number[]} n [nx, nz] normal canónica  @param {number} off desplazamiento con signo
  * @param {number} k índice de paralela
+ * @param {number} elevacion altura extra (la sala de datos eleva los arcos sobre los equipos)
  */
-export function puntoControl3D(p0, p1, n, off, k = 0, alturaParalela = 0.4) {
+export function puntoControl3D(p0, p1, n, off, k = 0, alturaParalela = 0.4, elevacion = 0) {
   const d = Math.hypot(p1[0] - p0[0], p1[2] - p0[2]);
-  const alto = clamp(1.2 + 0.18 * d, 1.5, 8) + k * alturaParalela;
+  const alto = clamp(1.2 + 0.18 * d, 1.5, 8) + elevacion + k * alturaParalela;
   return [
     (p0[0] + p1[0]) / 2 + n[0] * off,
     (p0[1] + p1[1]) / 2 + alto,

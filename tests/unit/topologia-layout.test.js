@@ -8,6 +8,7 @@ import {
 import {
   compararIds, indicesParalelas, desplazamientoLateral, normalCanonica, elegirPuertos, trazado2D, caminoSvg, puntoCubica,
 } from '../../frontend/public/js/dominios/topologia/geometriaAristas.js';
+import { disposicionSala, SALA } from '../../frontend/public/js/dominios/topologia/salaDatos.js';
 import { reescribirEspecificadorThree, VENDOR_THREE_LISTA } from '../../backend/src/routes/vendorThreeRoutes.js';
 
 const nodos = (...ids) => ids.map((id) => ({ id: String(id) }));
@@ -102,4 +103,68 @@ test('vendor three: reescribe el especificador desnudo y la lista es cerrada', (
   assert.deepEqual(Object.keys(VENDOR_THREE_LISTA).sort(), [
     '/addons/controls/OrbitControls.js', '/addons/renderers/CSS2DRenderer.js', '/three.module.js',
   ]);
+});
+
+// ── Disposición 3D "Sala de datos" ─────────────────────────────────────────
+
+const srv = (id, type, name, rack) => ({ id: String(id), type, name, rack });
+const SALA_DEMO = [
+  srv(1, 'fisicos', 'srv-dc-01', 'RACK-A1'), srv(2, 'fisicos', 'srv-fw-01', 'RACK-A1'),
+  srv(3, 'fisicos', 'srv-nas-01', 'RACK-B1'), srv(4, 'fisicos', 'srv-hv-01', 'RACK-A2'),
+  srv(5, 'virtuales', 'srv-web-01', 'srv-hv-01'), srv(6, 'virtuales', 'srv-api-01', 'srv-hv-01'),
+  srv(7, 'virtuales', 'srv-crm-01', 'VCL-02'), srv(8, 'virtuales', 'srv-sin-host', ''),
+];
+
+test('sala de datos: cada servidor tiene un centro único alineado a la cuadrícula', () => {
+  const { centros } = disposicionSala(SALA_DEMO);
+  assert.equal(centros.size, SALA_DEMO.length);
+  const claves = new Set([...centros.values()].map((c) => `${c.x},${c.z}`));
+  assert.equal(claves.size, SALA_DEMO.length, 'sin servidores superpuestos');
+  for (const c of centros.values()) assert.ok(Number.isFinite(c.x) && Number.isFinite(c.z));
+});
+
+test('sala de datos: físicos agrupados por rack en filas rotuladas', () => {
+  const { centros, zonas } = disposicionSala(SALA_DEMO);
+  const racks = zonas.filter((z) => z.tipo === 'rack');
+  assert.deepEqual(racks.map((z) => z.etiqueta), ['Fila A · RACK-A1', 'Fila A · RACK-B1']);
+  const a1 = racks[0];
+  for (const id of ['1', '2']) {
+    const c = centros.get(id);
+    assert.ok(c.x > a1.x0 && c.x < a1.x1 && c.z > a1.z0 && c.z < a1.z1, `servidor ${id} dentro de su rack`);
+  }
+  // Los del mismo rack, alineados en la misma fila y a un paso
+  assert.equal(centros.get('1').z, centros.get('2').z);
+  assert.equal(Math.abs(centros.get('1').x - centros.get('2').x), SALA.paso);
+  assert.ok(zonas.some((z) => z.tipo === 'area' && z.etiqueta === 'Infraestructura'));
+});
+
+test('sala de datos: el host encabeza su bloque y sus VMs quedan detrás en cuadrícula', () => {
+  const { centros, zonas } = disposicionSala(SALA_DEMO);
+  const host = zonas.find((z) => z.tipo === 'host');
+  assert.equal(host.etiqueta, 'Host srv-hv-01');
+  const h = centros.get('4');
+  for (const id of ['5', '6']) {
+    const v = centros.get(id);
+    assert.ok(v.z > h.z, 'la VM queda detrás del host');
+    assert.ok(v.x > host.x0 && v.x < host.x1, 'dentro del bloque del host');
+  }
+  assert.equal(centros.get('5').z, centros.get('6').z);
+  assert.ok(zonas.some((z) => z.tipo === 'cluster' && z.etiqueta === 'Clúster VCL-02'));
+  assert.ok(zonas.some((z) => z.tipo === 'cluster' && z.etiqueta === 'Clúster Sin host'));
+  // Virtualización debajo de Infraestructura
+  const infra = zonas.find((z) => z.etiqueta === 'Infraestructura');
+  const virt = zonas.find((z) => z.etiqueta === 'Virtualización');
+  assert.ok(virt.z0 > infra.z1);
+});
+
+test('sala de datos: determinista, centrada y robusta con muchos racks o sin datos', () => {
+  const muchos = Array.from({ length: 60 }, (_, i) => srv(i + 1, 'fisicos', `srv-${String(i).padStart(2, '0')}`, `R${String(i % 9).padStart(2, '0')}`));
+  const a = disposicionSala(muchos);
+  const b = disposicionSala([...muchos].reverse());
+  assert.deepEqual([...a.centros.entries()].sort(), [...b.centros.entries()].sort());
+  const etiquetas = a.zonas.filter((z) => z.tipo === 'rack').map((z) => z.etiqueta);
+  assert.ok(etiquetas.includes('Fila C · R08'), 'más de 4 racks pasan a la fila siguiente');
+  const xs = [...a.centros.values()].map((c) => c.x);
+  assert.ok(Math.abs(Math.min(...xs) + Math.max(...xs)) < SALA.paso * 2, 'centrada en x');
+  assert.equal(disposicionSala([]).centros.size, 0);
 });

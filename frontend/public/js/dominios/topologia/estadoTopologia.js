@@ -1,7 +1,7 @@
 /**
  * Almacén de estado compartido por el 3D, el 2D, el inspector y el simulador.
  * Emite eventos: 'grafo', 'posiciones', 'seleccion', 'hover', 'filtros', 'modo',
- * 'simulacion', 'foco', 'guardado', 'animaciones', 'calidad3d'.
+ * 'simulacion', 'foco', 'guardado', 'animaciones', 'calidad3d', 'disposicion3d'.
  */
 import { capas } from './autoLayout.js';
 
@@ -11,6 +11,8 @@ export function crearEstadoTopologia() {
   let animacionesGuardadas = null;
   try { animacionesGuardadas = localStorage.getItem('topo.animaciones'); } catch { /* sin acceso */ }
   // Calidad de la vista 3D: 'alta' | 'rendimiento' (null = automática según los fps medidos)
+  let disposicionGuardada = null;
+  try { disposicionGuardada = localStorage.getItem('topo.disposicion3d'); } catch { /* sin acceso */ }
   let calidadGuardada = null;
   try { calidadGuardada = localStorage.getItem('topo.calidad3d'); } catch { /* sin acceso */ }
 
@@ -35,6 +37,8 @@ export function crearEstadoTopologia() {
     focoImpacto: false,
     animaciones: animacionesGuardadas === null ? !preferenciaReducida : animacionesGuardadas === '1',
     calidad3d: calidadGuardada === 'alta' || calidadGuardada === 'rendimiento' ? calidadGuardada : 'alta',
+    // Disposición de la vista 3D: 'sala' (sala de datos ordenada) | 'editor' (posiciones del 2D)
+    disposicion3d: disposicionGuardada === 'editor' ? 'editor' : 'sala',
     calidad3dElegida: calidadGuardada === 'alta' || calidadGuardada === 'rendimiento',
 
     on(evento, fn) {
@@ -143,6 +147,12 @@ export function crearEstadoTopologia() {
         try { localStorage.setItem('topo.calidad3d', st.calidad3d); } catch { /* sin acceso */ }
       }
       st.emitir('calidad3d', st.calidad3d);
+    },
+
+    fijarDisposicion3d(valor) {
+      st.disposicion3d = valor === 'editor' ? 'editor' : 'sala';
+      try { localStorage.setItem('topo.disposicion3d', st.disposicion3d); } catch { /* sin acceso */ }
+      st.emitir('disposicion3d', st.disposicion3d);
     },
 
     /** Nodos tras aplicar filtros */

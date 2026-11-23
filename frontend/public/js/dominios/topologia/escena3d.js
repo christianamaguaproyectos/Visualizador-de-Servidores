@@ -19,6 +19,11 @@ import { ESCENARIO, ESCALA_3D, LAYOUT } from './constantesVisuales.js';
 import { crearModelosNodos } from './modelos3d.js';
 import { crearAristas3D } from './aristas3d.js';
 import { crearEtiquetas3D } from './etiquetas3d.js';
+import { crearZonasSuelo } from './zonasSuelo.js';
+import { disposicionSala } from './salaDatos.js';
+
+// En la sala de datos los arcos suben por encima de los equipos (≈2,6 u de alto)
+const ELEVACION_SALA = 3.2;
 
 const GRADOS = Math.PI / 180;
 const easeInOutCubic = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
@@ -31,7 +36,7 @@ const FPS_AMBIENTE = 30;
 const MS_HOVER = 30;
 const FPS_MINIMO = 40;
 
-export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alClicNodo, alClicArista, alClicVacio, alPerderContexto, alMoverCamara, alRendimientoBajo }) {
+export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alClicNodo, alClicArista, alClicVacio, alPerderContexto, alMoverCamara, alRendimientoBajo, alReconstruir }) {
   const dpr = window.devicePixelRatio || 1;
   // Antialias solo en calidad alta y pantallas de densidad normal (en alta densidad apenas se
   // nota y cuesta mucho). Es fijo al crear el contexto: cambiar de calidad recrea la escena.
@@ -95,6 +100,7 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
   const nodos3d = crearModelosNodos(escena);
   const aristas3d = crearAristas3D(escena);
   const etiquetas = crearEtiquetas3D(escena);
+  const zonas = crearZonasSuelo(escena);
 
   let caja = new THREE.Box3(new THREE.Vector3(-10, 0, -10), new THREE.Vector3(10, 0, 10));
   let centros = new Map();
@@ -132,16 +138,22 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     const aristas = estado.aristasVisibles(nodos);
     centros = new Map();
     tipos = new Map();
+    // Sala de datos (por defecto) o las posiciones del editor 2D
+    const sala = estado.disposicion3d === 'editor' ? null : disposicionSala(nodos);
     for (const n of nodos) {
-      const p = estado.posiciones.get(String(n.id)) || { x: 0, y: 0 };
-      centros.set(String(n.id), aEspacio(p));
-      tipos.set(String(n.id), n.type);
+      const id = String(n.id);
+      const c = sala?.centros.get(id);
+      centros.set(id, c ? new THREE.Vector3(c.x, 0, c.z) : aEspacio(estado.posiciones.get(id) || { x: 0, y: 0 }));
+      tipos.set(id, n.type);
     }
+    zonas.construir(sala ? sala.zonas : []);
     nodos3d.construir(nodos, centros);
-    aristas3d.construir(aristas, (id) => centros.get(String(id)), (id) => tipos.get(String(id)));
+    aristas3d.construir(aristas, (id) => centros.get(String(id)), (id) => tipos.get(String(id)), { elevacion: sala ? ELEVACION_SALA : 0 });
     etiquetas.construir(nodos, (id) => centros.get(String(id)), nombreDe);
     caja = new THREE.Box3();
     for (const c of centros.values()) caja.expandByPoint(c);
+    // En la sala de datos el encuadre abarca también las zonas rotuladas del suelo
+    for (const q of sala?.zonas || []) { caja.expandByPoint(new THREE.Vector3(q.x0, 0, q.z0)); caja.expandByPoint(new THREE.Vector3(q.x1, 0, q.z1)); }
     if (caja.isEmpty()) caja.set(new THREE.Vector3(-10, 0, -10), new THREE.Vector3(10, 0, 10));
     const tam = caja.getSize(new THREE.Vector3());
     crearRejilla(Math.max(tam.x, tam.z) + 80);
@@ -149,7 +161,15 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     // Compila los shaders ahora (y no en el primer hover o clic)
     renderer.compile(escena, camara);
     if (encuadrar) encajar({ instantaneo: true });
+    camaraSucia = true;
     pedirRender();
+    alReconstruir?.();
+  }
+
+  /** Posición equivalente en px del plano 2D (para el minimapa), o null si no está en escena */
+  function posicionPlano(id) {
+    const c = centros.get(String(id));
+    return c ? { x: c.x / ESCALA_3D, y: c.z / ESCALA_3D / factorZ() } : null;
   }
 
   function nombreDe(id) { return estado.nodoPorId.get(String(id))?.name || `#${id}`; }
@@ -195,7 +215,7 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     const ancho = tam.x / 2 + 3.5;
     const fondo = tam.z / 2 + 3.5;
     // El fondo se ve escorzado por la inclinación (~40°): basta ~0,8 de su tamaño
-    const dist = Math.max(18, Math.max(ancho / Math.tan(mediaH), (fondo * 0.8 + 2) / Math.tan(mediaV)) * 1.08);
+    const dist = Math.max(18, Math.max(ancho / Math.tan(mediaH), (fondo * 0.8 + 2) / Math.tan(mediaV)) * 1.15);
     const dir = new THREE.Vector3(0, 0.85, 1).normalize();
     // Objetivo algo detrás del centro: la escena baja y deja sitio al resumen superior
     const objetivo = new THREE.Vector3(esfera.center.x, 1, esfera.center.z - tam.z * 0.05);
@@ -521,6 +541,7 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
     nodos3d.dispose();
     aristas3d.dispose();
     etiquetas.dispose();
+    zonas.dispose();
     if (rejilla) { rejilla.geometry.dispose(); rejilla.material.dispose(); }
     suelo.geometry.dispose(); suelo.material.dispose();
     renderer.dispose();
@@ -540,6 +561,7 @@ export function crearEscena3D({ contenedor, elementoTeclado = null, estado, alCl
   return {
     reconstruir,
     proyectar,
+    posicionPlano,
     actualizarEstilos,
     encajar,
     enfocarNodo,

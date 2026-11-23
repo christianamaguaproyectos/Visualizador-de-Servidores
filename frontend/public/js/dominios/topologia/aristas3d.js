@@ -129,8 +129,9 @@ export function crearAristas3D(escena) {
    * @param {Array} lista aristas visibles
    * @param {(id) => THREE.Vector3|undefined} centroDe
    * @param {(id) => string} tipoDe tipo de servidor ('fisicos'|'virtuales')
+   * @param {{elevacion?: number}} opciones elevacion: altura extra de los arcos
    */
-  function construir(lista, centroDe, tipoDe) {
+  function construir(lista, centroDe, tipoDe, { elevacion = 0 } = {}) {
     limpiar();
     const paralelas = indicesParalelas(lista);
     for (const e of lista) {
@@ -147,7 +148,7 @@ export function crearAristas3D(escena) {
         p0[0] += n[0] * f; p0[2] += n[1] * f;
         p1[0] += n[0] * f; p1[2] += n[1] * f;
       }
-      const c = puntoControl3D(p0, p1, n, off, k, SEPARACION.alturaParalela3d);
+      const c = puntoControl3D(p0, p1, n, off, k, SEPARACION.alturaParalela3d, elevacion);
       const base = new THREE.QuadraticBezierCurve3(new THREE.Vector3(...p0), new THREE.Vector3(...c), new THREE.Vector3(...p1));
       const largo = base.getLength();
       const tFin = Math.max(0.5, 1 - LARGO_PUNTA / largo);
