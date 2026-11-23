@@ -101,7 +101,7 @@
         <line x1="16" y1="7" x2="20" y2="7"/>
         <line x1="16" y1="11" x2="20" y2="11"/>
       </svg>
-      <span class="global-nav__brand-text">Centro de Datos</span>
+      <span class="global-nav__brand-meta"><span class="global-nav__brand-text">Centro de Datos</span><span class="global-nav__brand-sub">Infraestructura</span></span>
     `;
 
         nav.appendChild(brand);
@@ -109,12 +109,16 @@
         // Nav links
         const linksContainer = document.createElement('div');
         linksContainer.className = 'global-nav__links';
+        const seccion = document.createElement('span');
+        seccion.className = 'global-nav__seccion';
+        seccion.textContent = 'Navegación';
+        linksContainer.appendChild(seccion);
 
         NAV_ITEMS.forEach(item => {
             const link = document.createElement('a');
             link.href = item.href;
             link.className = 'global-nav__link';
-            if (item.id === activePage) link.classList.add('active');
+            if (item.id === activePage) { link.classList.add('active'); link.setAttribute('aria-current', 'page'); }
             if (item.adminOnly) {
                 link.classList.add('admin-only');
                 link.style.display = 'none'; // Hidden by default, shown for admins

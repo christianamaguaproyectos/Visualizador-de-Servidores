@@ -5,13 +5,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard de Monitoreo - Servidores</title>
-  <link rel="stylesheet" href="monitoring-styles.css">
-  <link rel="stylesheet" href="/nav-styles.css">
-  <link rel="icon" type="image/jpeg" href="/favicon.jpg">
+  <link rel="stylesheet" href="/fonts/fonts.css" />
+  <link rel="stylesheet" href="/css/tokens.css" />
+  <link rel="stylesheet" href="/monitoring-styles.css" />
   <link rel="stylesheet" href="/css/estilos-sin-inline.css" />
+  <link rel="stylesheet" href="/css/ui-system.css" />
+  <link rel="stylesheet" href="/nav-styles.css" />
+  <link rel="stylesheet" href="/css/toast.css" data-toast-css />
+  <link rel="icon" type="image/jpeg" href="/favicon.jpg">
 </head>
 
-<body>
+<body class="ui-plataforma">
   <header class="monitoring-header">
     <div class="header-left">
       <h1>🖥️ Monitoreo de Servidores</h1>
@@ -503,6 +507,7 @@
 
   <!-- Debe ir primero: agrega el token CSRF a las peticiones que modifican datos -->
   <script src="/js/csrf.js"></script>
+  <script src="/js/dominios/ui-system/modales.js"></script>
   <script src="/toast.js"></script>
   <script src="/nav.js"></script>
   <script src="/monitoring.js" type="module"></script>

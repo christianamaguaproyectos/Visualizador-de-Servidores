@@ -1,9 +1,28 @@
+/*
+ * Tokens de diseño de la plataforma (colores, tipografía, radios, sombras, movimiento).
+ * Paleta de estados compartida con el mapa 3D: UP verde, DOWN rojo, DEGRADED ámbar,
+ * MAINT violeta, sin monitoreo gris. Superficies "rack" oscuras para las vistas de racks.
+ */
 :root {
   --font-family-sans: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-family-display: "Space Grotesk", "Inter", "Segoe UI", Arial, sans-serif;
+  --font-family-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  /* Escala tipográfica */
+  --text-xs: 11.5px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 26px;
+  --text-3xl: 34px;
 
   --color-bg-app: #f4f7fb;
   --color-bg-surface: #ffffff;
   --color-bg-soft: #eef3fa;
+  --color-bg-sunken: #f8fafc;
+  --color-border: #e4e7ec;
+  --color-border-strong: #d0d5dd;
 
   --color-text-primary: #1d2939;
   --color-text-secondary: #475467;
@@ -13,6 +32,7 @@
   --color-primary-600: #1d5ed8;
   --color-primary-500: #2f6fe6;
   --color-primary-100: #e8f0ff;
+  --color-primary-50: #f3f7ff;
 
   --color-success-700: #0f7b4a;
   --color-success-500: #12b76a;
@@ -22,17 +42,50 @@
   --color-danger-500: #f04438;
   --color-danger-100: #fee4e2;
 
+  --color-warning-700: #93370d;
   --color-warning-600: #b54708;
+  --color-warning-500: #f59e0b;
   --color-warning-100: #fef0c7;
 
+  --color-maint-700: #6d28d9;
+  --color-maint-500: #8b5cf6;
+  --color-maint-100: #ede9fe;
+
+  --color-unknown-500: #98a2b3;
+  --color-unknown-100: #f2f4f7;
+
+  /* Estados operativos (mismos valores que el mapa 3D) */
+  --estado-up: var(--color-success-500);
+  --estado-down: var(--color-danger-500);
+  --estado-degraded: var(--color-warning-500);
+  --estado-maint: var(--color-maint-500);
+  --estado-unknown: var(--color-unknown-500);
+
+  /* Superficies de rack (vista de racks 2D con el lenguaje del 3D) */
+  --rack-fondo: #0a1222;
+  --rack-gabinete: #0f1a2e;
+  --rack-unidad: #131f36;
+  --rack-unidad-borde: #1d2b47;
+  --rack-servidor: #1e3a66;
+  --rack-servidor-borde: #3d6db3;
+  --rack-texto: #dce8ff;
+  --rack-texto-suave: #8da2c4;
+
+  --radius-xs: 6px;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
+  --radius-pill: 999px;
 
   --shadow-1: 0 1px 3px rgba(16, 24, 40, 0.10);
   --shadow-2: 0 8px 24px rgba(16, 24, 40, 0.14);
+  --shadow-3: 0 24px 64px rgba(16, 24, 40, 0.24);
 
   --focus-ring: 0 0 0 3px rgba(47, 111, 230, 0.35);
+
+  --dur-rapida: 120ms;
+  --dur-media: 200ms;
+  --curva: cubic-bezier(0.2, 0, 0, 1);
 
   --accent: var(--color-primary-600);
   --ok: var(--color-success-500);
@@ -43,4 +96,8 @@
   --card: var(--color-bg-surface);
   --text: var(--color-text-primary);
   --muted: var(--color-text-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-rapida: 0ms; --dur-media: 0ms; }
 }
