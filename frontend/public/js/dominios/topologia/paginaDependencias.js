@@ -22,6 +22,8 @@ import { confirmAction } from '../ui-system/modalConfirm.js';
 
 const $ = (sel) => document.querySelector(sel);
 const toast = (msg, tipo = 'info', ms) => window.showToast?.(msg, tipo, ms);
+// Refresco del estado de monitoreo (los cambios de inventario llegan además por SSE)
+const INTERVALO_VIVO_MS = 15000;
 
 export async function iniciarPaginaDependencias() {
   const estado = crearEstadoTopologia();
@@ -42,6 +44,8 @@ export async function iniciarPaginaDependencias() {
   let autoguardado = 0;
   let avisoSoloLectura = false;
   let controladorCarga = null;
+  let firmaCargada = null; // grafo + inventario de la última carga (el refresco en vivo no redibuja si no cambió)
+  let aisladosCargados = null;
 
   // ── Usuario y permisos ───────────────────────────────────────────────────
   try {
@@ -61,6 +65,7 @@ export async function iniciarPaginaDependencias() {
       cerrar: () => { inspector.cerrar(); },
       seleccionar: (sel) => seleccionar(sel, { enfocar: false }),
       enfocar: (id) => enfocar(id),
+      enfocarRack: (id) => { if (estado.modo === '3d') escena?.enfocarRack(id); },
       simular: (id) => simulador.alternar(id),
       nuevaRelacion: ({ origen }) => formulario.abrir({ origen }),
       editarArista: (e) => formulario.abrir({ arista: e }),
@@ -256,14 +261,32 @@ export async function iniciarPaginaDependencias() {
     } catch { /* el catálogo es opcional */ }
   }
 
-  async function recargar({ simulateDownIds = [...estado.simulados], conservarPosiciones = false, catalogo: conCatalogo = false } = {}) {
+  /** La sala de racks 3D muestra todo el inventario: pide también los servidores sin relaciones */
+  const enSalaRacks = () => estado.modo === '3d' && estado.disposicion3d === 'sala';
+  const incluirAislados = () => includeIsolated || enSalaRacks();
+
+  /** Racks y servidores de /fisicos y /virtuales (la sala de racks y la ficha del inspector) */
+  async function cargarInventario() {
+    const [fisicos, virtuales] = await Promise.all(['fisicos', 'virtuales'].map((t) => api.obtenerInventario(t).catch(() => null)));
+    estado.fijarInventario({ fisicos, virtuales });
+  }
+  const firmaDe = (grafo) => JSON.stringify([grafo.nodes, grafo.edges, grafo.impact, grafo.view?.id,
+    estado.inventario.fisicos?.racks, estado.inventario.virtuales?.servers]);
+
+  async function recargar({ simulateDownIds = [...estado.simulados], conservarPosiciones = false, catalogo: conCatalogo = false, silencioso = false } = {}) {
     if (controladorCarga) controladorCarga.abort();
     const controlador = new AbortController();
     controladorCarga = controlador;
     if (!conservarPosiciones) mostrarEstado('cargando');
     try {
-      const grafo = await api.obtenerGrafo({ vista: vistaSel, includeIsolated, simulateDownIds, signal: controlador.signal });
+      const aislados = incluirAislados();
+      const grafo = await api.obtenerGrafo({ vista: vistaSel, includeIsolated: aislados, simulateDownIds, signal: controlador.signal });
       if (controlador.signal.aborted) return;
+      aisladosCargados = aislados;
+      const firma = firmaDe(grafo);
+      // Refresco en vivo sin cambios: no se toca la escena (cámara, selección e inspector intactos)
+      if (silencioso && firma === firmaCargada) return;
+      firmaCargada = firma;
       estado.fijarGrafo(grafo, { conservarPosiciones });
       if (conCatalogo || !catalogo.length) await cargarCatalogo();
       paleta.render();
@@ -272,6 +295,7 @@ export async function iniciarPaginaDependencias() {
       else if (!estado.nodosVisibles().length) mostrarEstado('filtrado');
     } catch (err) {
       if (err?.name === 'AbortError' || controlador.signal.aborted) return;
+      if (silencioso) return; // un refresco en vivo fallido no sustituye lo que ya se ve
       if (err?.status === 404) mostrarEstado('noexiste');
       else mostrarEstado('error', { detalle: err?.datos?.error || null });
     }
@@ -330,6 +354,9 @@ export async function iniciarPaginaDependencias() {
         const dependientes = estado.grafo.edges.filter((e) => String(e.target) === sel.id).length;
         live.textContent = `${n.name}, ${n.type === 'fisicos' ? 'físico' : 'virtual'}, estado ${(ESTADOS[n.status] || ESTADOS.UNKNOWN).texto}, depende de ${deps}, ${dependientes} depende${dependientes === 1 ? '' : 'n'} de él`;
       }
+    } else if (sel?.tipo === 'rack') {
+      const r = estado.rackPorId(sel.id);
+      if (r) live.textContent = `Rack ${r.name}, ${(r.servers || []).length} servidores`;
     } else if (sel?.tipo === 'arista') {
       const e = estado.aristaPorId.get(sel.id);
       if (e) live.textContent = `Relación ${e.sourceName} depende de ${e.targetName}, ${TIPOS_DEPENDENCIA[e.dependencyType]?.largo || e.dependencyType}`;
@@ -405,6 +432,7 @@ export async function iniciarPaginaDependencias() {
           contenedor: $('#topo-escena3d'), elementoTeclado: escenario, estado,
           alClicNodo: (id) => clicNodo(id),
           alClicArista: (id) => seleccionar({ tipo: 'arista', id }),
+          alClicRack: (id) => { if (!estado.simulando) seleccionar({ tipo: 'rack', id }); },
           alClicVacio: () => estado.seleccionar(null),
           alPerderContexto: () => { $('#topo-contexto').hidden = false; },
           alMoverCamara: actualizarEncuadre,
@@ -438,6 +466,9 @@ export async function iniciarPaginaDependencias() {
     document.querySelectorAll('#topo-exportar-menu [data-modo], #topo-mas-menu [data-modo]').forEach((li) => { li.hidden = li.dataset.modo !== modo; });
     lienzo.mostrar(modo === '2d');
     actualizarUrl();
+    pintarAislados();
+    // La sala de racks pide todos los servidores; el 2D, solo los de la vista
+    if (aisladosCargados !== null && aisladosCargados !== incluirAislados()) recargar({ conservarPosiciones: true });
     leyenda.render();
     // En 2D las tarjetas ya rotulan todo: la leyenda se pliega en anchos menores de 1600
     if (modo === '2d' && window.innerWidth < 1600) leyenda.fijarAbierta(false);
@@ -573,6 +604,8 @@ export async function iniciarPaginaDependencias() {
   $('#topo-disposicion-editor').addEventListener('click', () => { cerrarMenus(); estado.fijarDisposicion3d('editor'); });
   estado.on('disposicion3d', () => {
     pintarDisposicion();
+    pintarAislados();
+    if (aisladosCargados !== null && aisladosCargados !== incluirAislados()) { recargar({ conservarPosiciones: true }); return; }
     if (escena) escena.reconstruir({ encuadrar: true }); else pendiente3d = true;
   });
   pintarDisposicion();
@@ -590,6 +623,11 @@ export async function iniciarPaginaDependencias() {
     const visible = document.body.classList.toggle('topo-sin-filtros') === false;
     ev.currentTarget.setAttribute('aria-checked', visible ? 'true' : 'false');
   });
+  // En la sala de racks ya se ven todos los servidores: la opción solo aplica al 2D y al editor
+  function pintarAislados() {
+    const li = $('#topo-ver-aislados').closest('li');
+    if (li) li.hidden = enSalaRacks();
+  }
   $('#topo-ver-aislados').addEventListener('click', (ev) => {
     includeIsolated = !includeIsolated;
     ev.currentTarget.textContent = includeIsolated ? 'Ocultar servidores sin relaciones' : 'Mostrar todos los servidores';
@@ -767,8 +805,9 @@ export async function iniciarPaginaDependencias() {
   estado.emitir('guardado', estado.estadoGuardado);
   if (!webgl) avisoSinWebgl('Tu equipo o navegador no admite gráficos 3D (WebGL). Se muestra el Editor 2D.');
   await cambiarModo(estado.modo);
-  await cargarVistas();
+  await Promise.all([cargarVistas(), cargarInventario()]);
   await recargar();
+  iniciarTiempoReal();
   if (focoInicial) {
     // Un servidor sin relaciones ni posición en la vista no viene en el grafo: se muestran todos
     if (!estado.nodoPorId.has(String(focoInicial)) && /^\d+$/.test(focoInicial)) {
@@ -780,6 +819,32 @@ export async function iniciarPaginaDependencias() {
       setTimeout(() => seleccionar({ tipo: 'nodo', id: focoInicial }, { enfocar: true, parpadeo: true }), 50);
     } else toast('No se encontró el servidor solicitado', 'warning');
   }
+  // ── Tiempo real ──────────────────────────────────────────────────────────
+  // Inventario: el servidor avisa por SSE (/events, evento "update") al crear, editar o borrar
+  // servidores y racks. Monitoreo: refresco ligero periódico del grafo. Ninguno recarga la
+  // página ni mueve la cámara: si nada cambió, no se redibuja.
+  function iniciarTiempoReal() {
+    let pendiente = 0;
+    let enCurso = false;
+    const actualizar = async () => {
+      if (enCurso || document.hidden || estado.simulando) return;
+      enCurso = true;
+      try {
+        await cargarInventario();
+        await recargar({ conservarPosiciones: true, silencioso: true });
+      } finally { enCurso = false; }
+    };
+    const programar = (ms = 400) => { clearTimeout(pendiente); pendiente = setTimeout(actualizar, ms); };
+    try {
+      const fuente = new EventSource('/events');
+      // Referencia global para cerrarla al cerrar sesión (como en /fisicos)
+      window.__eventosServidor = fuente;
+      fuente.addEventListener('update', () => programar());
+    } catch { /* sin SSE queda el refresco periódico */ }
+    setInterval(() => programar(0), INTERVALO_VIVO_MS);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) programar(0); });
+  }
+
   // Exposición mínima para las pruebas automatizadas en navegador
   window.__topologia = { estado, escena: () => escena, lienzo, simulador };
 }
