@@ -4,6 +4,7 @@ import { confirmAction } from '/js/dominios/ui-system/modalConfirm.js';
 import { trackUIEvent } from '/js/dominios/ui-system/uxTelemetry.js';
 import { escapeHtml, textoSeguro } from '/js/dominios/ui-system/seguridadHtml.js';
 import { apiFetch, apiJson } from '/js/dominios/ui-system/apiFetch.js';
+import { montarBloqueDependencias } from '/js/dominios/topologia/bloqueDependenciasServidor.js';
 
 // Esperar a que el DOM esté listo y verificar que estamos en una página correcta
 
@@ -3746,7 +3747,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const back = `<div class="u-fila-derecha"><button class="back-btn" id="btnBackView">← Volver</button>${crudButtons}</div>`;
 
-    app.innerHTML = `<div class="scrollable">${renderErrorBlock(DATA.meta?.error)}${back}${serverCard(s)}</div>`;
+    app.innerHTML = `<div class="scrollable">${renderErrorBlock(DATA.meta?.error)}${back}${serverCard(s)}<div id="serverDependencias" class="dep-detalle-contenedor"></div></div>`;
+
+    // Dependencias e impacto (Mapa de Dependencias): de quién depende, quién depende de él y cascada
+    const contDependencias = document.getElementById('serverDependencias');
+    if (contDependencias) montarBloqueDependencias(contDependencias, s.id, { esAdmin: () => !isReadOnlyUser() });
 
     document.getElementById('btnBackView')?.addEventListener('click', () => {
 
