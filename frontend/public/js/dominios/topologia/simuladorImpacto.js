@@ -1,5 +1,5 @@
 /**
- * Modo "Simular caída", foco de impacto y resumen ejecutivo (§6).
+ * Modo "Simular caída", foco de impacto y resumen ejecutivo.
  * La simulación solo hace GET /api/topology/graph?simulateDownIds=…: no escribe nada.
  */
 import { h, icono } from './dom.js';

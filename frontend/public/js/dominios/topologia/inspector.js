@@ -1,5 +1,5 @@
 /**
- * Panel Inspector compartido por el 3D y el 2D (§8). Muestra el nodo o la arista
+ * Panel Inspector compartido por el 3D y el 2D. Muestra el nodo o la arista
  * seleccionados y sus acciones. El "Análisis" se carga bajo demanda.
  */
 import { h, icono, fechaCorta } from './dom.js';

@@ -1,5 +1,5 @@
 /**
- * Aristas 3D (§5): tubos curvos, puntas de flecha instanciadas, partículas de flujo,
+ * Aristas 3D: tubos curvos, puntas de flecha instanciadas, partículas de flujo,
  * conos fijos de dirección (movimiento reducido), proxies de picking y etiqueta.
  *
  * Los proxies de picking (tubos de r=0,18) NO se añaden a la escena: el raycast se hace

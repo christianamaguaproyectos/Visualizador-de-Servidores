@@ -1,5 +1,5 @@
 /**
- * Modelos 3D de los servidores (§4). Geometrías y materiales compartidos; las piezas
+ * Modelos 3D de los servidores. Geometrías y materiales compartidos; las piezas
  * repetidas son InstancedMesh con color por instancia. Cada nodo guarda la lista de
  * sus piezas (malla, índice de instancia y matriz local) para poder escalarlo en hover.
  *

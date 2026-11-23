@@ -1,5 +1,5 @@
 /**
- * Minimapa SVG 200×130 compartido por ambos modos (§8): nodos como puntos coloreados
+ * Minimapa SVG 200×130 compartido por ambos modos: nodos como puntos coloreados
  * por estado, aristas como líneas finas, y el encuadre (rectángulo en 2D, trapecio
  * de la huella de la cámara en 3D). Clic o arrastre centra la vista.
  */

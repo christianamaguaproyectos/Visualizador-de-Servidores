@@ -1,5 +1,5 @@
 /**
- * Escena 3D del mapa de dependencias (§7). Se carga con import() dinámico solo al
+ * Escena 3D del mapa de dependencias. Se carga con import() dinámico solo al
  * entrar en el modo 3D: el Editor 2D nunca descarga three.js.
  *
  * Render bajo demanda: solo hay bucle continuo mientras hay animación (partículas,

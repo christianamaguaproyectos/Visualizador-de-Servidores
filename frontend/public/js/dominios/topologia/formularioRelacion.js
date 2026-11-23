@@ -1,5 +1,5 @@
 /**
- * Formulario rápido de crear / editar relación (§8): modal accesible con foco
+ * Formulario rápido de crear / editar relación: modal accesible con foco
  * atrapado, combobox buscable de origen y destino, invertir y relación mutua.
  */
 import { h, atraparFoco } from './dom.js';

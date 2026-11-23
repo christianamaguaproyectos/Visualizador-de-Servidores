@@ -61,7 +61,7 @@ export const TIPOS_SERVIDOR = Object.freeze({
   virtuales: { badge: 'VM', texto: 'Virtual', ruta: '/virtuales' },
 });
 
-/** Separación de curvas (§5): en unidades 3D y su equivalente en px 2D */
+/** Separación de curvas: en unidades 3D y su equivalente en px 2D */
 export const SEPARACION = Object.freeze({
   bidireccional3d: 0.9,
   bidireccional2d: 28,

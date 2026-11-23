@@ -1,5 +1,5 @@
 /**
- * Etiquetas CSS2D de los nodos (§4.1) con nivel de detalle por distancia.
+ * Etiquetas CSS2D de los nodos con nivel de detalle por distancia.
  * El DOM se construye con createElement/textContent (nunca innerHTML con datos).
  * CSS2DRenderer las posiciona con element.style.transform (CSSOM, permitido por la CSP).
  */

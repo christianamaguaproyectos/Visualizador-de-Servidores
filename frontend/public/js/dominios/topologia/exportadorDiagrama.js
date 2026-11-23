@@ -1,5 +1,5 @@
 /**
- * Exportación del diagrama (§8): SVG, PNG ×2 y JSON del 2D; PNG del 3D.
+ * Exportación del diagrama: SVG, PNG ×2 y JSON del 2D; PNG del 3D.
  * Las descargas usan blob: (img-src blob: está permitido por la CSP).
  */
 

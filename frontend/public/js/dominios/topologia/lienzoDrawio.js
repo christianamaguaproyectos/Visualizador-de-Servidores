@@ -1,5 +1,5 @@
 /**
- * Editor 2D estilo Draw.io (§8): SVG con tarjetas arrastrables (ajuste a 10 px),
+ * Editor 2D estilo Draw.io: SVG con tarjetas arrastrables (ajuste a 10 px),
  * 4 puertos por tarjeta, conexión arrastrando con línea guía, flechas Bézier,
  * zoom al cursor, paneo y encuadre.
  *

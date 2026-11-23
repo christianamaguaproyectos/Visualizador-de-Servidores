@@ -68,7 +68,7 @@ export function normalCanonica(a, b, idA, idB) {
 const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 
 /**
- * Punto de control de la curva cuadrática 3D (§5).
+ * Punto de control de la curva cuadrática 3D.
  * @param {number[]} p0 [x,y,z]  @param {number[]} p1 [x,y,z]
  * @param {number[]} n [nx, nz] normal canónica  @param {number} off desplazamiento con signo
  * @param {number} k índice de paralela

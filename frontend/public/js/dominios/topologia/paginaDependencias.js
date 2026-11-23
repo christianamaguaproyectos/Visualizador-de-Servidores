@@ -726,6 +726,6 @@ export async function iniciarPaginaDependencias() {
       setTimeout(() => seleccionar({ tipo: 'nodo', id: focoInicial }, { enfocar: true, parpadeo: true }), 50);
     } else toast('El servidor no tiene relaciones en esta vista', 'warning');
   }
-  // Exposición mínima para pruebas automatizadas del prototipo
+  // Exposición mínima para las pruebas automatizadas en navegador
   window.__topologia = { estado, escena: () => escena, lienzo, simulador };
 }
