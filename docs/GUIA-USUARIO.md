@@ -162,7 +162,10 @@ La vista 3D representa el centro de datos como una **sala ordenada**:
 
 - **Infraestructura:** los servidores físicos se agrupan por su rack en bloques alineados, organizados en filas (`Fila A · RACK-01`, `Fila B · …`).
 - **Virtualización:** cada host aparece al frente de su bloque con sus máquinas virtuales en cuadrícula detrás (`Host …`); las VMs de un clúster sin host físico en el mapa se agrupan en su propio bloque (`Clúster …`).
-- Los servidores físicos se dibujan como equipos de rack y las VMs como cubos translúcidos. Las relaciones son arcos que pasan por encima de los equipos, con partículas que avanzan del origen al destino.
+- Los servidores físicos se dibujan como gabinetes de rack (armario alto con sus unidades y luces de estado) y las VMs como cubos translúcidos. Cada fila, host, clúster y área lleva su rótulo en el borde frontal.
+- Las relaciones son arcos que pasan por encima de los equipos (más altos cuanto más lejos está el destino), con partículas que avanzan del origen al destino. Al pasar el puntero sobre un servidor, o al seleccionarlo, sus relaciones se resaltan y las demás se atenúan.
+- Los nombres de los servidores nunca se superponen: si dos chocan, uno se eleva con una línea guía hacia su equipo o se oculta temporalmente; las etiquetas de los servidores seleccionados, caídos o afectados tienen prioridad. Al pasar el puntero sobre un servidor se muestra su ficha breve con el nombre completo.
+- Al abrir el mapa (y con **Encajar**) la cámara se ajusta para que todo el contenido ocupe la vista.
 
 | Acción | Cómo |
 |--------|------|
