@@ -96,9 +96,12 @@ test('huecos libres y primera posición libre (de abajo arriba)', () => {
 });
 
 test('la vista de rack de /fisicos usa la misma función de colocación', () => {
+  // app.js dibuja los racks con gabineteRack.js, que coloca los servidores con colocarEnRack
   const app = fs.readFileSync(new URL('../../frontend/public/app.js', import.meta.url), 'utf8');
-  assert.match(app, /import \{[^}]*colocarEnRack[^}]*\} from '\/js\/dominios\/hosts\/colocacionRack\.js'/);
-  assert.match(app, /colocarEnRack\(servers \|\| \[\], totalUnits\)/);
+  const gabinete = fs.readFileSync(new URL('../../frontend/public/js/dominios/hosts/gabineteRack.js', import.meta.url), 'utf8');
+  assert.match(app, /import \{[^}]*construirGabineteHtml[^}]*\} from '\/js\/dominios\/hosts\/gabineteRack\.js'/);
+  assert.match(gabinete, /import \{[^}]*colocarEnRack[^}]*\} from '\.\/colocacionRack\.js'/);
+  assert.match(gabinete, /colocarEnRack\(servidores, total\)/);
 });
 
 test('formatearDiscos: slots en JSON o texto libre', () => {
