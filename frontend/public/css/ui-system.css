@@ -190,7 +190,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 30000;
+  z-index: 100500; /* por encima de las ventanas de formulario (z-index 100000) */
   padding: 16px;
   animation: ui-fundido var(--dur-media) ease;
 }
