@@ -464,7 +464,14 @@ router.delete('/:id', requireAdmin, async (req, res) => {
 router.post('/:id/maintenance', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { duration_hours = 1, comment = '' } = req.body;
+    const { duration_hours = 1, comment = '' } = req.body || {};
+    const horas = Number(duration_hours);
+    if (!Number.isFinite(horas) || horas <= 0 || horas > 168) {
+      return res.status(400).json({ error: 'duration_hours debe ser un número entre 0 y 168' });
+    }
+    if (typeof comment !== 'string' || comment.length > 500) {
+      return res.status(400).json({ error: 'comment debe ser texto de hasta 500 caracteres' });
+    }
 
     const ends_at = await withTransaction(async (client) => {
       // Actualizar estado del host
@@ -474,7 +481,7 @@ router.post('/:id/maintenance', requireAdmin, async (req, res) => {
 
       // Crear ventana de mantenimiento
       const starts_at = new Date();
-      const ends = new Date(starts_at.getTime() + duration_hours * 60 * 60 * 1000);
+      const ends = new Date(starts_at.getTime() + horas * 60 * 60 * 1000);
 
       await client.query(`
         INSERT INTO maintenance_windows (scope_type, target_ids, starts_at, ends_at, comment)
@@ -484,7 +491,7 @@ router.post('/:id/maintenance', requireAdmin, async (req, res) => {
       return ends;
     });
 
-    Logger.info(`Host ${id} puesto en mantenimiento por ${duration_hours}h`);
+    Logger.info(`Host ${id} puesto en mantenimiento por ${horas}h`);
     res.json({ success: true, ends_at });
   } catch (err) {
     Logger.error('Error poniendo en mantenimiento:', err.message);

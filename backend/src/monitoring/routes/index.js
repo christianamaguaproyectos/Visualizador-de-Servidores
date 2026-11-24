@@ -16,6 +16,7 @@ import hostsRoutes from './hostsRoutes.js';
 import incidentsRoutes from './incidentsRoutes.js';
 import maintenanceRoutes from './maintenanceRoutes.js';
 import alertRecipientsRoutes from './alertRecipientsRoutes.js';
+import telemetryRoutes from './telemetryRoutes.js';
 
 const router = express.Router();
 const syncRateLimiter = createRateLimiter({
@@ -30,6 +31,7 @@ router.use('/hosts', hostsRoutes);
 router.use('/incidents', incidentsRoutes);
 router.use('/maintenance', requireAdmin, maintenanceRoutes);
 router.use('/alert-recipients', alertRecipientsRoutes);
+router.use('/telemetry', telemetryRoutes);
 
 // === Rutas generales de monitoreo ===
 
