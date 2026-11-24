@@ -1,6 +1,7 @@
 import { inicializarGestorDiscos } from '/js/dominios/hosts/gestorDiscos.js';
 import { construirResumenRacksHtml } from '/js/dominios/hosts/resumenRacks.js';
-import { colocarEnRack, normalizarUnidades, formatearDiscos } from '/js/dominios/hosts/colocacionRack.js';
+import { formatearDiscos } from '/js/dominios/hosts/colocacionRack.js';
+import { construirGabineteHtml, construirLeyendaHtml, aplicarEstadosMonitoreo, contarMonitoreo, normalizarCriticidad, claveMonitoreo, CRITICIDADES, ESTADOS_MONITOREO } from '/js/dominios/hosts/gabineteRack.js';
 import { confirmAction } from '/js/dominios/ui-system/modalConfirm.js';
 import { trackUIEvent } from '/js/dominios/ui-system/uxTelemetry.js';
 import { escapeHtml, textoSeguro } from '/js/dominios/ui-system/seguridadHtml.js';
@@ -165,6 +166,8 @@ document.addEventListener('DOMContentLoaded', function () {
   window.populateDiscos = populateDiscos;
   // serverManager.js la usa para refrescar la vista después de guardar o eliminar
   window.recargarDatosServidores = () => fetchData();
+  // rackDragDrop.js recarga la vista con esta función tras mover un servidor
+  window.loadAllData = () => fetchData();
 
 
 
@@ -181,6 +184,42 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
   let DATA = { racks: [], servers: [], meta: {} };
+  // Estado de monitoreo en vivo por servidor (id → UP/DOWN/DEGRADED/MAINTENANCE/UNKNOWN), solo físicos
+  let estadosMonitoreo = new Map();
+  let estadosMonitoreoCargados = false;
+  let consultandoMonitoreo = false;
+
+  async function cargarEstadosMonitoreo() {
+    if (isVirtuales || consultandoMonitoreo) return;
+    consultandoMonitoreo = true;
+    try {
+      // Mismo origen que el Mapa de Dependencias: incluye los servidores sin relaciones
+      const grafo = await apiJson('/api/topology/graph?includeIsolated=true');
+      const mapa = new Map();
+      for (const n of grafo?.nodes || []) mapa.set(String(n.id), n.monitoring ? n.status : 'UNKNOWN');
+      estadosMonitoreo = mapa;
+      estadosMonitoreoCargados = true;
+      aplicarEstadosMonitoreo(document, estadosMonitoreo);
+      document.querySelectorAll('[data-led-texto]').forEach((el) => {
+        el.textContent = ESTADOS_MONITOREO[claveMonitoreo(estadosMonitoreo.get(el.getAttribute('data-led-texto')))].texto;
+      });
+      // Contadores por estado en la leyenda de la vista general
+      const conteos = contarMonitoreo((DATA.racks || []).flatMap((r) => r.servers || []), estadosMonitoreo);
+      const leyenda = document.querySelector('#app > .gab-leyenda');
+      if (leyenda && !leyenda.querySelector('[data-conteo-monitoreo]')) {
+        leyenda.outerHTML = construirLeyendaHtml({ conteos });
+      } else {
+        document.querySelectorAll('[data-conteo-monitoreo]').forEach((el) => { el.textContent = String(conteos[el.getAttribute('data-conteo-monitoreo')] || 0); });
+      }
+    } catch (_) {
+      // Sin monitoreo disponible: los LED quedan como "sin datos"
+    } finally {
+      consultandoMonitoreo = false;
+    }
+  }
+  if (!isVirtuales) {
+    setInterval(() => { if (document.visibilityState === 'visible') cargarEstadosMonitoreo(); }, 30000);
+  }
 
   let lastUpdatedAt = null; // Para detectar cambios y mostrar toast
 
@@ -707,19 +746,8 @@ document.addEventListener('DOMContentLoaded', function () {
   // Normaliza el estado del servidor a: critico, activo, normal
 
   function normalizeEstado(estado) {
-
-    const e = (estado || '').toString().toLowerCase().trim()
-
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // Remover acentos
-
-    if (e.includes('critico') || e.includes('crit')) return 'critico';
-
-    if (e.includes('mant')) return 'mantenimiento';
-
-    if (e.includes('inactivo') || e === 'no' || e === 'apagado') return 'inactivo';
-
-    return 'no_critico'; // Por defecto
-
+    // "NO_CRITICO" es no crítico (antes contaba como crítico por contener la palabra)
+    return normalizarCriticidad(estado, estado);
   }
 
   function getRackStatusSummary(servers = []) {
@@ -1054,75 +1082,49 @@ document.addEventListener('DOMContentLoaded', function () {
         globalIndex: pager.start + idx
       }));
 
+      const totalPorEstado = contarMonitoreo(orderedRacks.flatMap((r) => r.servers || []), estadosMonitoreo);
       app.innerHTML = `
-
       ${renderErrorBlock(DATA.meta?.error)}
-
       ${renderPhysicalPaginationControls(pager)}
-
-      <div class="rack-grid">
-
-        ${visibleRacks.map(({ rack: r, globalIndex: i }) => {
-          const summary = getRackStatusSummary(r.servers || []);
-          const modelPreview = getRackModelPreview(r.servers || []);
+      ${construirLeyendaHtml({ conteos: estadosMonitoreoCargados ? totalPorEstado : null })}
+      <div class="gab-grid rack-grid--gab">
+        ${visibleRacks.map(({ rack: r }) => {
+          const servidores = r.servers || [];
+          const summary = getRackStatusSummary(servidores);
+          const modelPreview = getRackModelPreview(servidores);
+          const gab = construirGabineteHtml({
+            nombreRack: r.name,
+            servidores,
+            estados: estadosMonitoreo,
+            detalle: SHOW_SERVER_LABELS,
+            numeracionAscendente: /^rack\s*1$/i.test((r.name || '').trim()),
+          });
+          const pct = Math.round((gab.ocupadas / 42) * 100);
+          const nombre = encodeURIComponent(r.name);
           return `
-
-          <div class="rack" data-view="rack" data-idx="${DATA.racks.findIndex(rack => rack.name === r.name)}" data-name="${encodeURIComponent(r.name)}" data-rack-name="${encodeURIComponent(r.name)}" title="Ver detalle de ${fmt(r.name)}">
-
-            <div class="rack-chassis">
-
-              <div class="rack-title-badge">${fmt(r.name)}</div>
-
-              <div class="rack-units">
-
-                ${generateRackUnits(r.servers.length, r.name, r.servers, SHOW_SERVER_LABELS)}
-
+          <article class="gab-card" data-rack-name="${escapeHtml(nombre)}" data-name="${escapeHtml(nombre)}" data-idx="${DATA.racks.findIndex(rack => rack.name === r.name)}" aria-label="Rack ${escapeHtml(r.name)}">
+            <div class="gab-card__cab rack-content">
+              <div>
+                <h2>${escapeHtml(r.name)}</h2>
+                <div class="gab-card__sub">${servidores.length} servidores instalados</div>
               </div>
-
-              <div class="rack-base"></div>
-
+              <span class="gab-card__ocup" title="Unidades ocupadas">${gab.ocupadas}/42U</span>
             </div>
-
-            <div class="rack-content">
-
-              <div class="rack-content__header">
-
-                <span class="rack-content__icon" aria-hidden="true">🗄️️</span>
-
-                <div class="rack-content__info">
-
-                  <h2>${fmt(r.name)}</h2>
-
-                  <div class="muted">${r.servers.length} servidores instalados</div>
-
-                  <div class="rack-content__stats">
-                    <span class="rack-kpi rack-kpi--critical">🔴 ${summary.criticos}</span>
-                    <span class="rack-kpi rack-kpi--active">🟢 ${summary.noCriticos}</span>
-                    <span class="rack-kpi rack-kpi--maint">🛠️ ${summary.mantenimiento}</span>
-                  </div>
-
-                </div>
-
-                <span class="rack-content__count" title="Unidades ocupadas">${Math.min(r.servers.length * 2, 42)}U</span>
-
-              </div>
-
-              <div class="rack-tech-hint" aria-label="Detalle tecnico del rack ${fmt(r.name)}">
-                <div class="rack-tech-hint__row"><strong>Ocupacion:</strong> ${summary.occupiedUnits}U de 42U (${summary.occupancyPct}%)</div>
-                <div class="rack-tech-hint__row"><strong>Modelos:</strong> ${modelPreview}</div>
-              </div>
-
+            <div class="gab-card__kpis">
+              <span class="gab-kpi" title="Críticos"><span class="gab-crit gab-crit--critico" aria-hidden="true"></span>${summary.criticos}</span>
+              <span class="gab-kpi" title="No críticos"><span class="gab-crit gab-crit--no-critico" aria-hidden="true"></span>${summary.noCriticos}</span>
+              <span class="gab-kpi" title="En mantenimiento"><span class="gab-crit gab-crit--mantenimiento" aria-hidden="true"></span>${summary.mantenimiento}</span>
             </div>
-
-          </div>
-
-        `;
+            <div class="gab-barra" title="Ocupación ${pct}%"><span class="gab-ancho-${Math.min(100, Math.round(pct / 5) * 5)}"></span></div>
+            ${gab.html}
+            <div class="rack-tech-hint ${SHOW_SERVER_LABELS ? 'mostrar' : ''}" aria-label="Detalle técnico del rack ${escapeHtml(r.name)}">
+              <div class="rack-tech-hint__row"><strong>Ocupación:</strong> ${gab.ocupadas}U de 42U (${pct}%) · ${gab.libres}U libres</div>
+              <div class="rack-tech-hint__row"><strong>Modelos:</strong> ${escapeHtml(modelPreview)}</div>
+            </div>
+          </article>`;
         }).join('')}
-
       </div>
-
     `;
-
       const paginationEl = document.getElementById('rackPagination');
       paginationEl?.addEventListener('click', (event) => {
         const btn = event.target.closest('[data-rack-page-action]');
@@ -1174,257 +1176,7 @@ document.addEventListener('DOMContentLoaded', function () {
         totalRacks: racks.length
       });
 
-      // Ajustar el ancho de cada rack para que quepan todos sin scroll horizontal
-
-      try {
-
-        const grid = document.querySelector('.rack-grid');
-
-        const count = grid ? grid.querySelectorAll('.rack').length : 0;
-
-        if (grid && count > 0) {
-
-          grid.style.setProperty('--rack-count', String(count));
-
-          // Gap base adaptable según el ancho disponible
-
-          const vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
-
-          const gap = vw < 1400 ? 16 : 20;
-
-          grid.style.setProperty('--rack-gap', gap + 'px');
-
-          if (SHOW_SERVER_LABELS) {
-
-            // Calcular ancho de etiquetas lateral según ancho de rack
-
-            const rackWidth = (grid.clientWidth - (count - 1) * gap) / count;
-
-            const labelsW = Math.max(180, Math.min(280, Math.floor(rackWidth * 0.46)));
-
-            grid.style.setProperty('--labels-w', labelsW + 'px');
-
-          } else {
-
-            grid.style.setProperty('--labels-w', '0px');
-
-          }
-
-        }
-
-        // Alinear etiquetas solo si están activadas
-
-        const alignServerLabels = () => {
-
-          if (!SHOW_SERVER_LABELS) return;
-
-          document.querySelectorAll('.rack').forEach(rackEl => {
-
-            const unitsInner = rackEl.querySelector('.rack-units-inner');
-
-            const labelsEl = rackEl.querySelector('.rack-labels');
-
-            if (!unitsInner || !labelsEl) return;
-
-
-
-            const rackUnits = Array.from(unitsInner.querySelectorAll('.rack-unit'));
-
-            const labels = Array.from(labelsEl.querySelectorAll('.server-label'));
-
-
-
-            if (rackUnits.length === 0) return;
-
-            // Mantener etiquetas alineadas cuando el usuario hace scroll interno.
-            if (!unitsInner.dataset.labelsScrollBound) {
-              unitsInner.addEventListener('scroll', () => {
-                requestAnimationFrame(() => {
-                  try { alignServerLabels(); } catch (_) { }
-                });
-              }, { passive: true });
-
-              const unitsContainer = rackEl.querySelector('.rack-units');
-              if (unitsContainer && !unitsContainer.dataset.wheelBound) {
-                unitsContainer.addEventListener('wheel', (event) => {
-                  const canScroll = unitsInner.scrollHeight > unitsInner.clientHeight;
-                  if (!canScroll) return;
-                  unitsInner.scrollTop += event.deltaY;
-                  event.preventDefault();
-                }, { passive: false });
-                unitsContainer.dataset.wheelBound = '1';
-              }
-              unitsInner.dataset.labelsScrollBound = '1';
-            }
-
-
-
-            // Fase 1: Calcular posiciones ideales (centro del servidor)
-            const labelData = [];
-            const labelsRect = labelsEl.getBoundingClientRect();
-
-            labelsEl.classList.remove('labels-dense', 'labels-compact');
-
-            labels.forEach(lbl => {
-              const unitIndex = parseInt(lbl.getAttribute('data-unit-index') || '0', 10);
-              const span = Math.max(1, parseInt(lbl.getAttribute('data-unit-span') || '1', 10) || 1);
-              if (isNaN(unitIndex) || unitIndex < 0 || unitIndex >= rackUnits.length) {
-                lbl.style.display = 'none';
-                return;
-              }
-
-              const firstUnit = rackUnits[unitIndex];
-              const lastUnitIndex = Math.min(rackUnits.length - 1, unitIndex + span - 1);
-              const lastUnit = rackUnits[lastUnitIndex];
-              if (!firstUnit || !lastUnit) {
-                lbl.style.display = 'none';
-                return;
-              }
-
-              lbl.style.display = '';
-
-              const firstRect = firstUnit.getBoundingClientRect();
-              const lastRect = lastUnit.getBoundingClientRect();
-
-              // Centro del servidor relativo al contenedor de etiquetas
-              const serverCenter = ((firstRect.top + lastRect.bottom) / 2) - labelsRect.top;
-
-              // Medir alto real de la etiqueta
-              lbl.style.top = '0px';
-              lbl.style.visibility = 'hidden';
-              const lblH = lbl.offsetHeight || 20;
-              lbl.style.visibility = '';
-
-              labelData.push({ el: lbl, idealTop: serverCenter, height: lblH });
-            });
-
-            // Fase 2: Posicionar etiquetas, resolver solapamientos solo cuando los haya
-            if (labelData.length > 0) {
-              const minGap = 1;
-
-              // Ordenar por posición ideal
-              labelData.sort((a, b) => a.idealTop - b.idealTop);
-
-              // Iniciar con posiciones ideales (top edge)
-              const tops = labelData.map(d => d.idealTop - d.height / 2);
-
-              // Solo resolver solapamientos entre etiquetas adyacentes
-              for (let i = 1; i < tops.length; i++) {
-                const prevBottom = tops[i - 1] + labelData[i - 1].height + minGap;
-                if (tops[i] < prevBottom) {
-                  tops[i] = prevBottom;
-                }
-              }
-
-              // Si hay muchas etiquetas y poco espacio, reducir tamaño
-              const containerH = labelsRect.height || labelsEl.clientHeight || 1;
-              const avgSpace = containerH / labelData.length;
-              let scaleCls = '';
-              if (avgSpace < 28) scaleCls = 'labels-dense';
-              else if (avgSpace < 38) scaleCls = 'labels-compact';
-              if (scaleCls) labelsEl.classList.add(scaleCls);
-
-              // Aplicar posiciones (center para CSS translateY(-50%))
-              labelData.forEach((d, i) => {
-                d.el.style.top = `${Math.round(tops[i] + d.height / 2)}px`;
-              });
-            }
-
-          });
-
-        };
-
-        requestAnimationFrame(() => alignServerLabels());
-
-        // También llamar después de un breve delay para asegurar que el layout esté completo
-
-        setTimeout(() => alignServerLabels(), 100);
-
-        // Recalcular en resize
-
-        const onResize = () => {
-
-          const vw2 = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
-
-          const gap2 = vw2 < 1400 ? 16 : 20;
-
-          const grid2 = document.querySelector('.rack-grid');
-
-          grid2?.style.setProperty('--rack-gap', gap2 + 'px');
-
-          if (grid2) {
-
-            const cnt2 = grid2.querySelectorAll('.rack').length;
-
-            const rackWidth2 = (grid2.clientWidth - (cnt2 - 1) * gap2) / cnt2;
-
-            if (SHOW_SERVER_LABELS) {
-
-              const labelsW2 = Math.max(180, Math.min(280, Math.floor(rackWidth2 * 0.46)));
-
-              grid2.style.setProperty('--labels-w', labelsW2 + 'px');
-
-            } else {
-
-              grid2.style.setProperty('--labels-w', '0px');
-
-            }
-
-          }
-
-          // Reajustar posiciones de etiquetas tras el reflow
-
-          requestAnimationFrame(() => {
-
-            try { alignServerLabels(); } catch (_) { }
-
-          });
-
-        };
-
-        window.addEventListener('resize', onResize, { passive: true });
-
-      } catch (_) { }
-
-      // Vincular scroll wheel en rack-units para que funcione con y sin etiquetas
-      try {
-        document.querySelectorAll('.rack').forEach(rackEl => {
-          const unitsContainer = rackEl.querySelector('.rack-units');
-          const unitsInner = rackEl.querySelector('.rack-units-inner');
-          if (unitsContainer && unitsInner && !unitsContainer.dataset.wheelBound) {
-            unitsContainer.addEventListener('wheel', (event) => {
-              const canScroll = unitsInner.scrollHeight > unitsInner.clientHeight;
-              if (!canScroll) return;
-              unitsInner.scrollTop += event.deltaY;
-              event.preventDefault();
-            }, { passive: false });
-            unitsContainer.dataset.wheelBound = '1';
-          }
-        });
-      } catch (_) { }
-
       wirePhysicalUX();
-
-      // Asignar clases few-servers / many-servers según cantidad
-
-      try {
-
-        document.querySelectorAll('.rack').forEach(rackEl => {
-
-          const units = rackEl.querySelector('.rack-units');
-
-          const count = units?.querySelectorAll('.rack-unit').length || 0;
-
-          units?.classList.remove('few-servers', 'many-servers');
-
-          if (count <= 10) units?.classList.add('few-servers');
-
-          else if (count >= 28) units?.classList.add('many-servers');
-
-        });
-
-      } catch (_) { }
-
     }
 
 
@@ -2873,166 +2625,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-  function generateRackUnits(serverCount, rackName, servers, withLabels = false) {
-
-    const units = [];
-
-    const totalUnits = 42;
-    // Rack 1 muestra numeración 1→42; los demás 42→1
-    const isReversedRack = /^rack\s*1$/i.test((rackName || '').trim());
-
-    // Colocación por unidades: regla compartida con la sala de racks 3D (colocacionRack.js)
-    const occupiedUnits = new Array(totalUnits).fill(false);
-    const serverColors = new Array(totalUnits).fill('off');
-    const serverInfo = new Array(totalUnits).fill(null);
-    const serverIds = new Array(totalUnits).fill(null);
-    const serverIPs = new Array(totalUnits).fill('');
-    const serverHNs = new Array(totalUnits).fill('');
-    const serverSpanByUnit = new Array(totalUnits).fill(0);
-
-    const colocacion = colocarEnRack(servers || [], totalUnits);
-    colocacion.porUnidad.forEach((dueno, idx) => {
-      if (dueno < 0) return;
-      const serverData = servers[dueno];
-      // Color del servidor según su estado de inventario
-      const estadoNorm = normalizeEstado(serverData.estado || serverData.activo || '');
-      let serverColor = 'green'; // Activo/Normal
-      if (estadoNorm === 'critico') serverColor = 'red';
-      else if (estadoNorm === 'inactivo') serverColor = 'gray';
-      else if (estadoNorm === 'mantenimiento') serverColor = 'orange';
-      occupiedUnits[idx] = true;
-      serverColors[idx] = serverColor;
-      serverInfo[idx] = `IP: ${fmt(serverData.ip)}&#10;Hostname: ${fmt(serverData.hostname || serverData.nombre)}`;
-      serverIds[idx] = serverData.id;
-      serverIPs[idx] = serverData.ip || '';
-      serverHNs[idx] = serverData.hostname || serverData.nombre || '';
-      serverSpanByUnit[idx] = normalizarUnidades(serverData.rackUnits ?? serverData.rack_units);
-    });
-
-    // Alternancia robusta basada en el orden visual final dentro del rack.
-    const visualServerOrderByUnit = new Array(totalUnits).fill(-1);
-    let visualServerOrder = 0;
-    for (let i = 0; i < totalUnits; i++) {
-      if (!occupiedUnits[i]) continue;
-      const isServerStart = i === 0 || !occupiedUnits[i - 1] || serverIds[i] !== serverIds[i - 1];
-      if (isServerStart) {
-        visualServerOrderByUnit[i] = visualServerOrder;
-        visualServerOrder++;
-      } else {
-        visualServerOrderByUnit[i] = visualServerOrderByUnit[i - 1];
-      }
-    }
-
-    for (let i = 0; i < totalUnits; i++) {
-
-      const isServer = occupiedUnits[i];
-
-      const isFirstUnitOfServer = isServer && (i === 0 || serverIds[i] !== serverIds[i - 1]);
-
-      const statusColor = serverColors[i];
-
-      const tooltip = serverInfo[i] ? `title="${serverInfo[i]}&#10;Arrastrar para mover a otro rack"` : '';
-
-      const sid = serverIds[i];
-
-      const dataAttrs = sid ? `data-view="server" data-id="${encodeURIComponent(sid)}" data-server-id="${encodeURIComponent(sid)}"` : '';
-
-      const draggableAttr = isFirstUnitOfServer && sid ? 'draggable="true"' : '';
-
-      const ip = serverIPs[i] || '';
-
-      const hn = serverHNs[i] || '';
-
-      const serverNameAttr = hn ? `data-server-name="${encodeURIComponent(hn)}"` : '';
-
-
-
-      // Obtener estado normalizado para el filtro desde los datos del servidor
-
-      const serverDataForUnit = servers?.find(s => s.id === sid);
-
-      const estadoAttr = serverDataForUnit ? normalizeEstado(serverDataForUnit.estado || serverDataForUnit.activo || '') : 'activo';
-      const srvParity = (isServer && visualServerOrderByUnit[i] >= 0) ? (visualServerOrderByUnit[i] % 2 === 0 ? 'server-even' : 'server-odd') : '';
-
-
-
-      units.push(`
-
-      <div class="rack-unit ${isServer ? 'active' : 'inactive'} ${isFirstUnitOfServer ? 'server-top' : ''} ${srvParity}" ${tooltip} ${dataAttrs} ${draggableAttr} ${serverNameAttr} data-position="${totalUnits - i}" data-estado="${estadoAttr}">
-
-        <div class="unit-panel">
-
-          <div class="unit-led ${statusColor}"></div>
-
-          <div class="unit-label">${String(isReversedRack ? (i + 1) : (totalUnits - i)).padStart(2, '0')}</div>
-
-          <div class="unit-led ${statusColor}"></div>
-
-        </div>
-
-      </div>
-
-    `);
-
-    }
-
-
-
-    if (!withLabels) {
-
-      return `<div class="rack-units-inner">${units.join('')}</div>`;
-
-    }
-
-
-
-    // Generar superposición de etiquetas a la derecha (una por servidor)
-
-    let labels = '';
-
-    try {
-
-      let uIndex = 0;
-
-      while (uIndex < totalUnits) {
-
-        if (occupiedUnits[uIndex] && (uIndex === 0 || serverIds[uIndex] !== serverIds[uIndex - 1])) {
-
-          const ip = serverIPs[uIndex] || '';
-
-          const hn = serverHNs[uIndex] || '';
-
-          const sid = serverIds[uIndex] ? encodeURIComponent(serverIds[uIndex]) : '';
-
-          const showIp = fmt(ip || '—');
-
-          const showHn = fmt(hn || '—');
-          const span = Math.max(1, Number(serverSpanByUnit[uIndex] || 1));
-
-          // Guardar el índice de inicio del servidor (se usará en JS para calcular posición dinámica)
-
-          labels += `<div class="server-label" data-unit-index="${uIndex}" data-unit-span="${span}" data-view="server" data-id="${sid}"><span class="ip">${showIp}</span><span class="sep">·</span><span class="hn">${showHn}</span></div>`;
-
-          uIndex++;
-
-        } else {
-
-          uIndex++;
-
-        }
-
-      }
-
-    } catch (_) { }
-
-
-
-    return `<div class="rack-units-inner">${units.join('')}</div><div class="rack-labels">${labels}</div>`;
-
-  }
-
-
-
   function resolveRack({ idx, name }) {
 
     const racks = DATA.racks || [];
@@ -3089,77 +2681,68 @@ document.addEventListener('DOMContentLoaded', function () {
 
     virtualState.currentRackName = rack.name;
 
-
+    const itemServidor = (s) => {
+      const crit = normalizeEstado(s.estado || s.activo || '');
+      const mon = ESTADOS_MONITOREO[claveMonitoreo(estadosMonitoreo.get(String(s.id)))];
+      const estadoHtml = isVirtuales
+        ? fmt(s.estado)
+        : `<span class="gab-crit gab-crit--${crit.replace('_', '-')}" aria-hidden="true"></span>${escapeHtml(CRITICIDADES[crit].texto)}`;
+      const ledHtml = isVirtuales ? ''
+        : `<div class="server-led-linea"><span class="gab-led gab-led--${mon.clase}" data-led-id="${escapeHtml(String(s.id))}" aria-hidden="true"></span>Monitoreo: <span data-led-texto="${escapeHtml(String(s.id))}">${escapeHtml(mon.texto)}</span></div>`;
+      return `
+          <div class="server-item" draggable="true" title="IP: ${fmt(s.ip)}&#10;Hostname: ${fmt(s.nombre || s.hostname)}&#10;Arrastrar para mover a otro rack">
+            <div class="server-info u-flex-1 u-puntero" data-view="server" data-id="${encodeURIComponent(s.id)}">
+              <div class="server-name">${fmt(s.nombre || s.hostname)}</div>
+              <div class="server-ip">${fmt(s.ip)}</div>
+              <div class="server-model">${fmt(s.marca)} ${fmt(s.modelo)}</div>
+              ${ledHtml}
+            </div>
+            <div class="server-status ${statusClass(s.estado)}">
+              ${estadoHtml}
+            </div>
+            <div class="u-fila-gap-5">
+              <button class="server-btn-edit" data-server-id="${encodeURIComponent(s.id)}" title="Editar servidor">✏️</button>
+              <button class="server-btn-delete" data-server-id="${encodeURIComponent(s.id)}" data-server-name="${encodeURIComponent(s.hostname || s.nombre || '')}" title="Eliminar servidor">🗑️</button>
+            </div>
+          </div>`;
+    };
+    const listaHtml = `<div class="rack-servers-list">${rack.servers.map(itemServidor).join('')}</div>`;
+    // Físicos: el rack dibujado como gabinete (cada servidor en su U) junto a la lista del inventario
+    let cuerpoHtml = listaHtml;
+    let ocupacionHtml = '';
+    if (!isVirtuales) {
+      const gab = construirGabineteHtml({
+        nombreRack: rack.name,
+        servidores: rack.servers,
+        estados: estadosMonitoreo,
+        grande: true,
+        detalle: true,
+        numeracionAscendente: /^rack\s*1$/i.test((rack.name || '').trim()),
+      });
+      ocupacionHtml = ` · ${gab.ocupadas}/42U ocupadas · ${gab.libres}U libres`;
+      cuerpoHtml = `<div class="rack-detail__cuerpo">
+        <div class="rack-detail__gab">${gab.html}</div>
+        <div>${listaHtml}${construirLeyendaHtml()}</div>
+      </div>`;
+    }
 
     app.innerHTML = `
-
     <div class="scrollable">
-
     ${renderErrorBlock(DATA.meta?.error)}
-
-    <div class="rack-detail">
-
+    <div class="rack-detail ${isVirtuales ? '' : 'rack-detail--gab'}" data-rack-name="${encodeURIComponent(rack.name)}">
       <div class="rack-detail-header">
-
         <h2>${fmt(rack.name)}</h2>
-
-        <div class="muted">${rack.servers.length} servidores</div>
-
+        <div class="muted">${rack.servers.length} servidores${ocupacionHtml}</div>
         <div class="u-fila-gap-10">
-
           ${isVirtuales ? `<button id="btnAddVMToHost" class="home-btn btn-color-verde" title="Agregar VM a este host">➕ Agregar VM</button>` : ''}
-
           <button id="btnDeleteRack" class="home-btn btn-color-rojo" title="Eliminar rack">🗑️ Eliminar Rack</button>
-
           <button id="btnBackRackDetail" class="back-btn">← Volver</button>
-
         </div>
-
       </div>
-
-      <div class="rack-servers-list">
-
-        ${rack.servers.map(s => `
-
-          <div class="server-item" draggable="true" title="IP: ${fmt(s.ip)}&#10;Hostname: ${fmt(s.nombre || s.hostname)}&#10;Arrastrar para mover a otro rack">
-
-            <div class="server-info u-flex-1 u-puntero" data-view="server" data-id="${encodeURIComponent(s.id)}">
-
-              <div class="server-name">${fmt(s.nombre || s.hostname)}</div>
-
-              <div class="server-ip">${fmt(s.ip)}</div>
-
-              <div class="server-model">${fmt(s.marca)} ${fmt(s.modelo)}</div>
-
-            </div>
-
-            <div class="server-status ${statusClass(s.estado)}">
-
-              ${fmt(s.estado)}
-
-            </div>
-
-            <div class="u-fila-gap-5">
-
-              <button class="server-btn-edit" data-server-id="${encodeURIComponent(s.id)}" title="Editar servidor">✏️</button>
-
-              <button class="server-btn-delete" data-server-id="${encodeURIComponent(s.id)}" data-server-name="${encodeURIComponent(s.hostname || s.nombre || '')}" title="Eliminar servidor">🗑️</button>
-
-            </div>
-
-          </div>
-
-        `).join('')}
-
-      </div>
-
+      ${cuerpoHtml}
     </div>
-
     </div>
-
   `;
-
-
 
     // Agregar event listeners para los botones de editar y eliminar
 
@@ -3368,12 +2951,20 @@ document.addEventListener('DOMContentLoaded', function () {
   function serverCard(s) {
 
     const header = `<h3>${fmt(s.nombre || s.hostname)} <span class="muted">(${fmt(s.ip)})</span></h3>`;
+    let indicadores = '';
+    if (!isVirtuales) {
+      // Criticidad de inventario y LED de monitoreo (mismos símbolos que el rack)
+      const crit = normalizeEstado(s.estado || s.activo || '');
+      const mon = ESTADOS_MONITOREO[claveMonitoreo(estadosMonitoreo.get(String(s.id)))];
+      indicadores = `<div class="ficha-indicadores"><span><span class="gab-crit gab-crit--${crit.replace('_', '-')}" aria-hidden="true"></span>Criticidad: ${escapeHtml(CRITICIDADES[crit].texto)}</span><span><span class="gab-led gab-led--${mon.clase}" data-led-id="${escapeHtml(String(s.id))}" aria-hidden="true"></span>Monitoreo: <span data-led-texto="${escapeHtml(String(s.id))}">${escapeHtml(mon.texto)}</span></span></div>`;
+    }
 
     return `
 
     <div class="card" data-view="server" data-id="${encodeURIComponent(s.id)}">
 
       ${header}
+      ${indicadores}
 
       <div class="kv">
 
@@ -3491,7 +3082,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('btnBackView')?.addEventListener('click', () => {
 
-      if (history.length > 1) history.back(); else location.hash = '';
+      if (navegacionesInternas > 0) history.back(); else location.hash = '';
 
     });
 
@@ -3743,17 +3334,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
   btnInicio?.addEventListener('click', async () => {
 
-    // Volver al inicio de la vista y forzar recarga en el servidor
+    // Volver a la vista general y volver a consultar los datos (y el estado de monitoreo)
 
     location.hash = '';
-
-    try {
-
-      const type = getServerType();
-
-      await fetch(`/api/reload?type=${type}`, { method: 'POST' });
-
-    } catch (_) { }
 
     await fetchData();
 
@@ -3878,6 +3461,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (newUpdatedAt) lastUpdatedAt = newUpdatedAt;
 
     route();
+    cargarEstadosMonitoreo();
 
     // Re-aplicar el modo solo lectura a los botones recién renderizados
     disableReadOnlyActions();
@@ -3944,7 +3528,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-  window.addEventListener('hashchange', route);
+  // Cuenta las navegaciones dentro de la página: “Volver” solo usa el historial si hubo alguna
+  let navegacionesInternas = 0;
+  window.addEventListener('hashchange', () => { navegacionesInternas += 1; route(); });
 
   // Primero se confirma el rol (fail-closed) y luego se renderizan las vistas
   sesionLista.finally(() => fetchData());
@@ -3961,7 +3547,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-  btnInicio?.addEventListener('click', fetchData);
 
 
 
@@ -4036,71 +3621,54 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-    // Tooltip sobre unidades (usamos delegación si tuvieran data)
-
+    // Tooltip sobre el gabinete: servidor (nombre, IP, U, criticidad, monitoreo) o U libre
     if (registrarGlobales) document.addEventListener('mousemove', (e) => {
-
-      const unit = e.target.closest('.rack-unit');
-
       if (!tooltip) return;
-
-      if (!unit) { tooltip.classList.remove('show'); return; }
-
-      const title = unit.getAttribute('title') || '';
-
-      // Intentar extraer info de servidor si tenemos racks en memoria
-
-      let name = title || 'Servidor';
-
-      let number = unit.querySelector('.unit-label')?.textContent?.trim() || '';
-
-      const statusCls = unit.classList.contains('active') ? 'Running 🟢' : 'Stopped 🔴';
-
-      // Solo mostrar info básica del servidor (sin métricas inventadas)
-
-      tooltip.innerHTML = `
-
-      <div class="title">${fmt(name)}</div>
-
-      <div class="row"><span class="badge">#${fmt(number)}</span><span>${statusCls}</span></div>
-
-    `;
-
+      const unidad = e.target.closest('.gab-srv, .gab-libre');
+      if (!unidad) { tooltip.classList.remove('show'); return; }
+      if (unidad.classList.contains('gab-libre')) {
+        tooltip.innerHTML = `<div class="gab-tip"><div class="title">U${escapeHtml(unidad.getAttribute('data-position') || '')} libre</div><div class="gab-tip__fila">Suelta aquí un servidor para moverlo</div></div>`;
+      } else {
+        const id = decodeURIComponent(unidad.getAttribute('data-server-id') || '');
+        const crit = unidad.getAttribute('data-estado') || 'no_critico';
+        const mon = ESTADOS_MONITOREO[claveMonitoreo(estadosMonitoreo.get(id))];
+        tooltip.innerHTML = `<div class="gab-tip">
+          <div class="title">${escapeHtml(decodeURIComponent(unidad.getAttribute('data-server-name') || ''))}</div>
+          <div class="gab-tip__fila">IP: ${escapeHtml(unidad.getAttribute('data-ip') || '—')} · ${escapeHtml(unidad.getAttribute('data-u') || '')}</div>
+          <div class="gab-tip__fila"><span class="gab-crit gab-crit--${escapeHtml(crit.replace('_', '-'))}"></span>${escapeHtml(CRITICIDADES[crit]?.texto || '')}</div>
+          <div class="gab-tip__fila"><span class="gab-led gab-led--${mon.clase}"></span>Monitoreo: ${escapeHtml(mon.texto)}</div>
+        </div>`;
+      }
       tooltip.style.left = `${e.clientX}px`;
-
       tooltip.style.top = `${e.clientY}px`;
-
       tooltip.classList.add('show');
-
     }, { passive: true });
 
-
-
-    // Click en rack: navegar a detalle nativo (igual que virtuales)
-
-    document.querySelectorAll('.rack').forEach(rackEl => {
-
+    // Clic en la tarjeta de un rack (fuera de un servidor): abre la vista del rack
+    document.querySelectorAll('.gab-card').forEach(rackEl => {
       // Cada rack se conecta una sola vez aunque se vuelva a renderizar
       if (rackEl.dataset.uxBound === '1') return;
       rackEl.dataset.uxBound = '1';
-
-      rackEl.addEventListener('click', () => {
-
+      rackEl.addEventListener('click', (e) => {
+        if (e.target.closest('[data-view="server"]')) return; // lo atiende la navegación a la ficha
         if (isReadOnlyUser()) {
           showReadOnlyToast();
           return;
         }
-
-        const name = rackEl.getAttribute('data-name') || rackEl.querySelector('.rack-content h2')?.textContent || '';
-
+        const name = rackEl.getAttribute('data-name') || '';
         const idx = rackEl.getAttribute('data-idx');
-
         const idxPart = idx != null ? `&idx=${idx}` : '';
-
         if (name) location.hash = `view=rack&name=${name}${idxPart}`;
-
       });
+    });
 
+    // Teclado: Enter/Espacio sobre un servidor del gabinete abre su ficha
+    if (registrarGlobales) document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const srv = e.target.closest?.('.gab-srv');
+      if (!srv) return;
+      e.preventDefault();
+      srv.click();
     });
 
     // Cierre modal (compatibilidad)
@@ -4177,34 +3745,17 @@ document.addEventListener('DOMContentLoaded', function () {
     function applySearchFilter() {
       const q = (search?.value || '').toLowerCase().trim();
       const f = filter?.value || 'all';
-
-      document.querySelectorAll('.rack-unit').forEach((u) => {
-        const num = u.querySelector('.unit-label')?.textContent?.trim() || '';
-        const name = (u.getAttribute('title') || '').toLowerCase();
-        const isServer = u.classList.contains('active');
-        const estado = u.getAttribute('data-estado') || 'activo';
-
+      document.querySelectorAll('.gab-srv').forEach((u) => {
+        const estado = u.getAttribute('data-estado') || 'no_critico';
         let match = true;
-        if (q) match = name.includes(q) || num.includes(q);
-        if (isServer && f !== 'all') {
-          if (f === 'no_critico') {
-            match = match && estado !== 'critico' && estado !== 'mantenimiento';
-          } else {
-            match = match && estado === f;
-          }
+        if (q) match = (u.getAttribute('data-buscar') || '').includes(q);
+        if (f !== 'all') {
+          match = match && (f === 'no_critico' ? (estado !== 'critico' && estado !== 'mantenimiento') : estado === f);
         }
-
-        if (f !== 'all' && isServer) {
-          u.classList.toggle('dim', !match);
-          u.classList.toggle('match', match);
-        } else if (q) {
-          u.classList.toggle('match', match);
-          u.classList.toggle('dim', !match);
-        } else {
-          u.classList.remove('match', 'dim');
-        }
+        const activo = !!q || f !== 'all';
+        u.classList.toggle('match', activo && match);
+        u.classList.toggle('dim', activo && !match);
       });
-
     }
 
     renderOverview();
@@ -4215,32 +3766,6 @@ document.addEventListener('DOMContentLoaded', function () {
     if (registrarGlobales) filter?.addEventListener('change', applySearchFilter);
 
 
-
-    // Scroll horizontal con rueda del mouse en el grid de racks
-
-    try {
-
-      const grid = document.querySelector('.rack-grid');
-
-      if (grid && grid.dataset.wheelUxBound !== '1') {
-
-        grid.dataset.wheelUxBound = '1';
-
-        grid.addEventListener('wheel', (ev) => {
-
-          if (Math.abs(ev.deltaY) > Math.abs(ev.deltaX)) {
-
-            grid.scrollLeft += ev.deltaY;
-
-            ev.preventDefault();
-
-          }
-
-        }, { passive: false });
-
-      }
-
-    } catch (_) { }
 
   };
 

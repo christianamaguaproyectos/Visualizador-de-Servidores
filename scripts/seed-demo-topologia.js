@@ -99,6 +99,12 @@ export const DEPENDENCIAS = [
 // Estado de monitoreo fijo (el resto queda UP)
 export const ESTADOS_MONITOREO = { 'srv-db-01': 'DOWN', 'srv-bkp-01': 'DEGRADED' };
 
+// Criticidad de inventario (campo "estado"); el resto queda como NO_CRITICO
+export const ESTADOS_INVENTARIO = {
+  'srv-fw-01': 'CRITICO', 'srv-dc-01': 'CRITICO', 'srv-db-01': 'CRITICO', 'srv-db-02': 'CRITICO',
+  'srv-hv-01': 'CRITICO', 'srv-pru-01': 'MANTENIMIENTO', 'srv-cin-01': 'MANTENIMIENTO',
+};
+
 // Capa de cada servidor en el Editor 2D (0 = aplicaciones, 5 = red)
 const CAPAS = [
   ['srv-web-01', 'srv-portal-01', 'srv-intranet-01', 'srv-crm-01', 'srv-bi-01', 'srv-erp-01', 'srv-mail-01'],
@@ -133,11 +139,18 @@ export async function sembrar(client) {
     const [posicion = null, unidades = 2] = UBICACION_RACK[nombre] || [];
     const r = await client.query(
       `INSERT INTO inventory.servers (type, identity_key, rack_id, rack_norm, rack_raw, nombre, ip, marca, modelo, so, estado, activo, rack_position, rack_units)
-       VALUES ($1::inventory.server_type_enum, $2, $3, $4, $4, $5, $6, $7, $8, $9, 'NO_CRITICO', 'SI', $10, $11)
+       VALUES ($1::inventory.server_type_enum, $2, $3, $4, $4, $5, $6, $7, $8, $9, $12, 'SI', $10, $11)
        ON CONFLICT (type, identity_key) DO NOTHING RETURNING id`,
-      [tipo, identidad(nombre), idRack.get(rack), rack, nombre, ip, marca, modelo, so, posicion, unidades]);
+      [tipo, identidad(nombre), idRack.get(rack), rack, nombre, ip, marca, modelo, so, posicion, unidades, ESTADOS_INVENTARIO[nombre] || 'NO_CRITICO']);
     if (r.rowCount) creados.servidores += 1;
-    else if (posicion) {
+    else if (ESTADOS_INVENTARIO[nombre]) {
+      // Datos demo de una versión anterior: se asigna la criticidad solo si nunca se editaron
+      await client.query(
+        `UPDATE inventory.servers SET estado = $3
+          WHERE type = $1::inventory.server_type_enum AND identity_key = $2 AND estado = 'NO_CRITICO' AND updated_at = created_at`,
+        [tipo, identidad(nombre), ESTADOS_INVENTARIO[nombre]]);
+    }
+    if (!r.rowCount && posicion) {
       // Datos demo de una versión anterior sin ubicación: se completa (nunca se pisa una posición)
       await client.query(
         `UPDATE inventory.servers SET rack_position = $3, rack_units = $4

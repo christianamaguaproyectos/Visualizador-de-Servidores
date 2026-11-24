@@ -3,6 +3,11 @@
  * Mejorado con feedback visual, ghost badge, y sin confirm() bloqueantes
  */
 
+/** Decodifica un atributo codificado con encodeURIComponent (o lo deja igual si no lo está) */
+function decodificar(valor) {
+  try { return decodeURIComponent(valor || ''); } catch { return valor || ''; }
+}
+
 class RackDragDrop {
   constructor() {
     this.draggedServer = null;
@@ -126,7 +131,7 @@ class RackDragDrop {
     }
 
     // Buscar tanto .server-item (vista detalle) como .rack-unit.active (vista grid)
-    const serverElement = e.target.closest('.server-item') || e.target.closest('.rack-unit.active[draggable="true"]');
+    const serverElement = e.target.closest('.server-item') || e.target.closest('.rack-unit.active[draggable="true"], .gab-srv[draggable="true"]');
     if (!serverElement) return;
 
     this.draggedElement = serverElement;
@@ -142,13 +147,13 @@ class RackDragDrop {
       // Vista de grid
       this.draggedServer = {
         id: serverElement.getAttribute('data-server-id'),
-        name: serverElement.getAttribute('data-server-name') || 'Servidor'
+        name: decodificar(serverElement.getAttribute('data-server-name')) || 'Servidor'
       };
     }
 
     // Obtener el rack actual
     const rackDetail = serverElement.closest('.rack-detail');
-    const rackGrid = serverElement.closest('.rack');
+    const rackGrid = serverElement.closest('.rack, .gab-card');
 
     if (rackDetail) {
       this.sourceRack = rackDetail.querySelector('h2')?.textContent;
@@ -177,7 +182,7 @@ class RackDragDrop {
    * Termina el arrastre
    */
   handleDragEnd(e) {
-    const serverElement = e.target.closest('.server-item') || e.target.closest('.rack-unit.active[draggable="true"]');
+    const serverElement = e.target.closest('.server-item') || e.target.closest('.rack-unit.active[draggable="true"], .gab-srv[draggable="true"]');
     if (serverElement) {
       serverElement.classList.remove('dragging');
     }
@@ -198,10 +203,10 @@ class RackDragDrop {
    * Permite el drop al pasar sobre un área válida
    */
   handleDragOver(e) {
-    const rack = e.target.closest('.rack');
+    const rack = e.target.closest('.rack, .gab-card');
     const rackDetail = e.target.closest('.rack-detail');
-    const targetServer = e.target.closest('.server-item, .rack-unit.active[draggable="true"]');
-    const emptyUnit = e.target.closest('.rack-unit.inactive');
+    const targetServer = e.target.closest('.server-item, .rack-unit.active[draggable="true"], .gab-srv[draggable="true"]');
+    const emptyUnit = e.target.closest('.rack-unit.inactive, .gab-libre');
 
     if (rack || rackDetail || targetServer || emptyUnit) {
       e.preventDefault();
@@ -209,7 +214,7 @@ class RackDragDrop {
 
       // Actualizar mensaje del indicador
       if (emptyUnit) {
-        const unitLabel = emptyUnit.querySelector('.unit-label')?.textContent || '?';
+        const unitLabel = emptyUnit.querySelector('.unit-label')?.textContent || emptyUnit.getAttribute('data-position') || '?';
         this.showIndicator(`📍 Soltar en posición ${unitLabel}`);
       } else if (targetServer && targetServer !== this.draggedElement) {
         const targetName = targetServer.querySelector('.server-name')?.textContent ||
@@ -231,10 +236,10 @@ class RackDragDrop {
    * Entra en un área de drop
    */
   handleDragEnter(e) {
-    const rack = e.target.closest('.rack');
+    const rack = e.target.closest('.rack, .gab-card');
     const rackDetail = e.target.closest('.rack-detail');
-    const targetServer = e.target.closest('.server-item, .rack-unit.active[draggable="true"]');
-    const emptyUnit = e.target.closest('.rack-unit.inactive');
+    const targetServer = e.target.closest('.server-item, .rack-unit.active[draggable="true"], .gab-srv[draggable="true"]');
+    const emptyUnit = e.target.closest('.rack-unit.inactive, .gab-libre');
 
     // Evitar marcar el elemento que estamos arrastrando
     if (targetServer && targetServer !== this.draggedElement) {
@@ -252,10 +257,10 @@ class RackDragDrop {
    * Sale de un área de drop
    */
   handleDragLeave(e) {
-    const rack = e.target.closest('.rack');
+    const rack = e.target.closest('.rack, .gab-card');
     const rackDetail = e.target.closest('.rack-detail');
-    const targetServer = e.target.closest('.server-item, .rack-unit.active[draggable="true"]');
-    const emptyUnit = e.target.closest('.rack-unit.inactive');
+    const targetServer = e.target.closest('.server-item, .rack-unit.active[draggable="true"], .gab-srv[draggable="true"]');
+    const emptyUnit = e.target.closest('.rack-unit.inactive, .gab-libre');
 
     // Solo remover si realmente salimos del elemento
     if (targetServer && !targetServer.contains(e.relatedTarget)) {
@@ -284,7 +289,7 @@ class RackDragDrop {
     });
 
     // Verificar si se soltó sobre una unidad vacía (para reposicionar)
-    const emptyUnit = e.target.closest('.rack-unit.inactive');
+    const emptyUnit = e.target.closest('.rack-unit.inactive, .gab-libre');
 
     if (emptyUnit) {
       await this.handleRepositionToEmpty(emptyUnit);
@@ -292,7 +297,7 @@ class RackDragDrop {
     }
 
     // Verificar si se soltó sobre otro servidor (para intercambiar)
-    const targetServerElement = e.target.closest('.server-item, .rack-unit.active[draggable="true"]');
+    const targetServerElement = e.target.closest('.server-item, .rack-unit.active[draggable="true"], .gab-srv[draggable="true"]');
 
     if (targetServerElement && targetServerElement !== this.draggedElement) {
       // Intercambiar posiciones con otro servidor
@@ -302,7 +307,7 @@ class RackDragDrop {
 
     // Obtener el rack destino
     let targetRackName = null;
-    const rack = e.target.closest('.rack');
+    const rack = e.target.closest('.rack, .gab-card');
     const rackDetail = e.target.closest('.rack-detail');
 
     if (rack) {
@@ -349,7 +354,7 @@ class RackDragDrop {
     }
 
     // Obtener el rack de la unidad vacía
-    const rack = emptyUnit.closest('.rack');
+    const rack = emptyUnit.closest('.rack, .gab-card, .rack-detail');
     let targetRackName = null;
 
     if (rack) {
