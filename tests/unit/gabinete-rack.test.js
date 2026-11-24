@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   normalizarCriticidad, claveMonitoreo, construirGabineteHtml, construirLeyendaHtml, contarMonitoreo,
+  construirAvisoSinUbicarHtml, construirSinRackHtml,
 } from '../../frontend/public/js/dominios/hosts/gabineteRack.js';
 import { calcularResumenRacks } from '../../frontend/public/js/dominios/hosts/resumenRacks.js';
 
@@ -64,4 +65,24 @@ test('resumen de racks: NO_CRITICO se cuenta como no crítico', () => {
   assert.equal(r.criticos, 1);
   assert.equal(r.noCriticos, 1);
   assert.equal(r.mantenimiento, 1);
+});
+
+test('servidores que no caben en 42U: se avisan y se listan', () => {
+  const servidores = Array.from({ length: 25 }, (_, i) => ({ id: String(i + 1), nombre: `srv-${i + 1}`, rackUnits: 2 }));
+  const { sinUbicar } = construirGabineteHtml({ nombreRack: 'R', servidores });
+  assert.equal(sinUbicar.length, 4); // 21 de 2U caben en 42U (modo distribuido)
+  const aviso = construirAvisoSinUbicarHtml(sinUbicar);
+  assert.match(aviso, /4 servidores no caben/);
+  assert.equal((aviso.match(/data-view="server"/g) || []).length, 4);
+  assert.equal(construirAvisoSinUbicarHtml([]), '');
+});
+
+test('servidores sin rack: tarjeta con lista limitada y escape', () => {
+  const servidores = Array.from({ length: 5 }, (_, i) => ({ id: String(i), nombre: i === 0 ? '<b>x</b>' : `srv-${i}` }));
+  const html = construirSinRackHtml(servidores, new Map(), { limite: 3 });
+  assert.match(html, /Sin rack asignado/);
+  assert.equal((html.match(/data-view="server"/g) || []).length, 3);
+  assert.match(html, /Se muestran 3 de 5/);
+  assert.ok(!html.includes('<b>x</b>'));
+  assert.equal(construirSinRackHtml([]), '');
 });

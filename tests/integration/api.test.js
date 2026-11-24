@@ -2,6 +2,7 @@
 // Se omiten si no hay TEST_POSTGRES_URL (ver tests/helpers/appDePrueba.js).
 import { describe, test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import pg from 'pg';
 import {
   CREDENCIALES, clienteHttp, crearUsuarios, iniciarApp, motivoParaOmitir, prepararBaseDeDatos,
 } from '../helpers/appDePrueba.js';
@@ -112,6 +113,24 @@ describe('API (integración)', { skip: omitir || false }, () => {
       const s = lista.data.find((x) => String(x.id) === String(servidorId));
       assert.equal(s.ip, '10.50.0.2');
       assert.equal(s.storage, 'SAN-CI');
+    });
+
+    test('/api/data incluye racks sin tipo con servidores físicos y los servidores sin rack', async () => {
+      assert.equal((await admin.api('POST', '/api/racks', { body: { name: 'RACK-CI-SINTIPO', raw_name: 'RACK-CI-SINTIPO' } })).status, 201);
+      const r = await admin.api('POST', '/api/servers', { body: { type: 'fisicos', nombre: 'SRV-CI-SINTIPO', rack_norm: 'RACK-CI-SINTIPO', rack_raw: 'RACK-CI-SINTIPO', ip: '10.50.0.9' } });
+      assert.equal(r.status, 201);
+      const bd = new pg.Client({ connectionString: process.env.TEST_POSTGRES_URL });
+      await bd.connect();
+      try {
+        await bd.query("UPDATE inventory.racks SET type = NULL WHERE name = 'RACK-CI-SINTIPO'");
+        await bd.query("INSERT INTO inventory.servers (type, identity_key, nombre, ip) VALUES ('fisicos', 'ci:sin-rack', 'SRV-CI-SINRACK', '10.50.0.10') ON CONFLICT DO NOTHING");
+      } finally { await bd.end(); }
+      const { data } = await admin.api('GET', '/api/data?type=fisicos');
+      const rack = data.racks.find((x) => x.name === 'RACK-CI-SINTIPO');
+      assert.ok(rack, 'el rack sin tipo aparece');
+      assert.ok(rack.servers.some((s) => s.nombre === 'SRV-CI-SINTIPO'));
+      const sinRack = data.servers.find((s) => s.nombre === 'SRV-CI-SINRACK');
+      assert.ok(sinRack && sinRack.rackId == null, 'el servidor sin rack llega en servers con rackId nulo');
     });
 
     test('clúster duplicado -> 409 y el proceso sigue vivo', async () => {
