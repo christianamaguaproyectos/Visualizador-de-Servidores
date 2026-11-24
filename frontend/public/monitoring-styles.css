@@ -1632,3 +1632,4 @@ body:not(.rol-admin) .solo-admin {
 .kpi-card { padding: 18px 16px; gap: 12px; }
 .kpi-icon { font-size: 1.6rem; }
 .kpi-label { letter-spacing: .02em; font-size: .7rem; }
+.racks-vivo > .empty-state, .racks-vivo > .estado-error { grid-column: 1 / -1; }

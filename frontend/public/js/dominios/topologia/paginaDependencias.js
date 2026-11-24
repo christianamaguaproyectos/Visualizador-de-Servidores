@@ -236,6 +236,15 @@ export async function iniciarPaginaDependencias() {
       const texto = h('p', {}, 'Cargando topología…');
       elEstado.append(h('span', { class: 'topo-spinner', 'aria-hidden': 'true' }), texto);
       setTimeout(() => { if (elEstado.contains(texto)) texto.textContent = 'Esto está tardando más de lo normal…'; }, 8000);
+    } else if (tipo === 'vacio' && !catalogo.length) {
+      // Base sin servidores (p. ej. recién conectada a una base nueva): no hay nada que relacionar aún
+      elEstado.append(
+        h('div', { class: 'topo-estado__ilustracion', 'aria-hidden': 'true' }),
+        h('h2', {}, 'El inventario todavía no tiene servidores'),
+        h('p', {}, 'Cuando se registren servidores físicos o virtuales aparecerán aquí y podrás relacionarlos.'),
+        h('div', { class: 'topo-estado__acciones' },
+          h('a', { class: 'btn btn-primary', href: '/fisicos' }, 'Ir a Servidores Físicos'),
+          h('a', { class: 'btn btn-secondary', href: '/virtuales' }, 'Ir a Servidores Virtuales')));
     } else if (tipo === 'vacio') {
       elEstado.append(
         h('div', { class: 'topo-estado__ilustracion', 'aria-hidden': 'true' }),
