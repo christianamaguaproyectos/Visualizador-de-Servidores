@@ -12,9 +12,10 @@
 2. [API de Servidores](#api-de-servidores)
 3. [API de Racks](#api-de-racks)
 4. [Dependencias y Topología](#-dependencias-y-topología)
-5. [Eventos en Tiempo Real (SSE)](#eventos-en-tiempo-real-sse)
-6. [Ejemplos de Uso](#ejemplos-de-uso)
-7. [Códigos de Error](#códigos-de-error)
+5. [Telemetría de Monitoreo](#-telemetría-de-monitoreo)
+6. [Eventos en Tiempo Real (SSE)](#eventos-en-tiempo-real-sse)
+7. [Ejemplos de Uso](#ejemplos-de-uso)
+8. [Códigos de Error](#códigos-de-error)
 
 ---
 
@@ -999,6 +1000,83 @@ No son endpoints de datos, pero también requieren sesión:
 | GET | `/vendor/three/addons/renderers/CSS2DRenderer.js` | Etiquetas HTML de la vista 3D. |
 
 - `/vendor/three` sirve **solo** esos tres módulos (lista cerrada); cualquier otra ruta bajo `/vendor/three` responde `404`. Los módulos se entregan como `text/javascript` con `ETag` (`304` si no cambiaron) y con el especificador `'three'` ya reescrito a `/vendor/three/three.module.js`, así el navegador los carga sin CDN ni *import map*, compatible con la CSP (`script-src 'self'`).
+
+---
+
+## 📈 Telemetría de Monitoreo
+
+Rutas de **solo lectura** para la vista en tiempo real de `/monitoring.html`. Requieren sesión (cualquier rol) y solo existen con el monitoreo habilitado (`MONITORING_ENABLED=1`). Las respuestas llevan `Cache-Control: no-store`. Cada punto de una serie es `[epoch_ms, latencia_ms | null, estado]`, en orden cronológico; `estado` es `ok`, `fail`, `timeout` o `degraded` y la latencia es `null` cuando no hubo respuesta.
+
+### 📖 Estado de todos los hosts con su mini-serie
+
+```http
+GET /api/monitoring/telemetry/overview?points=24
+```
+
+| Parámetro | Tipo | Por defecto | Límites |
+|---|---|---|---|
+| `points` | entero | 24 | 5 – 60 (últimas ejecuciones de cada host dentro de las últimas 6 h) |
+
+**Respuesta (200):**
+```json
+{
+  "generatedAt": "2026-11-24T13:40:00.000Z",
+  "points": 24,
+  "hosts": [
+    {
+      "id": "12", "name": "srv-app-01", "ip": "10.0.0.11", "type": "fisico", "rack": "RACK-A1",
+      "critical": true, "estado_actual": "UP", "estado_changed_at": "2026-11-24T13:02:11.000Z",
+      "open_incidents": 0, "active_checks": 1,
+      "serie": [[1795959540000, 12, "ok"], [1795959555000, null, "fail"]]
+    }
+  ]
+}
+```
+
+Incluye los hosts habilitados (máximo 1000), ordenados por rack y nombre. `open_incidents` cuenta los incidentes abiertos o reconocidos. Para las máquinas virtuales, `rack` es su host o clúster.
+
+### 📖 Serie por check y línea de tiempo de incidentes de un host
+
+```http
+GET /api/monitoring/telemetry/hosts/:id/series?minutes=60&limit=120
+```
+
+| Parámetro | Tipo | Por defecto | Límites |
+|---|---|---|---|
+| `id` | entero positivo | — | id del host |
+| `minutes` | entero | 60 | 5 – 1440 (ventana de tiempo) |
+| `limit` | entero | 120 | 10 – 300 (puntos por check, los más recientes) |
+
+**Respuesta (200):**
+```json
+{
+  "generatedAt": "2026-11-24T13:40:00.000Z",
+  "minutes": 60,
+  "limit": 120,
+  "host": { "id": "12", "name": "srv-app-01", "ip": "10.0.0.11", "type": "fisico", "rack": "RACK-A1", "critical": true, "enabled": true, "estado_actual": "UP", "estado_changed_at": "2026-11-24T13:02:11.000Z" },
+  "checks": [
+    { "id": "31", "kind": "tcp", "label": "TCP 443", "enabled": true, "frequency_sec": 60, "points": [[1795959540000, 12, "ok"]] }
+  ],
+  "incidents": [
+    { "id": "7", "state": "ack", "severity": "critical", "summary": "Sin respuesta en el puerto 443", "opened_at": "...", "last_event_at": "...", "closed_at": null, "ack_at": "..." }
+  ]
+}
+```
+
+`label` describe el destino del check (`ICMP`, `TCP <puerto>`, `HTTP <ruta>`) sin exponer su configuración completa. Se devuelven hasta 20 checks y los 20 incidentes más recientes.
+
+**Errores:** `400` si `id`, `minutes`, `limit` o `points` no son enteros dentro de sus límites; `401` sin sesión; `404` si el host no existe.
+
+### Ventana de mantenimiento de un host (Solo Admin)
+
+```http
+POST /api/monitoring/hosts/:id/maintenance
+Content-Type: application/json
+
+{ "duration_hours": 2, "comment": "Cambio de disco" }
+```
+
+`duration_hours` debe ser un número mayor que 0 y como máximo 168; `comment` es opcional (hasta 500 caracteres). `DELETE /api/monitoring/hosts/:id/maintenance` termina la ventana y el estado del host se vuelve a evaluar.
 
 ---
 

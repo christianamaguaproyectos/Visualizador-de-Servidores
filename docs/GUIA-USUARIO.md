@@ -332,14 +332,36 @@ Navega a la página **👥 Usuarios** desde el menú de navegación (solo visibl
 
 ### Panel de Monitoreo
 
-Accede a **📡 Monitoreo** desde el menú. El sistema realiza checks automatizados de disponibilidad (ping, TCP, HTTP) a los servidores registrados.
+Accede a **Monitoreo** desde el menú: *telemetría en tiempo real, alertas y comportamiento de incidentes operativos*. El sistema ejecuta checks automáticos de disponibilidad (ping, TCP, HTTP) a los servidores registrados. Esta sección requiere que el monitoreo esté habilitado en el servidor (`MONITORING_ENABLED=1`).
 
-### Funcionalidades
+En la parte superior se ven los totales (activos, caídos, degradados, en mantenimiento, incidentes y latencia media) y el indicador **En vivo** con la hora de la última actualización. Los datos se actualizan solos cada 15 segundos mientras la pestaña del navegador está visible; el botón **⟳** actualiza al momento. Si el servidor no responde, el indicador pasa a *Sin conexión* y cada bloque muestra el motivo con un botón **Reintentar**.
 
-- **Dashboard de checks**: visualización del estado actual de cada servidor monitoreado.
-- **Incidentes**: registro automático de caídas y recuperaciones.
-- **Ventanas de Mantenimiento**: programa ventanas donde las alertas se silencian.
-- **Alertas por Email**: notificaciones automáticas cuando un servidor cae o se recupera (requiere SMTP configurado).
+### Vista General: estado en tiempo real por rack
+
+- Cada **rack** (o, para las máquinas virtuales, su host o clúster) es una tarjeta con un color según el peor estado de sus servidores y un resumen ("Todo operativo", "2 caídos").
+- Cada **servidor** es un punto de estado (verde operativo, ámbar degradado, rojo caído y parpadeando, violeta mantenimiento, gris sin datos) con una **mini-onda** de sus últimos tiempos de respuesta y la última latencia. Los puntos rojos bajo la onda son ejecuciones fallidas.
+- **Buscar** filtra por nombre, IP o rack; **Con problemas** deja solo los servidores caídos, degradados o con incidentes.
+- Pulsa el nombre del rack o **Ver rack →** para ver todas sus tarjetas de servidor (latencia, disponibilidad, checks e incidentes); la **×** cierra el detalle.
+- Pulsa un servidor (punto, fila o tarjeta) para abrir su **panel de telemetría**.
+
+Debajo siguen los incidentes activos, los hosts críticos caídos, la tendencia de 24 h y las métricas de las últimas 2 h.
+
+### Panel de telemetría de un servidor
+
+- **Telemetría en vivo**: estado actual y, por cada check, una gráfica de onda con la latencia (última, media y p95), la disponibilidad y una franja con el resultado de cada ejecución (verde correcto, rojo fallo, ámbar lento o sin respuesta a tiempo). Elige el periodo: 15 min, 1 h, 6 h o 24 h (hasta 120 puntos por check). Incluye la **línea de tiempo de incidentes** (abierto, reconocido, cerrado y duración); pulsa uno para ver su detalle.
+- **Resumen**: checks configurados, estadísticas de 24 h y últimas ejecuciones.
+- **Historial**: ejecuciones en un rango (hoy, ayer, 6 h, 24 h, 3 días, 7 días o personalizado).
+- Administradores: **Poner en mantenimiento** (duración de 1 a 24 h y motivo; durante la ventana no se generan alertas) o **Sacar de mantenimiento**, y **Agregar check**.
+
+### Otras pestañas
+
+- **Hosts**: tarjetas con filtros por estado, tipo, rack y criticidad; **Importar Hosts** trae servidores físicos o virtuales del inventario (administradores).
+- **Incidentes**: filtros por estado y severidad, búsqueda, y acciones **ACK**, **Resolver**, **Cerrar** y **Agregar nota** (la nota se escribe en una ventana propia).
+- **Checks**: búsqueda, **Nuevo Check**, **Check Masivo** (elige varios hosts y crea el mismo tipo de check para todos con la IP de cada uno), ejecutar ahora y eliminar.
+- **Mantenimiento** (administradores): estadísticas de almacenamiento, depuración de registros e incidentes antiguos y optimización de la base de datos.
+- **Alertas** (administradores): destinatarios de correo (agregar, editar, activar/desactivar, eliminar), estado del SMTP, correo de prueba y simulador de caída o recuperación.
+
+Las acciones que modifican datos piden confirmación en una ventana del sistema. Los usuarios de solo lectura ven la vista en tiempo real, la telemetría, los hosts, los incidentes y los checks, sin botones de modificación.
 
 ---
 
