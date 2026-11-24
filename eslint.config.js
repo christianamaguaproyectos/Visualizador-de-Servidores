@@ -83,7 +83,7 @@ export default [
 
   // Páginas que arrancan como módulo ES (type="module")
   {
-    files: ['frontend/public/js/paginas/dependencias.js'],
+    files: ['frontend/public/js/paginas/dependencias.js', 'frontend/public/js/paginas/login.js'],
     languageOptions: { sourceType: 'module' },
   },
 ];

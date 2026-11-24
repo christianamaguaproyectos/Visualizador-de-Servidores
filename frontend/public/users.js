@@ -3,6 +3,8 @@
  */
 
 import { formatearUsuarioFila } from '/js/dominios/usuarios/presentacionUsuarios.js';
+import { confirmAction } from '/js/dominios/ui-system/modalConfirm.js';
+import { mostrarParaCopiar } from '/js/dominios/ui-system/modalTexto.js';
 
 let users = [];
 let editingUserId = null;
@@ -183,9 +185,12 @@ async function handleUserSubmit(e) {
     if (response.ok) {
       if (result.inviteLink) {
         // SMTP falló o no tiene email: mostrar enlace de invitación
-        const msg = result.message + '\n\nEnlace de invitación:\n' + result.inviteLink;
         showToast(result.message, 'success');
-        prompt('Copia este enlace y compártelo con el usuario:', result.inviteLink);
+        mostrarParaCopiar({
+          titulo: 'Enlace de invitación',
+          mensaje: 'Copia este enlace y compártelo con el usuario para que defina su contraseña.',
+          valor: result.inviteLink
+        });
       } else {
         showToast(result.message || (editingUserId ? 'Usuario actualizado exitosamente' : 'Usuario creado exitosamente'), 'success');
       }
@@ -266,9 +271,13 @@ async function handlePasswordSubmit(e) {
  * Inhabilita (desactiva) un usuario
  */
 async function disableUser(userId, username) {
-  if (!confirm(`¿Estás seguro de inhabilitar al usuario "${username}"?\n\nEl usuario no podrá iniciar sesión pero sus datos se conservarán.`)) {
-    return;
-  }
+  const ok = await confirmAction({
+    title: 'Inhabilitar usuario',
+    message: `¿Inhabilitar al usuario "${username}"? No podrá iniciar sesión, pero sus datos se conservarán.`,
+    confirmText: 'Inhabilitar',
+    tone: 'danger'
+  });
+  if (!ok) return;
 
   try {
     const response = await fetch(`/api/users/${userId}`, {
@@ -293,14 +302,22 @@ async function disableUser(userId, username) {
  * Elimina permanentemente un usuario de la BD
  */
 async function permanentlyDeleteUser(userId, username) {
-  if (!confirm(`⚠️ ¿Estás SEGURO de ELIMINAR PERMANENTEMENTE al usuario "${username}"?\n\nEsta acción NO se puede deshacer. Todos los datos del usuario se perderán.`)) {
-    return;
-  }
+  const primera = await confirmAction({
+    title: 'Eliminar usuario permanentemente',
+    message: `¿Eliminar PERMANENTEMENTE al usuario "${username}"? Esta acción no se puede deshacer y se perderán todos sus datos.`,
+    confirmText: 'Continuar',
+    tone: 'danger'
+  });
+  if (!primera) return;
 
   // Doble confirmación
-  if (!confirm(`🗑️ ÚLTIMA CONFIRMACIÓN\n\nEl usuario "${username}" será eliminado permanentemente.\n\n¿Continuar?`)) {
-    return;
-  }
+  const segunda = await confirmAction({
+    title: 'Última confirmación',
+    message: `El usuario "${username}" será eliminado permanentemente. ¿Continuar?`,
+    confirmText: 'Eliminar definitivamente',
+    tone: 'danger'
+  });
+  if (!segunda) return;
 
   try {
     const response = await fetch(`/api/users/${userId}/permanent`, {

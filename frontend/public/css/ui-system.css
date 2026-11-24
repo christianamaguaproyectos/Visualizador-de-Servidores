@@ -262,3 +262,10 @@
   .ui-plataforma .modal-content, .ui-confirm-dialog, .ui-confirm-overlay { animation: none; }
   .ui-badge--down::before, .ui-led--down { animation: none; }
 }
+
+/* Ventana de texto (sustituye a prompt(); js/dominios/ui-system/modalTexto.js) */
+.ui-texto-campo { width: 100%; margin-top: 10px; padding: 9px 12px; border: 1px solid var(--color-border-strong); border-radius: 8px; font: inherit; color: var(--color-text-primary); background: var(--color-bg-surface); }
+.ui-texto-campo:focus { outline: none; border-color: var(--color-primary-500); box-shadow: var(--focus-ring); }
+.ui-texto-campo[readonly] { background: var(--color-bg-sunken); font-family: ui-monospace, Consolas, monospace; font-size: .85rem; }
+.ui-texto-error { margin: 6px 0 0; color: var(--color-danger-700); font-size: .85rem; }
+.ui-texto-form .ui-confirm-actions { padding: 16px 0 0; }

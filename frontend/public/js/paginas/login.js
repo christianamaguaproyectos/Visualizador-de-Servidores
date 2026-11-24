@@ -1,4 +1,6 @@
 // Lógica de login.html (antes inline; extraída para la CSP estricta, Fase 4.2)
+import { pedirTexto } from '/js/dominios/ui-system/modalTexto.js';
+
 // Tomar el token de recuperación y QUITARLO de la barra de direcciones de inmediato
 // (así no queda en el historial ni se comparte por error al copiar la URL)
 const resetTokenDesdeUrl = new URLSearchParams(window.location.search).get('resetToken');
@@ -20,8 +22,13 @@ document.getElementById('togglePassword').addEventListener('click', () => {
 });
 
 document.getElementById('forgotPasswordBtn').addEventListener('click', async () => {
-  const identifier = window.prompt('Ingresa tu usuario o correo para recuperar la contraseña:');
-  if (!identifier || !identifier.trim()) return;
+  const identifier = await pedirTexto({
+    titulo: 'Recuperar contraseña',
+    mensaje: 'Ingresa tu usuario o correo. Si la cuenta existe, te enviaremos instrucciones.',
+    etiqueta: 'Usuario o correo',
+    textoAceptar: 'Enviar instrucciones'
+  });
+  if (!identifier) return;
 
   try {
     const response = await fetch('/api/auth/forgot-password', {
