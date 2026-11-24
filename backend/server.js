@@ -160,7 +160,7 @@ class Application {
     this.app.use('/js/paginas/login.js', express.static(path.join(__dirname, '..', 'frontend', 'public', 'js', 'paginas', 'login.js')));
     this.app.use('/fonts', express.static(path.join(__dirname, '..', 'frontend', 'public', 'fonts')));
     // Sistema visual común (tokens, componentes y comportamiento de ventanas): también lo usa el login
-    for (const publico of ['css/tokens.css', 'css/ui-system.css', 'js/dominios/ui-system/modales.js']) {
+    for (const publico of ['css/tokens.css', 'css/ui-system.css', 'js/dominios/ui-system/modales.js', 'js/dominios/ui-system/modalTexto.js']) {
       this.app.use('/' + publico, express.static(path.join(__dirname, '..', 'frontend', 'public', ...publico.split('/'))));
     }
     this.app.use('/css/estilos-sin-inline.css', express.static(path.join(__dirname, '..', 'frontend', 'public', 'css', 'estilos-sin-inline.css')));
