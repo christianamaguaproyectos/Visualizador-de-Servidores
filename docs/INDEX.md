@@ -11,6 +11,9 @@
 ### Si vas a **mostrar el sistema en Docker** (demostración en Windows)
 👉 Sigue: [**GUIA-DEMO-DOCKER.md**](./GUIA-DEMO-DOCKER.md)
 
+### Si vas a **usar la base de datos real**
+👉 Sigue: [**GUIA-BASE-DATOS-REAL.md**](./GUIA-BASE-DATOS-REAL.md) (respaldo, conexión, actualización del esquema sin perder datos y comprobación)
+
 ### Si necesitas **Configurar Acceso en Red**
 👉 Lee esto: [**ACCESO-RED.md**](./ACCESO-RED.md) y [**SEGURIDAD-RED.md**](./SEGURIDAD-RED.md)
 
@@ -162,6 +165,7 @@
 5. [GUIA-DEMO-DOCKER.md](./GUIA-DEMO-DOCKER.md) → Levantar todo en Docker, cargar datos de demostración y recorrido del Mapa de Dependencias
 
 ### 🔄 Migración
+0. [GUIA-BASE-DATOS-REAL.md](./GUIA-BASE-DATOS-REAL.md) → Poner al día una base existente con `scripts/actualizar-bd.js`
 1. [GUIA-RAPIDA.md](./GUIA-RAPIDA.md) → Sección "Migración Permanente"
 2. [REFACTORIZACION.md](./REFACTORIZACION.md) → "Cómo Usar la Nueva Arquitectura"
 

@@ -62,10 +62,10 @@ La primera vez tarda unos minutos (descarga las imágenes y construye la aplicac
 
 Al crear la base por primera vez, PostgreSQL aplica todos los esquemas de `scripts/sql/`, incluido el del Mapa de Dependencias.
 
-**Solo si la base de datos ya existía** (instalación anterior a este módulo), aplica el esquema a mano; es idempotente y no modifica datos:
+**Solo si la base de datos ya existía** (instalación anterior o base real), ponla al día sin tocar sus datos; antes haz un respaldo. Detalles en [GUIA-BASE-DATOS-REAL.md](./GUIA-BASE-DATOS-REAL.md):
 
 ```powershell
-docker compose exec postgres sh -c 'psql -v ON_ERROR_STOP=1 -U $POSTGRES_USER -d $POSTGRES_DB -f /docker-entrypoint-initdb.d/08-schema.dependencies.sql'
+docker compose run --rm tools node scripts/actualizar-bd.js --aplicar
 ```
 
 ## 4. Crear el usuario administrador
