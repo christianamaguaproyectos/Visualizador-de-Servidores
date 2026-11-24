@@ -8,6 +8,7 @@
  */
 
 import { confirmAction } from '/js/dominios/ui-system/modalConfirm.js';
+import { esCancelacionPorSalida } from '/js/dominios/ui-system/salidaPagina.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -103,6 +104,7 @@ class ServerManager {
       const racks = await response.json();
       this.racks = Array.isArray(racks) ? racks : [];
     } catch (error) {
+      if (esCancelacionPorSalida(error)) return;
       console.error('Error cargando racks:', error);
     }
   }

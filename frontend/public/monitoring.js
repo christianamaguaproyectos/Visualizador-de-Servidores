@@ -2215,6 +2215,13 @@ async function sendTestEmail() {
   const btn = document.getElementById('btnTestEmail');
   const result = document.getElementById('testEmailResult');
 
+  // Sin destinatarios activos no hay a quién enviar: se avisa sin llamar al servidor
+  const activos = document.querySelectorAll('#recipientsList .status-indicator.status-active').length;
+  if (!activos) {
+    result.innerHTML = '<div class="alert alert-error">Agregue o active al menos un destinatario para enviar el correo de prueba.</div>';
+    return;
+  }
+
   btn.disabled = true;
   btn.textContent = '⏳ Enviando...';
   result.innerHTML = '';

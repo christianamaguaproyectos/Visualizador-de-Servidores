@@ -192,3 +192,6 @@ body.ui-plataforma #app > .loading h2 { margin: 0 0 8px; font: 700 var(--text-xl
 
 /* Servidores sin rack: una fila completa bajo los racks */
 .gab-grid--sin-rack { grid-template-columns: minmax(0, 1fr); }
+/* Paginación deshabilitada (una sola página): sin cambio de color al pasar el mouse */
+body.ui-plataforma .rack-pagination .btn-secondary:disabled,
+body.ui-plataforma .rack-pagination .btn-secondary:disabled:hover { background: var(--color-bg-soft); color: var(--color-text-muted); border-color: var(--color-border); cursor: not-allowed; opacity: .8; }
