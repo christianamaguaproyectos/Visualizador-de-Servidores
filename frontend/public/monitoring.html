@@ -18,12 +18,15 @@
 <body class="ui-plataforma">
   <header class="monitoring-header">
     <div class="header-left">
-      <h1>🖥️ Monitoreo de Servidores</h1>
-      <span class="last-update" id="lastUpdate">Actualizando...</span>
+      <h1>Monitoreo</h1>
+      <p class="mon-subtitulo">Telemetría en tiempo real, alertas y comportamiento de incidentes operativos</p>
     </div>
     <div class="header-right">
-      <button class="btn btn-secondary btn-icon" id="btnRefresh" title="Actualizar">🔄</button>
-
+      <span class="en-vivo" id="indicadorVivo" title="Los datos se actualizan solos cada 15 s mientras la pestaña está visible">
+        <span class="en-vivo__punto" aria-hidden="true"></span>
+        <span class="last-update" id="lastUpdate">Conectando…</span>
+      </span>
+      <button type="button" class="btn btn-secondary btn-icon" id="btnRefresh" title="Actualizar ahora" aria-label="Actualizar ahora">⟳</button>
     </div>
   </header>
 
@@ -86,6 +89,35 @@
 
     <!-- Tab Content: Overview -->
     <section class="tab-content active" id="tab-overview" role="tabpanel" aria-labelledby="tab-btn-overview">
+      <section class="card sala-vivo" aria-labelledby="salaVivoTitulo">
+        <div class="card-header sala-vivo__cab">
+          <div>
+            <h2 id="salaVivoTitulo">Estado en tiempo real por rack</h2>
+            <p class="muted">Cada punto es un servidor; la onda muestra sus últimos tiempos de respuesta. Pulse un rack para ver sus servidores y un servidor para abrir su telemetría.</p>
+          </div>
+          <div class="sala-vivo__herr">
+            <input type="search" class="search-input" id="buscarVivo" placeholder="Buscar servidor, IP o rack" aria-label="Buscar servidor, IP o rack">
+            <div class="segmentado" role="group" aria-label="Filtro de servidores">
+              <button type="button" class="segmentado__btn activo" data-filtro-vivo="todos" aria-pressed="true">Todos</button>
+              <button type="button" class="segmentado__btn" data-filtro-vivo="problemas" aria-pressed="false">Con problemas</button>
+            </div>
+          </div>
+        </div>
+        <div class="leyenda-vivo" aria-hidden="true">
+          <span><span class="led led--UP"></span>Operativo</span>
+          <span><span class="led led--DEGRADED"></span>Degradado</span>
+          <span><span class="led led--DOWN"></span>Caído</span>
+          <span><span class="led led--MAINTENANCE"></span>Mantenimiento</span>
+          <span><span class="led led--UNKNOWN"></span>Sin datos</span>
+        </div>
+        <div class="racks-vivo" id="racksVivo" aria-live="polite" aria-busy="true">
+          <div class="rack-vivo rack-vivo--esqueleto" aria-hidden="true"><div class="esq esq--titulo"></div><div class="esq esq--leds"></div><div class="esq esq--fila"></div><div class="esq esq--fila"></div></div>
+          <div class="rack-vivo rack-vivo--esqueleto" aria-hidden="true"><div class="esq esq--titulo"></div><div class="esq esq--leds"></div><div class="esq esq--fila"></div><div class="esq esq--fila"></div></div>
+          <div class="rack-vivo rack-vivo--esqueleto" aria-hidden="true"><div class="esq esq--titulo"></div><div class="esq esq--leds"></div><div class="esq esq--fila"></div><div class="esq esq--fila"></div></div>
+        </div>
+        <div class="detalle-rack" id="detalleRack" hidden></div>
+      </section>
+
       <div class="overview-grid">
         <!-- Incidentes Activos -->
         <div class="card">
@@ -496,6 +528,148 @@
           <div class="form-actions">
             <button type="button" class="btn btn-secondary" id="checkFormCancel">Cancelar</button>
             <button type="submit" class="btn btn-primary">Crear Check</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Nota de incidente -->
+  <div class="modal" id="noteModal">
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="noteModalTitle">
+      <div class="modal-header">
+        <h2 id="noteModalTitle">Agregar nota al incidente</h2>
+        <button type="button" class="modal-close" data-cerrar-modal>×</button>
+      </div>
+      <div class="modal-body">
+        <form id="noteForm">
+          <input type="hidden" id="noteIncidentId">
+          <div class="form-group">
+            <label for="noteText">Nota *</label>
+            <textarea id="noteText" rows="4" maxlength="1000" required placeholder="Qué se observó o qué acción se tomó"></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" data-cerrar-modal>Cancelar</button>
+            <button type="submit" class="btn btn-primary">Guardar nota</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Importar hosts -->
+  <div class="modal" id="importModal">
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="importModalTitle">
+      <div class="modal-header">
+        <h2 id="importModalTitle">Importar hosts del inventario</h2>
+        <button type="button" class="modal-close" data-cerrar-modal>×</button>
+      </div>
+      <div class="modal-body">
+        <form id="importForm">
+          <p class="muted u-mb-16">Crea hosts de monitoreo a partir de los servidores del inventario. Los que ya existen se omiten.</p>
+          <div class="form-group">
+            <label for="importType">Servidores a importar</label>
+            <select id="importType">
+              <option value="fisicos">Servidores físicos</option>
+              <option value="virtuales">Servidores virtuales</option>
+            </select>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" data-cerrar-modal>Cancelar</button>
+            <button type="submit" class="btn btn-primary">Importar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Mantenimiento de host -->
+  <div class="modal" id="maintenanceModal">
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="maintenanceModalTitle">
+      <div class="modal-header">
+        <h2 id="maintenanceModalTitle">Poner en mantenimiento</h2>
+        <button type="button" class="modal-close" data-cerrar-modal>×</button>
+      </div>
+      <div class="modal-body">
+        <form id="maintenanceForm">
+          <input type="hidden" id="maintenanceHostId">
+          <p class="muted u-mb-16" id="maintenanceHostName"></p>
+          <div class="form-group">
+            <label for="maintenanceHours">Duración</label>
+            <select id="maintenanceHours">
+              <option value="1">1 hora</option>
+              <option value="2">2 horas</option>
+              <option value="4">4 horas</option>
+              <option value="8">8 horas</option>
+              <option value="24">24 horas</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="maintenanceComment">Motivo (opcional)</label>
+            <input type="text" id="maintenanceComment" maxlength="500" placeholder="Cambio de disco, actualización...">
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" data-cerrar-modal>Cancelar</button>
+            <button type="submit" class="btn btn-warning">Poner en mantenimiento</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Check masivo -->
+  <div class="modal" id="bulkCheckModal">
+    <div class="modal-content modal-lg" role="dialog" aria-modal="true" aria-labelledby="bulkCheckModalTitle">
+      <div class="modal-header">
+        <h2 id="bulkCheckModalTitle">Check masivo</h2>
+        <button type="button" class="modal-close" data-cerrar-modal>×</button>
+      </div>
+      <div class="modal-body">
+        <form id="bulkCheckForm">
+          <div class="form-group">
+            <label for="bulkSearch">Hosts (se usa la IP de cada uno)</label>
+            <div class="bulk-herr">
+              <input type="search" id="bulkSearch" class="search-input" placeholder="Filtrar hosts" aria-label="Filtrar hosts">
+              <button type="button" class="btn btn-secondary btn-sm" id="bulkSelectAll">Seleccionar visibles</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="bulkSelectNone">Ninguno</button>
+              <span class="muted" id="bulkCount">0 seleccionados</span>
+            </div>
+            <div class="bulk-lista" id="bulkHostList"></div>
+          </div>
+          <div class="mon-grid-3">
+            <div class="form-group">
+              <label for="bulkKind">Tipo de check</label>
+              <select id="bulkKind">
+                <option value="icmp">ICMP (Ping)</option>
+                <option value="tcp">TCP (Puerto)</option>
+                <option value="http">HTTP/HTTPS</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="bulkFrequency">Frecuencia</label>
+              <select id="bulkFrequency">
+                <option value="30">30 segundos</option>
+                <option value="60" selected>1 minuto</option>
+                <option value="300">5 minutos</option>
+                <option value="600">10 minutos</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="bulkTimeout">Timeout (ms)</label>
+              <input type="number" id="bulkTimeout" value="2000" min="100" max="30000">
+            </div>
+          </div>
+          <div class="form-group u-oculto" id="bulkTcpGroup">
+            <label for="bulkPort">Puerto TCP</label>
+            <input type="number" id="bulkPort" min="1" max="65535" placeholder="22, 443...">
+          </div>
+          <div class="form-group u-oculto" id="bulkHttpGroup">
+            <label for="bulkPath">Ruta HTTP (se combina con la IP de cada host)</label>
+            <input type="text" id="bulkPath" placeholder="/" value="/">
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" data-cerrar-modal>Cancelar</button>
+            <button type="submit" class="btn btn-primary">Crear checks</button>
           </div>
         </form>
       </div>

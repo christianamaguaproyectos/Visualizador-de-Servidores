@@ -10,6 +10,11 @@ import {
 } from '/js/dominios/monitoreo/presentacionEstado.js';
 import { confirmAction } from '/js/dominios/ui-system/modalConfirm.js';
 import { trackUIEvent } from '/js/dominios/ui-system/uxTelemetry.js';
+import { apiJson } from '/js/dominios/ui-system/apiFetch.js';
+import { escapeAttr } from '/js/dominios/ui-system/seguridadHtml.js';
+import { agruparPorRack, filtrarHosts, resumenEstados } from '/js/dominios/monitoreo/modeloRacks.js';
+import { tarjetaRack, detalleRack } from '/js/dominios/monitoreo/vistaRacks.js';
+import { cabeceraPanel, cuerpoPanel, esqueletoPanel } from '/js/dominios/monitoreo/panelServidor.js';
 
 
 // Estado global
@@ -19,8 +24,59 @@ const state = {
   incidents: [],
   checks: [],
   currentTab: 'overview',
-  refreshInterval: null
+  refreshInterval: null,
+  // Vista en tiempo real
+  vivo: null,
+  filtroVivo: { texto: '', soloProblemas: false },
+  rackAbierto: null,
+  ultimaActualizacion: 0,
+  // Panel de servidor abierto
+  panel: { hostId: null, minutos: 60, host: null, pidiendo: false }
 };
+
+const INTERVALO_VIVO_MS = 15000;
+const ESPERA_API_MS = 10000;
+
+/** Muestra un error claro con botón Reintentar (nunca deja un "cargando" infinito) */
+function mostrarError(container, mensaje, accion) {
+  if (!container) return;
+  container.setAttribute('aria-busy', 'false');
+  container.innerHTML = `
+    <div class="estado-error" role="alert">
+      <span>${fmt(mensaje)}</span>
+      ${accion ? `<button type="button" class="btn btn-secondary btn-sm" data-reintentar="${escapeAttr(accion)}">Reintentar</button>` : ''}
+    </div>`;
+}
+
+function mensajeDeError(err, porDefecto = 'No se pudieron cargar los datos.') {
+  if (err?.status === 404) return 'El monitoreo no está habilitado en este servidor (variable MONITORING_ENABLED=1).';
+  if (err?.tiempoAgotado) return 'El servidor tardó demasiado en responder.';
+  if (err?.status === 403) return 'Su usuario no tiene permiso para esta sección.';
+  if (err instanceof TypeError) return 'Sin conexión con el servidor.';
+  return err?.message || porDefecto;
+}
+
+const obtenerJson = (url) => apiJson(url, { timeoutMs: ESPERA_API_MS });
+
+/** POST/PUT/DELETE con JSON; lanza Error con el mensaje del servidor si falla */
+async function enviarJson(url, method = 'POST', body) {
+  return apiJson(url, {
+    method,
+    timeoutMs: 30000,
+    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined
+  });
+}
+
+function abrirModal(id) {
+  document.getElementById(id)?.classList.add('show');
+}
+
+function cerrarModal(modal) {
+  if (!modal) return;
+  modal.classList.remove('show');
+  if (modal.id === 'hostModal') detenerPanel();
+}
 
 // Helpers
 function fmt(val) {
@@ -30,10 +86,6 @@ function fmt(val) {
 /** Deja solo letras, números, guion y guion bajo para usar un valor como clase CSS */
 function claseSegura(val) {
   return String(val ?? '').replace(/[^a-zA-Z0-9_-]/g, '');
-}
-
-function safeErrorMessage(error) {
-  return fmt(error?.message || 'Error desconocido');
 }
 
 function formatDate(dateStr) {
@@ -85,18 +137,10 @@ async function confirmActionTracked(eventName, options, data = {}) {
 
 // API Calls
 async function fetchDashboard() {
-  try {
-    const res = await fetch('/api/monitoring/dashboard');
-    if (!res.ok) throw new Error('Error cargando dashboard');
-    return await res.json();
-  } catch (err) {
-    console.error('Error fetchDashboard:', err);
-    return null;
-  }
+  return obtenerJson('/api/monitoring/dashboard');
 }
 
 async function fetchHosts(filters = {}) {
-  try {
     const params = new URLSearchParams();
     if (filters.estado) params.append('estado', filters.estado);
     if (filters.type) params.append('type', filters.type);
@@ -104,13 +148,8 @@ async function fetchHosts(filters = {}) {
     if (filters.critical) params.append('critical', 'true');
     if (filters.search) params.append('search', filters.search);
 
-    const res = await fetch(`/api/monitoring/hosts?${params}`);
-    if (!res.ok) throw new Error('Error cargando hosts');
-    return await res.json();
-  } catch (err) {
-    console.error('Error fetchHosts:', err);
-    return { hosts: [] };
-  }
+    params.append('limit', '500');
+    return obtenerJson(`/api/monitoring/hosts?${params}`);
 }
 
 function getHostFiltersFromUI() {
@@ -201,9 +240,7 @@ function clearHostFilters() {
 
 async function fetchHostDetail(id) {
   try {
-    const res = await fetch(`/api/monitoring/hosts/${id}`);
-    if (!res.ok) throw new Error('Error cargando detalle');
-    return await res.json();
+    return await obtenerJson(`/api/monitoring/hosts/${encodeURIComponent(id)}`);
   } catch (err) {
     console.error('Error fetchHostDetail:', err);
     return null;
@@ -216,9 +253,7 @@ async function fetchHostHistory(id, from, to) {
     if (from) params.append('from', from);
     if (to) params.append('to', to);
 
-    const res = await fetch(`/api/monitoring/hosts/${id}/history?${params}`);
-    if (!res.ok) throw new Error('Error cargando historial');
-    return await res.json();
+    return await obtenerJson(`/api/monitoring/hosts/${encodeURIComponent(id)}/history?${params}`);
   } catch (err) {
     console.error('Error fetchHostHistory:', err);
     return null;
@@ -226,25 +261,15 @@ async function fetchHostHistory(id, from, to) {
 }
 
 async function fetchIncidents(filters = {}) {
-  try {
-    const params = new URLSearchParams();
-    if (filters.state) params.append('state', filters.state);
-    if (filters.severity) params.append('severity', filters.severity);
-
-    const res = await fetch(`/api/monitoring/incidents?${params}`);
-    if (!res.ok) throw new Error('Error cargando incidentes');
-    return await res.json();
-  } catch (err) {
-    console.error('Error fetchIncidents:', err);
-    return { incidents: [] };
-  }
+  const params = new URLSearchParams();
+  if (filters.state) params.append('state', filters.state);
+  if (filters.severity) params.append('severity', filters.severity);
+  return obtenerJson(`/api/monitoring/incidents?${params}`);
 }
 
 async function fetchIncidentDetail(id) {
   try {
-    const res = await fetch(`/api/monitoring/incidents/${id}`);
-    if (!res.ok) throw new Error('Error cargando detalle');
-    return await res.json();
+    return await obtenerJson(`/api/monitoring/incidents/${encodeURIComponent(id)}`);
   } catch (err) {
     console.error('Error fetchIncidentDetail:', err);
     return null;
@@ -252,14 +277,7 @@ async function fetchIncidentDetail(id) {
 }
 
 async function fetchChecks() {
-  try {
-    const res = await fetch('/api/monitoring/checks');
-    if (!res.ok) throw new Error('Error cargando checks');
-    return await res.json();
-  } catch (err) {
-    console.error('Error fetchChecks:', err);
-    return { checks: [] };
-  }
+  return obtenerJson('/api/monitoring/checks');
 }
 
 // Render Functions
@@ -277,8 +295,6 @@ function updateKPIs(data) {
     ? `${recentMetrics.avg_latency}ms`
     : '—';
 
-  // Actualizar timestamp
-  document.getElementById('lastUpdate').textContent = `Última actualización: ${new Date().toLocaleTimeString('es-EC')}`;
 }
 
 function renderActiveIncidents(incidents) {
@@ -581,31 +597,112 @@ function formatCheckConfig(check) {
 }
 
 // Modal Functions
+/**
+ * Panel de un servidor: pestaña "Telemetría en vivo" (ondas por check + incidentes, se
+ * actualiza sola), "Resumen" (datos de 24 h y últimas ejecuciones) e "Historial".
+ */
 async function showHostModal(hostId) {
-  const modal = document.getElementById('hostModal');
   const body = document.getElementById('hostModalBody');
   const title = document.getElementById('hostModalTitle');
+  const id = String(hostId || '');
+  if (!/^[1-9][0-9]{0,18}$/.test(id)) return;
 
-  modal.classList.add('show');
-  body.innerHTML = '<div class="loading-spinner"></div>';
+  const conocido = (state.vivo?.hosts || []).find((h) => String(h.id) === id) || state.hosts.find((h) => String(h.id) === id);
+  title.textContent = conocido ? `${conocido.name}${conocido.ip ? ` (${conocido.ip})` : ''}` : 'Telemetría del servidor';
+  state.panel = { hostId: id, minutos: state.panel.minutos || 60, host: conocido || null, pidiendo: false };
 
-  const data = await fetchHostDetail(hostId);
+  body.innerHTML = `
+    <div class="ptabs" role="tablist" aria-label="Secciones del servidor">
+      <button type="button" class="ptab activo" role="tab" aria-selected="true" data-ptab="tele">Telemetría en vivo</button>
+      <button type="button" class="ptab" role="tab" aria-selected="false" data-ptab="resumen">Resumen</button>
+      <button type="button" class="ptab" role="tab" aria-selected="false" data-ptab="historial">Historial</button>
+    </div>
+    <div class="ppanel" data-ppanel="tele">${cabeceraPanel(state.panel.minutos)}</div>
+    <div class="ppanel" data-ppanel="resumen" hidden><div class="loading-spinner"></div></div>
+    <div class="ppanel" data-ppanel="historial" hidden>${marcadoHistorial()}</div>
+    <div class="host-detail-actions solo-admin">
+      <button type="button" class="btn btn-warning" data-action="maintenance" data-id="${escapeAttr(id)}">🔧 Mantenimiento</button>
+      <button type="button" class="btn btn-primary" data-action="add-check" data-host-id="${escapeAttr(id)}">➕ Agregar check</button>
+    </div>`;
+  body.querySelector('[data-tele-cuerpo]').innerHTML = esqueletoPanel();
+  abrirModal('hostModal');
+  actualizarBotonMantenimiento();
+  trackUIEvent('monitoring.host_panel.open');
+  await refrescarPanel();
+}
+
+function marcadoHistorial() {
+  return `
+    <div class="history-controls historial-controles">
+      <select id="historyRange" class="form-control u-ancho-auto" aria-label="Rango del historial">
+        <option value="today">Hoy</option>
+        <option value="yesterday">Ayer</option>
+        <option value="6h">Últimas 6 horas</option>
+        <option value="24h">Últimas 24 horas</option>
+        <option value="3d">Últimos 3 días</option>
+        <option value="7d">Últimos 7 días</option>
+        <option value="custom">Rango personalizado</option>
+      </select>
+      <button type="button" class="btn btn-primary btn-sm" id="btnLoadHistory">Cargar</button>
+    </div>
+    <div id="customDateRange" class="u-oculto historial-rango">
+      <label class="u-texto-13">Desde: <input type="datetime-local" id="historyFrom" class="form-control u-ancho-auto-inline"></label>
+      <label class="u-texto-13-ml-12">Hasta: <input type="datetime-local" id="historyTo" class="form-control u-ancho-auto-inline"></label>
+    </div>
+    <div id="historyResults">
+      <p class="muted">Seleccione un rango y pulse Cargar.</p>
+    </div>`;
+}
+
+function actualizarBotonMantenimiento() {
+  const btn = document.querySelector('#hostModalBody [data-action="maintenance"]');
+  if (!btn) return;
+  const enMant = state.panel.host?.estado_actual === 'MAINTENANCE';
+  btn.textContent = enMant ? '✅ Sacar de mantenimiento' : '🔧 Poner en mantenimiento';
+  btn.classList.toggle('btn-success', enMant);
+  btn.classList.toggle('btn-warning', !enMant);
+}
+
+/** Pide la serie del servidor abierto y repinta solo el cuerpo de la telemetría */
+async function refrescarPanel() {
+  const { hostId, minutos } = state.panel;
+  const cuerpo = document.querySelector('#hostModalBody [data-tele-cuerpo]');
+  const hora = document.querySelector('#hostModalBody [data-tele-hora]');
+  const vivo = document.querySelector('#hostModalBody [data-tele-vivo]');
+  if (!hostId || !cuerpo || state.panel.pidiendo) return;
+  state.panel.pidiendo = true;
+  try {
+    const datos = await obtenerJson(`/api/monitoring/telemetry/hosts/${encodeURIComponent(hostId)}/series?minutes=${minutos}&limit=120`);
+    if (state.panel.hostId !== hostId) return; // se cerró o cambió de servidor
+    state.panel.host = datos.host;
+    document.getElementById('hostModalTitle').textContent = `${datos.host.name}${datos.host.ip ? ` (${datos.host.ip})` : ''}`;
+    cuerpo.innerHTML = cuerpoPanel(datos);
+    actualizarBotonMantenimiento();
+    if (hora) hora.textContent = `En vivo · ${new Date().toLocaleTimeString('es-EC')}`;
+    vivo?.classList.remove('en-vivo--error');
+  } catch (err) {
+    if (state.panel.hostId !== hostId) return;
+    if (hora) hora.textContent = 'Sin conexión';
+    vivo?.classList.add('en-vivo--error');
+    // Si ya hay gráficas se conservan; si no, se muestra el error con reintento
+    if (!cuerpo.querySelector('.tele-grid, .tele-estado')) mostrarError(cuerpo, mensajeDeError(err, 'No se pudo cargar la telemetría.'), 'panel');
+  } finally {
+    state.panel.pidiendo = false;
+  }
+}
+
+function detenerPanel() {
+  state.panel = { hostId: null, minutos: state.panel.minutos, host: null, pidiendo: false };
+}
+
+async function cargarResumenHost(contenedor) {
+  const data = await fetchHostDetail(state.panel.hostId);
   if (!data) {
-    body.innerHTML = '<div class="error">Error cargando datos</div>';
+    mostrarError(contenedor, 'No se pudo cargar el resumen del servidor.', 'resumen');
     return;
   }
-
   const { host, checks, recentRuns, incidents, stats24h } = data;
-  title.textContent = `${host.name} (${host.ip})`;
-
-  // Estructura con Tabs
-  body.innerHTML = `
-    <div class="tabs">
-      <button class="tab-btn active" data-tab="host-summary">Resumen</button>
-      <button class="tab-btn" data-tab="host-history">Historial</button>
-    </div>
-
-    <div id="host-summary" class="tab-content active">
+  contenedor.innerHTML = `
       <div class="host-detail">
         <div class="host-detail-header">
           ${statusBadge(host.estado_actual)}
@@ -613,14 +710,13 @@ async function showHostModal(hostId) {
           <span class="muted">Tipo: ${fmt(host.type)}</span>
           ${host.rack ? `<span class="muted">Rack: ${fmt(host.rack)}</span>` : ''}
         </div>
-        
         <div class="host-detail-stats">
           <div class="stat">
-            <div class="stat-value">${stats24h?.ok_count || 0}</div>
+            <div class="stat-value">${fmt(stats24h?.ok_count || 0)}</div>
             <div class="stat-label">Checks OK (24h)</div>
           </div>
           <div class="stat">
-            <div class="stat-value text-danger">${stats24h?.fail_count || 0}</div>
+            <div class="stat-value text-danger">${fmt(stats24h?.fail_count || 0)}</div>
             <div class="stat-label">Fallidos (24h)</div>
           </div>
           <div class="stat">
@@ -628,7 +724,6 @@ async function showHostModal(hostId) {
             <div class="stat-label">Latencia Prom.</div>
           </div>
         </div>
-        
         <div class="host-detail-section">
           <h3>Checks Configurados (${checks.length})</h3>
           ${checks.length > 0 ? `
@@ -637,14 +732,13 @@ async function showHostModal(hostId) {
                 <li>
                   <span class="badge">${fmt(String(c.kind || '').toUpperCase())}</span>
                   ${formatCheckConfig(c)}
-                  <span class="muted">(cada ${c.frequency_sec}s)</span>
+                  <span class="muted">(cada ${fmt(c.frequency_sec)}s)</span>
                   ${c.enabled ? '✅' : '❌'}
                 </li>
               `).join('')}
             </ul>
           ` : '<p class="muted">Sin checks configurados</p>'}
         </div>
-        
         <div class="host-detail-section">
           <h3>Últimas Ejecuciones</h3>
           ${recentRuns.length > 0 ? `
@@ -658,14 +752,13 @@ async function showHostModal(hostId) {
                     <td>${formatDate(r.time)}</td>
                     <td>${fmt(r.kind?.toUpperCase() || '?')}</td>
                     <td><span class="badge badge-${claseSegura(r.status)}">${fmt(r.status)}</span></td>
-                    <td>${r.latency_ms ? r.latency_ms + 'ms' : '—'}</td>
+                    <td>${r.latency_ms ? fmt(r.latency_ms) + 'ms' : '—'}</td>
                   </tr>
                 `).join('')}
               </tbody>
             </table>
           ` : '<p class="muted">Sin ejecuciones recientes</p>'}
         </div>
-        
         <div class="host-detail-section">
           <h3>Incidentes Recientes</h3>
           ${incidents.length > 0 ? `
@@ -681,125 +774,57 @@ async function showHostModal(hostId) {
             </ul>
           ` : '<p class="muted">Sin incidentes</p>'}
         </div>
-        
-        <div class="host-detail-actions">
-          <button class="btn btn-warning" data-action="maintenance" data-id="${encodeURIComponent(String(host.id ?? ''))}">🔧 Poner en Mantenimiento</button>
-          <button class="btn btn-primary" data-action="add-check" data-host-id="${encodeURIComponent(String(host.id ?? ''))}">➕ Agregar Check</button>
-        </div>
-      </div>
-    </div>
+      </div>`;
+}
 
-    <!-- Pestaña Historial -->
-    <div id="host-history" class="tab-content u-oculto">
-      <div class="history-controls historial-controles">
-        <select id="historyRange" class="form-control u-ancho-auto">
-          <option value="today">Hoy</option>
-          <option value="yesterday">Ayer</option>
-          <option value="6h">Últimas 6 horas</option>
-          <option value="24h">Últimas 24 horas</option>
-          <option value="3d">Últimos 3 días</option>
-          <option value="7d">Últimos 7 días</option>
-          <option value="custom">Rango personalizado</option>
-        </select>
-        <button class="btn btn-primary btn-sm" id="btnLoadHistory">Cargar</button>
-      </div>
-      <div id="customDateRange" class="u-oculto historial-rango">
-        <label class="u-texto-13">Desde: <input type="datetime-local" id="historyFrom" class="form-control u-ancho-auto-inline"></label>
-        <label class="u-texto-13-ml-12">Hasta: <input type="datetime-local" id="historyTo" class="form-control u-ancho-auto-inline"></label>
-      </div>
-      <div id="historyResults">
-        <p class="muted">Seleccione un rango y haga clic en Cargar.</p>
-      </div>
-    </div>
-  `;
+function rangoHistorial() {
+  const range = document.getElementById('historyRange').value;
+  const now = new Date();
+  const horasAtras = { '6h': 6, '24h': 24, '3d': 72, '7d': 168 };
+  if (horasAtras[range]) {
+    return { from: new Date(now.getTime() - horasAtras[range] * 3600000).toISOString(), to: now.toISOString() };
+  }
+  if (range === 'today') {
+    return { from: new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString(), to: now.toISOString() };
+  }
+  if (range === 'yesterday') {
+    const y = new Date(now);
+    y.setDate(y.getDate() - 1);
+    return {
+      from: new Date(y.getFullYear(), y.getMonth(), y.getDate()).toISOString(),
+      to: new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59, 999).toISOString()
+    };
+  }
+  const fromInput = document.getElementById('historyFrom').value;
+  const toInput = document.getElementById('historyTo').value;
+  if (!fromInput || !toInput) return null;
+  return { from: new Date(fromInput).toISOString(), to: new Date(toInput).toISOString() };
+}
 
-  // Tab switching logic
-  const tabs = body.querySelectorAll('.tab-btn');
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      tabs.forEach(t => t.classList.remove('active'));
-      body.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
-
-      tab.classList.add('active');
-      const target = body.querySelector(`#${tab.dataset.tab}`);
-      if (target) target.style.display = 'block';
-    });
-  });
-
-  // History logic
-  const btnLoadHistory = document.getElementById('btnLoadHistory');
-  const historyRange = document.getElementById('historyRange');
+async function cargarHistorial() {
   const historyResults = document.getElementById('historyResults');
-  const customDateRange = document.getElementById('customDateRange');
-
-  // Show/hide custom date inputs
-  historyRange.addEventListener('change', () => {
-    customDateRange.style.display = historyRange.value === 'custom' ? 'block' : 'none';
-  });
-
-  btnLoadHistory.addEventListener('click', async () => {
-    historyResults.innerHTML = '<div class="loading-spinner"></div>';
-
-    let from, to;
-    const range = historyRange.value;
-    const now = new Date();
-
-    if (range === 'today') {
-      from = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-      to = new Date().toISOString();
-    } else if (range === 'yesterday') {
-      const yest = new Date(now);
-      yest.setDate(yest.getDate() - 1);
-      from = new Date(yest.getFullYear(), yest.getMonth(), yest.getDate()).toISOString();
-      to = new Date(yest.getFullYear(), yest.getMonth(), yest.getDate(), 23, 59, 59, 999).toISOString();
-    } else if (range === '6h') {
-      from = new Date(now.getTime() - 6 * 60 * 60 * 1000).toISOString();
-      to = new Date().toISOString();
-    } else if (range === '24h') {
-      from = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-      to = new Date().toISOString();
-    } else if (range === '3d') {
-      from = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString();
-      to = new Date().toISOString();
-    } else if (range === '7d') {
-      from = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      to = new Date().toISOString();
-    } else if (range === 'custom') {
-      const fromInput = document.getElementById('historyFrom').value;
-      const toInput = document.getElementById('historyTo').value;
-      if (!fromInput || !toInput) {
-        historyResults.innerHTML = '<div class="error">Por favor seleccione fecha de inicio y fin</div>';
-        return;
-      }
-      from = new Date(fromInput).toISOString();
-      to = new Date(toInput).toISOString();
-    }
-
-    const hData = await fetchHostHistory(hostId, from, to);
-    if (!hData || !hData.history) {
-      historyResults.innerHTML = '<div class="error">Error cargando historial</div>';
-      return;
-    }
-
-    // Render History Table
-    if (hData.history.length === 0) {
-      historyResults.innerHTML = '<div class="empty-state">No hay registros en este periodo</div>';
-      return;
-    }
-
-    historyResults.innerHTML = `
+  const rango = rangoHistorial();
+  if (!rango) {
+    historyResults.innerHTML = '<div class="error">Seleccione fecha de inicio y fin</div>';
+    return;
+  }
+  historyResults.innerHTML = '<div class="loading-spinner"></div>';
+  const hData = await fetchHostHistory(state.panel.hostId, rango.from, rango.to);
+  if (!hData || !hData.history) {
+    mostrarError(historyResults, 'No se pudo cargar el historial.', 'historial');
+    return;
+  }
+  if (hData.history.length === 0) {
+    historyResults.innerHTML = '<div class="empty-state">No hay registros en este periodo</div>';
+    return;
+  }
+  historyResults.innerHTML = `
       <div class="historial-resumen">
         Mostrando ${hData.history.length} registros
       </div>
       <table class="data-table compact u-ancho-100">
         <thead>
-          <tr>
-            <th>Hora</th>
-            <th>Tipo</th>
-            <th>Estado</th>
-            <th>Latencia</th>
-            <th>Error</th>
-          </tr>
+          <tr><th>Hora</th><th>Tipo</th><th>Estado</th><th>Latencia</th><th>Error</th></tr>
         </thead>
         <tbody class="historial-cuerpo">
           ${hData.history.map(r => `
@@ -807,14 +832,65 @@ async function showHostModal(hostId) {
               <td class="u-col-25">${formatDate(r.time)}</td>
               <td class="u-col-15">${fmt(r.kind?.toUpperCase() || 'ICMP')}</td>
               <td class="u-col-15"><span class="badge badge-${claseSegura(r.status)}">${fmt(r.status)}</span></td>
-              <td class="u-col-15">${r.latency_ms ? r.latency_ms + 'ms' : '—'}</td>
+              <td class="u-col-15">${r.latency_ms ? fmt(r.latency_ms) + 'ms' : '—'}</td>
               <td class="historial-col-error">${fmt(r.error)}</td>
             </tr>
           `).join('')}
         </tbody>
-      </table>
-    `;
+      </table>`;
+}
+
+function cambiarPestanaPanel(nombre) {
+  const body = document.getElementById('hostModalBody');
+  body.querySelectorAll('[data-ptab]').forEach((b) => {
+    const activo = b.dataset.ptab === nombre;
+    b.classList.toggle('activo', activo);
+    b.setAttribute('aria-selected', activo ? 'true' : 'false');
   });
+  body.querySelectorAll('[data-ppanel]').forEach((p) => { p.hidden = p.dataset.ppanel !== nombre; });
+  if (nombre === 'resumen') cargarResumenHost(body.querySelector('[data-ppanel="resumen"]'));
+  if (nombre === 'tele') refrescarPanel();
+}
+
+async function alternarMantenimiento(hostId) {
+  const host = state.panel.host || (state.vivo?.hosts || []).find((h) => String(h.id) === String(hostId));
+  if (host?.estado_actual === 'MAINTENANCE') {
+    const ok = await confirmActionTracked('end_maintenance', {
+      title: 'Sacar de mantenimiento',
+      message: `¿Sacar "${host.name}" de mantenimiento? Su estado se volverá a evaluar con los checks.`,
+      confirmText: 'Sacar de mantenimiento',
+      tone: 'primary'
+    }, { hostId });
+    if (!ok) return;
+    try {
+      await enviarJson(`/api/monitoring/hosts/${encodeURIComponent(hostId)}/maintenance`, 'DELETE');
+      showToast('El servidor salió de mantenimiento', 'success');
+      refrescarTodo();
+    } catch (err) {
+      showToast(mensajeDeError(err, 'No se pudo sacar de mantenimiento'), 'error');
+    }
+    return;
+  }
+  document.getElementById('maintenanceForm').reset();
+  document.getElementById('maintenanceHostId').value = String(hostId);
+  document.getElementById('maintenanceHostName').textContent = host ? `Servidor: ${host.name}. Durante la ventana no se generan alertas.` : 'Durante la ventana no se generan alertas.';
+  abrirModal('maintenanceModal');
+}
+
+async function guardarMantenimiento(e) {
+  e.preventDefault();
+  const hostId = document.getElementById('maintenanceHostId').value;
+  try {
+    await enviarJson(`/api/monitoring/hosts/${encodeURIComponent(hostId)}/maintenance`, 'POST', {
+      duration_hours: Number(document.getElementById('maintenanceHours').value),
+      comment: document.getElementById('maintenanceComment').value.trim()
+    });
+    showToast('Servidor en mantenimiento', 'success');
+    cerrarModal(document.getElementById('maintenanceModal'));
+    refrescarTodo();
+  } catch (err) {
+    showToast(mensajeDeError(err, 'No se pudo activar el mantenimiento'), 'error');
+  }
 }
 
 async function showIncidentModal(incidentId) {
@@ -883,7 +959,7 @@ async function showIncidentModal(incidentId) {
 }
 
 function closeModals() {
-  document.querySelectorAll('.modal').forEach(m => m.classList.remove('show'));
+  document.querySelectorAll('.modal.show').forEach(cerrarModal);
 }
 
 // Check Form
@@ -893,18 +969,26 @@ function showCheckModal(hostId = null) {
   const hostSelect = document.getElementById('checkHostId');
 
   form.reset();
+  document.getElementById('tcpConfigGroup').classList.add('u-oculto');
+  document.getElementById('httpConfigGroup').classList.add('u-oculto');
 
-  // Populate host select
-  hostSelect.innerHTML = '<option value="">Seleccione un host...</option>';
-  state.hosts.forEach(h => {
-    const option = document.createElement('option');
-    option.value = h.id;
-    option.textContent = `${h.name} (${h.ip})`;
-    if (hostId && h.id == hostId) option.selected = true;
-    hostSelect.appendChild(option);
-  });
-
+  const pintar = () => {
+    hostSelect.innerHTML = '<option value="">Seleccione un host...</option>';
+    const lista = state.hosts.length ? state.hosts : (state.vivo?.hosts || []);
+    lista.forEach(h => {
+      const option = document.createElement('option');
+      option.value = h.id;
+      option.textContent = `${h.name} (${h.ip || 'sin IP'})`;
+      if (hostId && String(h.id) === String(hostId)) option.selected = true;
+      hostSelect.appendChild(option);
+    });
+  };
+  pintar();
   modal.classList.add('show');
+  // Si aún no se cargó la lista de hosts (p. ej. desde la vista en vivo), se completa en segundo plano
+  if (!state.hosts.length) {
+    fetchHosts({}).then((d) => { state.hosts = d.hosts || []; pintar(); }).catch(() => { });
+  }
 }
 
 // Event Handlers
@@ -918,27 +1002,18 @@ async function handleIncidentAction(action, id) {
       'close': 'close'
     };
     const backendAction = actionMap[action] || action;
-    let endpoint = `/api/monitoring/incidents/${id}/${backendAction}`;
-    let body = {};
+    if (!/^[1-9][0-9]{0,18}$/.test(String(id)) || !Object.hasOwn(actionMap, action)) return;
 
     if (action === 'add-note') {
-      const note = prompt('Ingrese la nota:');
-      if (!note) return;
-      body = { note }; // el autor lo toma el backend de la sesión
-    } else {
-      body = {};
+      // La nota se escribe en una ventana del sistema (sin prompt() nativo)
+      document.getElementById('noteForm').reset();
+      document.getElementById('noteIncidentId').value = String(id);
+      abrirModal('noteModal');
+      document.getElementById('noteText').focus();
+      return;
     }
 
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-
-    if (!res.ok) {
-      const data = await res.json();
-      throw new Error(data.error || 'Error');
-    }
+    await enviarJson(`/api/monitoring/incidents/${encodeURIComponent(id)}/${backendAction}`, 'POST', {});
 
     const actionLabelMap = {
       ack: 'reconocer',
@@ -947,12 +1022,30 @@ async function handleIncidentAction(action, id) {
       'add-note': 'agregar nota'
     };
     const actionLabel = actionLabelMap[action] || action;
-    showToast(`Accion "${actionLabel}" completada correctamente`, 'success');
-    loadIncidents();
-    loadDashboard();
-    closeModals();
+    showToast(`Acción "${actionLabel}" completada correctamente`, 'success');
+    cerrarModal(document.getElementById('incidentModal'));
+    refrescarTodo();
   } catch (err) {
-    showToast(err.message, 'error');
+    showToast(mensajeDeError(err, 'No se pudo completar la acción'), 'error');
+  }
+}
+
+async function guardarNota(e) {
+  e.preventDefault();
+  const id = document.getElementById('noteIncidentId').value;
+  const note = document.getElementById('noteText').value.trim();
+  if (!note) {
+    showToast('Escriba la nota', 'warning');
+    return;
+  }
+  try {
+    await enviarJson(`/api/monitoring/incidents/${encodeURIComponent(id)}/note`, 'POST', { note });
+    showToast('Nota agregada correctamente', 'success');
+    cerrarModal(document.getElementById('noteModal'));
+    if (document.getElementById('incidentModal').classList.contains('show')) showIncidentModal(id);
+    refrescarTodo();
+  } catch (err) {
+    showToast(mensajeDeError(err, 'No se pudo guardar la nota'), 'error');
   }
 }
 
@@ -1023,38 +1116,137 @@ async function createCheck(formData) {
     }
 
     showToast('Check creado correctamente', 'success');
-    closeModals();
+    cerrarModal(document.getElementById('checkModal'));
     loadChecks();
+    if (state.panel.hostId) refrescarPanel();
   } catch (err) {
     showToast(err.message, 'error');
   }
 }
 
-async function importHosts() {
+function importHosts() {
+  document.getElementById('importForm').reset();
+  abrirModal('importModal');
+}
+
+async function confirmarImportacion(e) {
+  e.preventDefault();
+  const type = document.getElementById('importType').value;
   try {
-    const type = prompt('Tipo de servidores a importar (fisicos/virtuales):', 'fisicos');
-    if (!type) return;
-
-    const res = await fetch('/api/monitoring/hosts/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type })
-    });
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Error importando');
-
+    const data = await enviarJson('/api/monitoring/hosts/import', 'POST', { type });
     showToast(`Importados ${data.imported} hosts, ${data.skipped} omitidos`, 'success');
-    loadHosts();
+    cerrarModal(document.getElementById('importModal'));
+    refrescarTodo();
   } catch (err) {
-    showToast(err.message, 'error');
+    showToast(mensajeDeError(err, 'No se pudo importar'), 'error');
+  }
+}
+
+// === CHECK MASIVO ===
+async function abrirCheckMasivo() {
+  document.getElementById('bulkCheckForm').reset();
+  actualizarCamposBulk();
+  const lista = document.getElementById('bulkHostList');
+  lista.innerHTML = '<div class="loading-spinner"></div>';
+  abrirModal('bulkCheckModal');
+  try {
+    if (!state.hosts.length) state.hosts = (await fetchHosts({})).hosts || [];
+    pintarHostsBulk();
+  } catch (err) {
+    mostrarError(lista, mensajeDeError(err, 'No se pudieron cargar los hosts.'), 'bulk');
+  }
+}
+
+function pintarHostsBulk() {
+  const lista = document.getElementById('bulkHostList');
+  if (!state.hosts.length) {
+    lista.innerHTML = '<div class="empty-state">No hay hosts. Importe hosts del inventario primero.</div>';
+    return;
+  }
+  lista.innerHTML = state.hosts.map((h) => `
+    <label class="bulk-item" data-texto="${escapeAttr(`${h.name} ${h.ip || ''} ${h.rack || ''}`.toLowerCase())}">
+      <input type="checkbox" value="${escapeAttr(h.id)}" data-ip="${escapeAttr(h.ip || '')}">
+      <span>${fmt(h.name)}</span><span class="muted">${fmt(h.ip || 'sin IP')}${h.rack ? ` · ${fmt(h.rack)}` : ''}</span>
+    </label>`).join('');
+  contarBulk();
+}
+
+function filtrarBulk() {
+  const t = document.getElementById('bulkSearch').value.toLowerCase().trim();
+  document.querySelectorAll('#bulkHostList .bulk-item').forEach((el) => { el.hidden = !!t && !el.dataset.texto.includes(t); });
+}
+
+function contarBulk() {
+  const n = document.querySelectorAll('#bulkHostList input:checked').length;
+  document.getElementById('bulkCount').textContent = `${n} seleccionado${n === 1 ? '' : 's'}`;
+}
+
+function actualizarCamposBulk() {
+  const kind = document.getElementById('bulkKind').value;
+  document.getElementById('bulkTcpGroup').classList.toggle('u-oculto', kind !== 'tcp');
+  document.getElementById('bulkHttpGroup').classList.toggle('u-oculto', kind !== 'http');
+}
+
+async function crearChecksMasivos(e) {
+  e.preventDefault();
+  const marcados = [...document.querySelectorAll('#bulkHostList input:checked')];
+  if (!marcados.length) {
+    showToast('Seleccione al menos un host', 'warning');
+    return;
+  }
+  const kind = document.getElementById('bulkKind').value;
+  const comunes = {
+    kind,
+    frequency_sec: Number(document.getElementById('bulkFrequency').value),
+    timeout_ms: Number(document.getElementById('bulkTimeout').value) || 2000,
+    enabled: true
+  };
+  try {
+    let creados = 0;
+    let errores = 0;
+    if (kind === 'http') {
+      // Cada host tiene su propia URL (IP + ruta)
+      const ruta = (document.getElementById('bulkPath').value.trim() || '/').replace(/^(?!\/)/, '/');
+      for (const m of marcados) {
+        if (!m.dataset.ip) { errores += 1; continue; }
+        try {
+          await enviarJson('/api/monitoring/checks', 'POST', {
+            ...comunes, host_id: Number(m.value), config: { url: `http://${m.dataset.ip}${ruta}`, expectCode: 200 }
+          });
+          creados += 1;
+        } catch { errores += 1; }
+      }
+    } else {
+      const config = kind === 'tcp' ? { port: Number(document.getElementById('bulkPort').value) } : {};
+      if (kind === 'tcp' && !(config.port >= 1 && config.port <= 65535)) {
+        showToast('Indique un puerto TCP entre 1 y 65535', 'warning');
+        return;
+      }
+      const r = await enviarJson('/api/monitoring/checks/bulk', 'POST', { ...comunes, config, host_ids: marcados.map((m) => Number(m.value)) });
+      creados = r.created?.length || 0;
+      errores = r.errors?.length || 0;
+    }
+    showToast(`Checks creados: ${creados}${errores ? ` · con error: ${errores}` : ''}`, errores && !creados ? 'error' : 'success');
+    if (creados) {
+      cerrarModal(document.getElementById('bulkCheckModal'));
+      loadChecks();
+    }
+  } catch (err) {
+    showToast(mensajeDeError(err, 'No se pudieron crear los checks'), 'error');
   }
 }
 
 // Data Loading Functions
 async function loadDashboard() {
-  const data = await fetchDashboard();
-  if (!data) return;
+  let data;
+  try {
+    data = await fetchDashboard();
+  } catch (err) {
+    const msg = mensajeDeError(err, 'No se pudo cargar el resumen.');
+    ['activeIncidentsList', 'criticalDownList', 'trendChart', 'recentMetrics']
+      .forEach((id) => mostrarError(document.getElementById(id), msg, 'dashboard'));
+    return;
+  }
 
   state.dashboard = data;
   updateKPIs(data);
@@ -1064,10 +1256,119 @@ async function loadDashboard() {
   renderTrendChart(data.hourlyTrend);
 }
 
+// === VISTA EN TIEMPO REAL POR RACK ===
+async function loadVivo() {
+  const contenedor = document.getElementById('racksVivo');
+  try {
+    state.vivo = await obtenerJson('/api/monitoring/telemetry/overview?points=24');
+    state.ultimaActualizacion = Date.now();
+    marcarVivo(true);
+    renderVivo();
+    actualizarKpisVivo();
+  } catch (err) {
+    marcarVivo(false);
+    // Con datos previos se conserva el diagrama; sin datos, error claro con reintento
+    if (!state.vivo) mostrarError(contenedor, mensajeDeError(err), 'vivo');
+  }
+}
+
+function marcarVivo(ok) {
+  const ind = document.getElementById('indicadorVivo');
+  const txt = document.getElementById('lastUpdate');
+  ind?.classList.toggle('en-vivo--error', !ok);
+  if (txt) {
+    txt.textContent = ok
+      ? `En vivo · ${new Date().toLocaleTimeString('es-EC')}`
+      : `Sin conexión${state.ultimaActualizacion ? ` · últimos datos ${new Date(state.ultimaActualizacion).toLocaleTimeString('es-EC')}` : ''}`;
+  }
+}
+
+/** Los indicadores superiores se llenan con la vista en vivo (no esperan al resumen) */
+function actualizarKpisVivo() {
+  if (!state.vivo) return;
+  const r = resumenEstados(state.vivo.hosts);
+  const poner = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = String(v); };
+  poner('kpiUp', r.UP);
+  poner('kpiDown', r.DOWN);
+  poner('kpiDegraded', r.DEGRADED);
+  poner('kpiMaintenance', r.MAINTENANCE);
+  if (!state.dashboard) poner('kpiIncidents', r.incidentes);
+}
+
+function renderVivo() {
+  const contenedor = document.getElementById('racksVivo');
+  if (!contenedor || !state.vivo) return;
+  contenedor.setAttribute('aria-busy', 'false');
+  const hosts = filtrarHosts(state.vivo.hosts, state.filtroVivo);
+  const racks = agruparPorRack(hosts);
+  if (!state.vivo.hosts.length) {
+    contenedor.innerHTML = '<div class="empty-state">No hay hosts en monitoreo. Use “Importar Hosts” en la pestaña Hosts para traerlos del inventario.</div>';
+  } else if (!racks.length) {
+    contenedor.innerHTML = '<div class="empty-state">Ningún servidor coincide con el filtro.</div>';
+  } else {
+    contenedor.innerHTML = racks.map((r) => tarjetaRack(r, { seleccionado: r.nombre === state.rackAbierto })).join('');
+  }
+  renderDetalleRack(racks);
+}
+
+function renderDetalleRack(racks = agruparPorRack(filtrarHosts(state.vivo?.hosts || [], state.filtroVivo))) {
+  const panel = document.getElementById('detalleRack');
+  if (!panel) return;
+  const rack = racks.find((r) => r.nombre === state.rackAbierto);
+  panel.hidden = !rack;
+  panel.innerHTML = rack ? detalleRack(rack) : '';
+}
+
+function abrirRack(nombre) {
+  state.rackAbierto = state.rackAbierto === nombre ? null : nombre;
+  trackUIEvent('monitoring.rack.open');
+  renderVivo();
+  if (state.rackAbierto) document.getElementById('detalleRack')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/** Sondeo ligero: solo con la pestaña del navegador visible */
+function tickVivo() {
+  if (document.hidden) return;
+  if (state.currentTab === 'overview') {
+    loadVivo();
+    loadDashboard();
+  }
+  if (state.panel.hostId && document.getElementById('hostModal')?.classList.contains('show')) refrescarPanel();
+}
+
+function refrescarTodo() {
+  loadVivo();
+  loadDashboard();
+  if (state.currentTab === 'hosts') loadHosts();
+  if (state.currentTab === 'incidents') loadIncidents();
+  if (state.currentTab === 'checks') loadChecks();
+  if (state.panel.hostId) refrescarPanel();
+}
+
+const REINTENTOS = {
+  vivo: () => loadVivo(),
+  dashboard: () => loadDashboard(),
+  hosts: () => loadHosts(),
+  incidents: () => loadIncidents(),
+  checks: () => loadChecks(),
+  maintenance: () => loadMaintenanceStats(),
+  recipients: () => loadAlertRecipients(),
+  panel: () => refrescarPanel(),
+  resumen: () => cargarResumenHost(document.querySelector('#hostModalBody [data-ppanel="resumen"]')),
+  historial: () => cargarHistorial(),
+  bulk: () => abrirCheckMasivo()
+};
+
 async function loadHosts() {
   const filters = getHostFiltersFromUI();
 
-  const data = await fetchHosts(filters);
+  let data;
+  try {
+    data = await fetchHosts(filters);
+  } catch (err) {
+    mostrarError(document.getElementById('hostsGrid'), mensajeDeError(err, 'No se pudieron cargar los hosts.'), 'hosts');
+    return;
+  }
   state.hosts = data.hosts || [];
 
   updateRackFilterOptions(state.hosts);
@@ -1082,15 +1383,23 @@ async function loadIncidents() {
     severity: document.getElementById('filterIncidentSeverity')?.value || ''
   };
 
-  const data = await fetchIncidents(filters);
-  state.incidents = data.incidents;
-  renderIncidents(data.incidents);
+  try {
+    const data = await fetchIncidents(filters);
+    state.incidents = data.incidents || [];
+    filterAndRenderIncidents();
+  } catch (err) {
+    mostrarError(document.getElementById('incidentsList'), mensajeDeError(err, 'No se pudieron cargar los incidentes.'), 'incidents');
+  }
 }
 
 async function loadChecks() {
-  const data = await fetchChecks();
-  state.checks = data.checks;
-  renderChecks(data.checks);
+  try {
+    const data = await fetchChecks();
+    state.checks = data.checks || [];
+    filterAndRenderChecks();
+  } catch (err) {
+    mostrarError(document.getElementById('checksList'), mensajeDeError(err, 'No se pudieron cargar los checks.'), 'checks');
+  }
 }
 
 // === FILTRADO LOCAL ===
@@ -1195,7 +1504,7 @@ async function loadMaintenanceStats() {
       ` : ''}
     `;
   } catch (err) {
-    container.innerHTML = `<div class="error">Error: ${safeErrorMessage(err)}</div>`;
+    mostrarError(container, mensajeDeError(err, 'No se pudieron cargar las estadísticas.'), 'maintenance');
   }
 }
 
@@ -1307,6 +1616,7 @@ function switchTab(tabName) {
   // Load data for the tab
   switch (tabName) {
     case 'overview':
+      loadVivo();
       loadDashboard();
       break;
     case 'hosts':
@@ -1369,7 +1679,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Refresh button
   document.getElementById('btnRefresh')?.addEventListener('click', () => {
     trackUIEvent('monitoring.dashboard.refresh');
-    loadDashboard();
+    refrescarTodo();
     showToast('Datos actualizados', 'info');
   });
 
@@ -1490,26 +1800,113 @@ document.addEventListener('DOMContentLoaded', () => {
     handleCheckAction(btn.dataset.action, decodeURIComponent(btn.dataset.id || ''));
   });
 
-  // Modal closes
-  document.querySelectorAll('.modal-close').forEach(btn => {
-    btn.addEventListener('click', closeModals);
+  // Cierre de ventanas: cada × / Cancelar cierra SOLO su ventana (las demás siguen abiertas)
+  document.querySelectorAll('.modal-close, [data-cerrar-modal]').forEach(btn => {
+    btn.addEventListener('click', () => cerrarModal(btn.closest('.modal')));
   });
   document.querySelectorAll('.modal').forEach(modal => {
     modal.addEventListener('click', (e) => {
-      if (e.target === modal) closeModals();
+      if (e.target === modal) cerrarModal(modal);
     });
   });
 
-  // Modal action buttons (delegated)
+  // Reintentar (errores de carga)
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-reintentar]');
+    if (!btn) return;
+    const fn = REINTENTOS[btn.dataset.reintentar];
+    if (fn) fn();
+  });
+
+  // Vista en tiempo real: racks y servidores
+  document.querySelector('.sala-vivo')?.addEventListener('click', (e) => {
+    const srv = e.target.closest('[data-host-id]');
+    if (srv) {
+      showHostModal(srv.dataset.hostId);
+      return;
+    }
+    if (e.target.closest('[data-rack-cerrar]')) {
+      state.rackAbierto = null;
+      renderVivo();
+      return;
+    }
+    const rack = e.target.closest('[data-rack-abrir]');
+    if (rack) {
+      abrirRack(rack.dataset.rackAbrir);
+      return;
+    }
+    const filtro = e.target.closest('[data-filtro-vivo]');
+    if (filtro) {
+      state.filtroVivo.soloProblemas = filtro.dataset.filtroVivo === 'problemas';
+      document.querySelectorAll('[data-filtro-vivo]').forEach((b) => {
+        const activo = b === filtro;
+        b.classList.toggle('activo', activo);
+        b.setAttribute('aria-pressed', activo ? 'true' : 'false');
+      });
+      renderVivo();
+    }
+  });
+  document.getElementById('buscarVivo')?.addEventListener('input', debounce((e) => {
+    state.filtroVivo.texto = e.target.value;
+    renderVivo();
+  }, 200));
+
+  // Panel del servidor (delegado)
   document.getElementById('hostModalBody')?.addEventListener('click', (e) => {
+    const ptab = e.target.closest('[data-ptab]');
+    if (ptab) {
+      cambiarPestanaPanel(ptab.dataset.ptab);
+      return;
+    }
+    const rango = e.target.closest('[data-rango]');
+    if (rango) {
+      state.panel.minutos = Number(rango.dataset.rango) || 60;
+      rango.parentElement.querySelectorAll('[data-rango]').forEach((b) => {
+        const activo = b === rango;
+        b.classList.toggle('activo', activo);
+        b.setAttribute('aria-pressed', activo ? 'true' : 'false');
+      });
+      refrescarPanel();
+      return;
+    }
+    const inc = e.target.closest('[data-incident-id]');
+    if (inc) {
+      showIncidentModal(inc.dataset.incidentId);
+      return;
+    }
+    if (e.target.closest('#btnLoadHistory')) {
+      cargarHistorial();
+      return;
+    }
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
     if (btn.dataset.action === 'add-check') {
       showCheckModal(decodeURIComponent(btn.dataset.hostId || ''));
     } else if (btn.dataset.action === 'maintenance') {
-      // TODO: implement maintenance
-      showToast('Función de mantenimiento próximamente', 'info');
+      alternarMantenimiento(decodeURIComponent(btn.dataset.id || ''));
     }
+  });
+  document.getElementById('hostModalBody')?.addEventListener('change', (e) => {
+    if (e.target.id === 'historyRange') {
+      document.getElementById('customDateRange').classList.toggle('u-oculto', e.target.value !== 'custom');
+    }
+  });
+
+  // Formularios de las ventanas nuevas
+  document.getElementById('noteForm')?.addEventListener('submit', guardarNota);
+  document.getElementById('importForm')?.addEventListener('submit', confirmarImportacion);
+  document.getElementById('maintenanceForm')?.addEventListener('submit', guardarMantenimiento);
+  document.getElementById('bulkCheckForm')?.addEventListener('submit', crearChecksMasivos);
+  document.getElementById('bulkKind')?.addEventListener('change', actualizarCamposBulk);
+  document.getElementById('bulkSearch')?.addEventListener('input', filtrarBulk);
+  document.getElementById('bulkHostList')?.addEventListener('change', contarBulk);
+  document.getElementById('bulkSelectAll')?.addEventListener('click', () => {
+    document.querySelectorAll('#bulkHostList .bulk-item:not([hidden]) input').forEach((i) => { i.checked = true; });
+    contarBulk();
+  });
+  document.getElementById('bulkSelectNone')?.addEventListener('click', () => {
+    document.querySelectorAll('#bulkHostList input').forEach((i) => { i.checked = false; });
+    contarBulk();
   });
 
   document.getElementById('incidentModalBody')?.addEventListener('click', (e) => {
@@ -1520,9 +1917,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Add Check button
   document.getElementById('btnAddCheck')?.addEventListener('click', () => showCheckModal());
-  document.getElementById('btnBulkCheck')?.addEventListener('click', () => {
-    showToast('Función de check masivo próximamente', 'info');
-  });
+  document.getElementById('btnBulkCheck')?.addEventListener('click', abrirCheckMasivo);
 
   // Import hosts
   document.getElementById('btnImportHosts')?.addEventListener('click', importHosts);
@@ -1532,10 +1927,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const checkKind = document.getElementById('checkKind');
 
   checkKind?.addEventListener('change', () => {
-    document.getElementById('tcpConfigGroup').style.display =
-      checkKind.value === 'tcp' ? 'block' : 'none';
-    document.getElementById('httpConfigGroup').style.display =
-      checkKind.value === 'http' ? 'block' : 'none';
+    document.getElementById('tcpConfigGroup').classList.toggle('u-oculto', checkKind.value !== 'tcp');
+    document.getElementById('httpConfigGroup').classList.toggle('u-oculto', checkKind.value !== 'http');
   });
 
   checkForm?.addEventListener('submit', (e) => {
@@ -1551,9 +1944,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  document.getElementById('checkFormCancel')?.addEventListener('click', closeModals);
-  document.getElementById('checkModalClose')?.addEventListener('click', closeModals);
-  document.getElementById('incidentModalClose')?.addEventListener('click', closeModals);
 
   // Maintenance buttons
   document.getElementById('btnRefreshStats')?.addEventListener('click', loadMaintenanceStats);
@@ -1593,15 +1983,15 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnSimulateDown')?.addEventListener('click', () => simulateAlert('down'));
   document.getElementById('btnSimulateUp')?.addEventListener('click', () => simulateAlert('up'));
 
-  // Initial load
+  // Carga inicial: la vista en vivo y el resumen en paralelo
+  loadVivo();
   loadDashboard();
 
-  // Auto refresh every 30 seconds
-  state.refreshInterval = setInterval(() => {
-    if (state.currentTab === 'overview') {
-      loadDashboard();
-    }
-  }, 30000);
+  // Actualización en vivo cada 15 s, solo con la pestaña visible; al volver se refresca al instante
+  state.refreshInterval = setInterval(tickVivo, INTERVALO_VIVO_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && Date.now() - state.ultimaActualizacion > INTERVALO_VIVO_MS) tickVivo();
+  });
 });
 
 // ====== ALERT RECIPIENTS FUNCTIONS ======
@@ -1676,7 +2066,7 @@ async function loadAlertRecipients() {
     `;
   } catch (err) {
     console.error('Error loading recipients:', err);
-    container.innerHTML = `<div class="error">Error cargando destinatarios: ${safeErrorMessage(err)}</div>`;
+    mostrarError(container, mensajeDeError(err, 'No se pudieron cargar los destinatarios.'), 'recipients');
   }
 }
 
@@ -1733,7 +2123,7 @@ async function loadRecipientForEdit(id) {
     const res = await fetch('/api/monitoring/alert-recipients');
     if (!res.ok) throw new Error('Error');
     const recipients = await res.json();
-    const r = recipients.find(x => x.id === id);
+    const r = recipients.find(x => String(x.id) === String(id));
 
     if (r) {
       document.getElementById('recipientId').value = r.id;
