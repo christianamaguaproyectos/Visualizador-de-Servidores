@@ -26,7 +26,9 @@ body {
   min-height: 100%;
 }
 
-body {
+/* body.ui-plataforma: el sistema visual común pone fondo claro a toda la plataforma; el login conserva el suyo */
+body,
+body.ui-plataforma {
   font-family: 'Inter', 'Segoe UI', sans-serif;
   color: var(--text-main);
   background:
