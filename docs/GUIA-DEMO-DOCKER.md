@@ -86,6 +86,14 @@ Crea 30 servidores ficticios (`srv-web-01`, `srv-db-01`…, IPs `10.0.0.x`): **c
 
 El script se puede ejecutar varias veces sin duplicar nada y no modifica datos reales.
 
+También genera **24 h de telemetría de demostración** por servidor (latencias con variación, el servidor caído sin respuesta en los últimos minutos y el degradado con respuestas lentas), para que **Monitoreo** muestre las ondas de inmediato. Son datos sintéticos: no se hace ninguna conexión de red y los checks de demostración siguen desactivados. Para que las ondas sigan avanzando en vivo durante la presentación, deja corriendo en otra terminal:
+
+```powershell
+docker compose run --rm tools node scripts/seed-demo-topologia.js --telemetria-continua
+```
+
+Añade un punto cada 15 s por servidor de demostración hasta que lo detengas con `Ctrl+C`.
+
 ## 6. Abrir la aplicación
 
 Abre **http://localhost:3000** (o el puerto que pusiste en `APP_PORT`) e inicia sesión con el usuario `admin`.
@@ -99,7 +107,8 @@ Abre **http://localhost:3000** (o el puerto que pusiste en `APP_PORT`) e inicia 
 5. **Tiempo real:** en otra pestaña, agrega un servidor en **Servidores Físicos** (por ejemplo en `RACK-A4`, posición 20, 2U) o usa **Agregar servidor en este rack** desde la ficha del rack. Al guardar, el equipo aparece en su U en la sala 3D sin recargar; al eliminarlo, desaparece.
 6. **Simular caída:** pulsa **Simular caída** y haz clic en `srv-nas-01`. El mapa resalta toda la cadena de impacto y el indicador separa las **caídas reales (monitoreo)** de las **caídas simuladas**, cada una con su conteo, y cuántos servidores se ven afectados. Sal con la **×** de la banda superior o con `Esc`.
 7. **Editor 2D y nueva relación:** pulsa **Editor 2D**, pasa el puntero sobre una tarjeta, arrastra desde uno de sus puntos de conexión hasta otra tarjeta y completa el formulario (tipo y criticidad). La relación aparece al guardar.
-8. **Detalle de servidor:** en **Servidores Físicos**, abre `srv-db-01`. En la fila superior, el botón **🔗 Dependencias e impacto** (con el número de relaciones) lleva al bloque del mismo nombre, que lista sus relaciones con su estado y el impacto en cascada; **Abrir en el mapa** vuelve al mapa con ese servidor seleccionado.
+8. **Monitoreo en tiempo real:** abre **Monitoreo**. Cada rack aparece como un gabinete con un punto de estado por servidor y su onda de latencia; `RACK-A5` se marca *1 caído*. Pulsa el rack para ver sus servidores y `srv-db-01` para abrir su panel: la onda muestra cuándo dejó de responder y la franja inferior cada ejecución fallida.
+9. **Detalle de servidor:** en **Servidores Físicos**, abre `srv-db-01`. En la fila superior, el botón **🔗 Dependencias e impacto** (con el número de relaciones) lleva al bloque del mismo nombre, que lista sus relaciones con su estado y el impacto en cascada; **Abrir en el mapa** vuelve al mapa con ese servidor seleccionado.
 
 Más detalles de cada función en la [Guía de usuario](./GUIA-USUARIO.md#mapa-de-dependencias).
 
@@ -109,7 +118,7 @@ Más detalles de cada función en la [Guía de usuario](./GUIA-USUARIO.md#mapa-d
 docker compose run --rm tools node scripts/seed-demo-topologia.js --borrar
 ```
 
-Elimina solo lo que creó el script (servidores, relaciones, posiciones, hosts de monitoreo y racks de demostración); los datos propios no se tocan.
+Elimina solo lo que creó el script (servidores, relaciones, posiciones, hosts de monitoreo con su telemetría y racks de demostración); los datos propios no se tocan.
 
 ## 9. Apagar
 
