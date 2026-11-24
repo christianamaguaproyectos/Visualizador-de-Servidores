@@ -20,40 +20,6 @@ body.ui-plataforma .rack-pagination { padding: 14px 20px 0; }
 /* .u-oculto gana a display de .btn (p. ej. "Usuarios" solo se muestra a superadmin) */
 body.ui-plataforma .u-oculto { display: none; }
 
-/* ── Leyenda ─────────────────────────────────────────────────────────────────── */
-.gab-leyenda {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px;
-  margin: 14px 20px 0; padding: 10px 14px;
-  background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md);
-  font-size: var(--text-sm); color: var(--color-text-secondary); box-shadow: var(--shadow-1);
-}
-.gab-leyenda__grupo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
-.gab-leyenda__titulo { font-weight: 700; color: var(--color-text-primary); }
-.gab-leyenda__item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-.gab-leyenda__item strong { color: var(--color-text-primary); }
-.gab-leyenda__nota { margin-left: auto; font-size: var(--text-xs); color: var(--color-text-muted); }
-.gab-leyenda .gab-led { box-shadow: none; }
-
-/* ── Indicadores: punto de criticidad (cuadrado) y LED de monitoreo (círculo) ──── */
-.gab-crit { flex: none; width: 9px; height: 9px; border-radius: 2px; background: var(--color-success-500); box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .85); }
-.gab-crit--critico { background: var(--color-danger-500); }
-.gab-crit--no-critico { background: var(--color-success-500); }
-.gab-crit--mantenimiento { background: var(--color-warning-500); }
-.gab-crit--inactivo { background: var(--color-unknown-500); }
-
-.gab-led { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--estado-unknown); }
-.gab-led--up { background: var(--estado-up); box-shadow: 0 0 6px 1px rgba(18, 183, 106, .75); }
-.gab-led--down { background: var(--estado-down); box-shadow: 0 0 7px 2px rgba(240, 68, 56, .85); animation: gab-parpadeo 1.1s steps(2, start) infinite; }
-.gab-led--degraded { background: var(--estado-degraded); box-shadow: 0 0 6px 1px rgba(245, 158, 11, .8); }
-.gab-led--maint { background: var(--estado-maint); box-shadow: 0 0 6px 1px rgba(139, 92, 246, .8); }
-.gab-led--sin { background: transparent; border: 1.5px solid var(--estado-unknown); }
-@keyframes gab-parpadeo { to { opacity: .35; } }
-@media (prefers-reduced-motion: reduce) { .gab-led--down { animation: none; } }
-
-.gab-chip { flex: none; padding: 0 4px; border-radius: 3px; font: 700 8.5px/13px var(--font-family-sans); letter-spacing: .04em; color: #fff; background: var(--color-danger-500); }
-.gab-chip--mantenimiento { background: var(--color-warning-500); color: #3b2200; }
-.gab-chip--inactivo { background: #667085; }
-
 /* ── Cuadrícula de racks ─────────────────────────────────────────────────────── */
 .gab-grid {
   display: grid; gap: 16px; padding: 16px 20px 8px;
@@ -215,3 +181,7 @@ body.ui-plataforma .u-fila-derecha { flex-wrap: wrap; gap: 8px; padding: 12px 20
 .gab-ancho-30 { width: 30%; } .gab-ancho-35 { width: 35%; } .gab-ancho-40 { width: 40%; } .gab-ancho-45 { width: 45%; } .gab-ancho-50 { width: 50%; } .gab-ancho-55 { width: 55%; }
 .gab-ancho-60 { width: 60%; } .gab-ancho-65 { width: 65%; } .gab-ancho-70 { width: 70%; } .gab-ancho-75 { width: 75%; } .gab-ancho-80 { width: 80%; } .gab-ancho-85 { width: 85%; }
 .gab-ancho-90 { width: 90%; } .gab-ancho-95 { width: 95%; } .gab-ancho-100 { width: 100%; } 
+
+/* Paginación: hover legible (azul claro con texto azul oscuro) */
+body.ui-plataforma .rack-pagination .btn-secondary:hover:not(:disabled) { background: #dbe7ff; color: var(--color-primary-700); border-color: #b2ccff; }
+body.ui-plataforma .rack-pagination .btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }

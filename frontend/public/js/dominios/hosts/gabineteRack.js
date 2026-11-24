@@ -133,7 +133,7 @@ export function construirGabineteHtml({ nombreRack, servidores = [], estados = n
 }
 
 /** Leyenda de criticidad y estado de monitoreo (HTML estático) */
-export function construirLeyendaHtml({ conteos = null } = {}) {
+export function construirLeyendaHtml({ conteos = null, nota = 'Clic en un servidor: ficha · Arrastrar a una U libre: mover' } = {}) {
   const crit = Object.entries(CRITICIDADES).map(([k, v]) =>
     `<span class="gab-leyenda__item"><span class="gab-crit gab-crit--${k.replace('_', '-')}" aria-hidden="true"></span>${escapeHtml(v.texto)}</span>`).join('');
   const mon = Object.entries(ESTADOS_MONITOREO).map(([k, v]) => {
@@ -143,7 +143,7 @@ export function construirLeyendaHtml({ conteos = null } = {}) {
   return `<div class="gab-leyenda" role="note" aria-label="Leyenda de los racks">
   <div class="gab-leyenda__grupo"><span class="gab-leyenda__titulo">Criticidad (inventario)</span>${crit}</div>
   <div class="gab-leyenda__grupo"><span class="gab-leyenda__titulo">Monitoreo (LED)</span>${mon}</div>
-  <div class="gab-leyenda__nota">Clic en un servidor: ficha · Arrastrar a una U libre: mover</div>
+  ${nota ? `<div class="gab-leyenda__nota">${escapeHtml(nota)}</div>` : ''}
 </div>`;
 }
 
