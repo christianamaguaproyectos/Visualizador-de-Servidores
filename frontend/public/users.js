@@ -5,6 +5,7 @@
 import { formatearUsuarioFila } from '/js/dominios/usuarios/presentacionUsuarios.js';
 import { confirmAction } from '/js/dominios/ui-system/modalConfirm.js';
 import { mostrarParaCopiar } from '/js/dominios/ui-system/modalTexto.js';
+import { esCancelacionPorSalida } from '/js/dominios/ui-system/salidaPagina.js';
 
 let users = [];
 let editingUserId = null;
@@ -73,6 +74,7 @@ async function loadUsers() {
     users = data.users || [];
     renderUsers();
   } catch (error) {
+    if (esCancelacionPorSalida(error)) return;
     console.error('Error cargando usuarios:', error);
     showToast('Error cargando usuarios', 'error');
   }

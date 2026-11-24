@@ -3,6 +3,7 @@ import { construirResumenRacksHtml } from '/js/dominios/hosts/resumenRacks.js';
 import { formatearDiscos } from '/js/dominios/hosts/colocacionRack.js';
 import { construirGabineteHtml, construirAvisoSinUbicarHtml, construirSinRackHtml, construirLeyendaHtml, aplicarEstadosMonitoreo, contarMonitoreo, normalizarCriticidad, claveMonitoreo, CRITICIDADES, ESTADOS_MONITOREO } from '/js/dominios/hosts/gabineteRack.js';
 import { confirmAction } from '/js/dominios/ui-system/modalConfirm.js';
+import { esCancelacionPorSalida } from '/js/dominios/ui-system/salidaPagina.js';
 import { pedirTexto } from '/js/dominios/ui-system/modalTexto.js';
 import { trackUIEvent } from '/js/dominios/ui-system/uxTelemetry.js';
 import { escapeHtml, textoSeguro } from '/js/dominios/ui-system/seguridadHtml.js';
@@ -371,6 +372,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
       } catch (err) {
 
+        if (esCancelacionPorSalida(err)) return;
         console.error('Error exportando:', err);
 
         showToast('❌ Error al exportar Excel');
@@ -571,6 +573,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
       } catch (err) {
 
+        if (esCancelacionPorSalida(err)) return;
         console.error('Error exportando:', err);
 
         showToast('❌ Error al exportar Excel');
