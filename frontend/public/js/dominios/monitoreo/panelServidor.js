@@ -68,7 +68,7 @@ function tarjetaCheck(c) {
       <header class="tele-check__cab">
         <span class="led led--${estado}" aria-hidden="true"></span>
         <h4>${escapeHtml(c.label)}</h4>
-        <span class="muted">cada ${Number(c.frequency_sec) || '?'} s${c.enabled ? '' : ' · desactivado'}</span>
+        <span class="muted">cada ${Number(c.frequency_sec) || '?'} s${c.enabled || r.total ? '' : ' · desactivado'}</span>
         <span class="tele-check__estado tele-check__estado--${estado}">${escapeHtml(textoEstado)}</span>
       </header>
       <div class="tele-metricas">

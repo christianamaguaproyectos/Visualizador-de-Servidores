@@ -17,10 +17,17 @@
  * Uso (Docker):
  *   docker compose run --rm tools node scripts/seed-demo-topologia.js
  *   docker compose run --rm tools node scripts/seed-demo-topologia.js --borrar
+ *
+ * Telemetría de demostración: además se generan 24 h de ejecuciones sintéticas por host demo
+ * (scripts/lib/telemetriaDemo.js) para que la vista en tiempo real de Monitoreo muestre ondas.
+ * Con --telemetria-continua el script queda en marcha y añade un punto cada 15 s (Ctrl+C para
+ * salir). No hace conexiones de red ni cambia el estado de los hosts.
+ *   docker compose run --rm tools node scripts/seed-demo-topologia.js --telemetria-continua
  */
 
 import 'dotenv/config';
 import { withTransaction, closePool } from '../backend/src/config/db.js';
+import { completarTelemetria, PASO_CONTINUO_SEG } from './lib/telemetriaDemo.js';
 
 export const MARCA = 'demo-topologia';
 const PREFIJO_IDENTIDAD = `${MARCA}:`;
@@ -224,6 +231,31 @@ export async function borrar(client) {
   return borrados;
 }
 
+/** Historial demo de 24 h (idempotente). Los checks demo muestran la frecuencia real de los puntos */
+export async function sembrarTelemetria(client, opciones = {}) {
+  await client.query(
+    `UPDATE monitoring.checks c SET frequency_sec = 60
+       FROM monitoring.hosts h
+      WHERE h.id = c.host_id AND $1 = ANY(h.group_tags) AND NOT c.enabled AND c.frequency_sec = 300`, [MARCA]);
+  return completarTelemetria(client, { marca: MARCA, ...opciones });
+}
+
+async function telemetriaContinua() {
+  console.log(`Telemetría de demostración en vivo: un punto cada ${PASO_CONTINUO_SEG} s por host demo (Ctrl+C para salir).`);
+  let activo = true;
+  const parar = () => { activo = false; };
+  process.on('SIGINT', parar);
+  process.on('SIGTERM', parar);
+  while (activo) {
+    try {
+      await withTransaction((c) => completarTelemetria(c, { marca: MARCA, pasoSeg: PASO_CONTINUO_SEG }));
+    } catch (err) {
+      console.error('No se pudo añadir telemetría de demostración:', err.message);
+    }
+    for (let i = 0; i < PASO_CONTINUO_SEG && activo; i += 1) await new Promise((r) => setTimeout(r, 1000));
+  }
+}
+
 async function main() {
   const modoBorrar = process.argv.includes('--borrar');
   if (!process.env.POSTGRES_URL) {
@@ -240,7 +272,10 @@ async function main() {
       console.log(total
         ? `Datos de demostración creados: ${c.servidores} servidores, ${c.dependencias} relaciones, ${c.hosts} hosts de monitoreo, ${c.racks} racks y ${c.posiciones} posiciones.`
         : 'Los datos de demostración ya estaban cargados: no se creó nada.');
+      const puntos = await withTransaction((cl) => sembrarTelemetria(cl));
+      if (puntos) console.log(`Telemetría de demostración: ${puntos} ejecuciones nuevas (últimas 24 h).`);
       console.log('Abre /dependencias para ver el mapa. Para quitarlos: node scripts/seed-demo-topologia.js --borrar');
+      if (process.argv.includes('--telemetria-continua')) await telemetriaContinua();
     }
   } catch (err) {
     console.error('No se pudieron cargar los datos de demostración:', err.message);
