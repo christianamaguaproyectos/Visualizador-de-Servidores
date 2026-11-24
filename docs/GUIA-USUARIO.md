@@ -163,13 +163,32 @@ Debajo de la ficha aparece el bloque **🔗 Dependencias e impacto** (igual en f
 
 ## Servidores Virtuales
 
-La vista de **Virtuales** organiza las máquinas virtuales por **hosts ESXi** y/o **clusters**. Funciona de forma similar a la vista física, con las siguientes diferencias:
+**Servidores Virtuales** (`/virtuales`) — *Gestión de VMs y contenedores con inventario y estado operativo consolidado* — organiza las máquinas virtuales por **host** y agrupa los hosts en **vistas**.
 
-- Las VMs se agrupan por **cluster → host**.
-- Puedes cambiar la vista entre **Clusters**, **Hosts** o **Lista**.
-- Puedes agregar VMs directamente dentro de un host.
+### Barra superior
 
-Los filtros de estado (**Críticos**, **No Críticos**, **En Mantenimiento**) también están disponibles en esta vista.
+Buscador de VM o host, filtro por criticidad (**Críticos**, **No Críticos**, **En Mantenimiento**) y los botones *Agregar VM* (dentro de un host), *Agregar Host*, *Exportar Excel*, *Usuarios* (solo superadmin) y *Actualizar datos*.
+
+### Vistas
+
+Al entrar se elige una vista:
+
+- **Clusters Danec**: un bloque por clúster con sus hosts y las VMs de cada host. **Ver detalle del clúster** permite renombrarlo (✏️), eliminarlo (🗑️, con confirmación) y **agregar o quitar hosts**.
+- **VMware vSphere**: los hosts dedicados a vSphere.
+- **✨ Crear Nueva Vista**: abre la ventana **Nueva vista**; escribe el nombre (obligatorio) y pulsa **Crear** (o `Enter`); **Cancelar**, **×** o `Esc` cierran sin crear. La vista nueva aparece en el menú con sus botones ✏️ (renombrar, con la misma ventana) y 🗑️ (eliminar, con confirmación).
+- **← Volver** regresa al menú de vistas.
+
+### Inventario y estado operativo consolidado
+
+- **Leyenda** arriba de cada vista con el número de VMs en cada estado de monitoreo (UP, DOWN, DEGRADED, MAINT, sin datos); se actualiza sola cada 30 segundos.
+- Cada **VM** muestra un LED de monitoreo con los mismos colores que en Servidores Físicos y en el Mapa de Dependencias.
+- Cada **host** muestra el estado del servidor físico que lo aloja (*Host UP/DOWN…*) y el resumen de sus VMs por estado; cada **clúster**, el resumen de todas sus VMs.
+
+### Acciones
+
+- Clic en una **VM**: abre su ficha (con el bloque **🔗 Dependencias e impacto**, *Editar*, *Eliminar* y *Volver*).
+- Clic en un **host**: abre su vista con *➕ Agregar VM*, *🗑️ Eliminar Rack* y *← Volver*. **✏️ Editar** en la tarjeta del host cambia su nombre.
+- Los usuarios de solo lectura ven las vistas, los estados y el buscador, pero no pueden crear, editar ni abrir el detalle.
 
 ---
 
