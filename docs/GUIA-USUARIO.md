@@ -72,6 +72,8 @@ Cada servidor del gabinete muestra su **nombre**, su **IP** y dos indicadores:
 
 El estado de monitoreo es el mismo que usa el Mapa de Dependencias y se actualiza solo cada 30 segundos. Al pasar el mouse sobre un servidor aparece un recuadro con nombre, IP, unidades, criticidad y monitoreo; sobre una unidad libre, su número de U.
 
+Si un rack tiene más servidores de los que caben en 42U, o varios con la misma posición, su tarjeta muestra el aviso **⚠ N servidores no caben en el rack o no tienen posición libre**; al desplegarlo se listan para abrirlos y corregir su ubicación. Los servidores del inventario **sin rack** aparecen debajo de los racks en el bloque **Sin rack asignado** (y se cuentan en el resumen). Los racks sin tipo que contienen servidores físicos también se muestran.
+
 **Mostrar detalles técnicos** añade en cada rack la ocupación detallada (U ocupadas y libres) y los modelos instalados, y en los equipos de 2U o más el modelo y su rango de U.
 
 ### Buscador y filtros
@@ -175,6 +177,7 @@ Al entrar se elige una vista:
 
 - **Clusters Danec**: un bloque por clúster con sus hosts y las VMs de cada host. **Ver detalle del clúster** permite renombrarlo (✏️), eliminarlo (🗑️, con confirmación) y **agregar o quitar hosts**.
 - **VMware vSphere**: los hosts dedicados a vSphere.
+- **Todos los hosts**: todos los hosts del inventario, estén o no en un clúster, con el resumen de monitoreo de todas las VMs; debajo, el bloque **VMs sin host asignado** con las VMs que no tienen host.
 - **✨ Crear Nueva Vista**: abre la ventana **Nueva vista**; escribe el nombre (obligatorio) y pulsa **Crear** (o `Enter`); **Cancelar**, **×** o `Esc` cierran sin crear. La vista nueva aparece en el menú con sus botones ✏️ (renombrar, con la misma ventana) y 🗑️ (eliminar, con confirmación).
 - **← Volver** regresa al menú de vistas.
 
