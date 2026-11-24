@@ -42,7 +42,9 @@ const letraFila = (i) => (i < LETRAS.length ? LETRAS[i] : `${LETRAS[Math.floor(i
  * @returns {{ancho:number, fondo:number, celdas:Array<{id:string, x:number, z:number}>}} coords locales
  */
 function bloque(miembros, cabecera = null) {
-  const { paso, porFila, margen, anchoMinimo } = SALA;
+  const { paso, margen, anchoMinimo } = SALA;
+  // Bloques grandes (clústeres con cientos de VMs): más columnas para que no formen una fila larguísima
+  const porFila = Math.max(SALA.porFila, Math.ceil(Math.sqrt(miembros.length)));
   const columnas = Math.max(1, Math.min(porFila, miembros.length || 1));
   const filas = Math.ceil(miembros.length / porFila);
   const anchoCentros = (columnas - 1) * paso;
@@ -306,7 +308,9 @@ export function disposicionSalaRacks(nodos, racks = []) {
       for (let i = 0; i < nombres.length; i += 3) lineas.push(nombres.slice(i, i + 3).join(' · '));
       return [`${b.zona.tipo === 'host' ? 'Host' : 'Clúster'} ${b.nombre}`, ...lineas].join('\n');
     };
-    const r = colocarFilas(bloquesVirt, 0, conVms, listaRacks.length ? 2 : SALA.bloquesPorFila);
+    // Con muchos hosts o clústeres la zona se hace más ancha (casi cuadrada) en vez de una fila muy larga
+    const porFila = listaRacks.length ? Math.max(2, Math.ceil(Math.sqrt(bloquesVirt.length))) : SALA.bloquesPorFila;
+    const r = colocarFilas(bloquesVirt, 0, conVms, porFila);
     const dz = listaRacks.length ? -r.zFin : 0;
     r.centros.forEach((v, k) => centros.set(k, { x: v.x + x0, z: v.z + dz }));
     for (const q of r.zonas) { q.x0 += x0; q.x1 += x0; q.z0 += dz; q.z1 += dz; }
