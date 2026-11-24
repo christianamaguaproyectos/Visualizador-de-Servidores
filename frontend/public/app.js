@@ -1,7 +1,7 @@
 import { inicializarGestorDiscos } from '/js/dominios/hosts/gestorDiscos.js';
 import { construirResumenRacksHtml } from '/js/dominios/hosts/resumenRacks.js';
 import { formatearDiscos } from '/js/dominios/hosts/colocacionRack.js';
-import { construirGabineteHtml, construirLeyendaHtml, aplicarEstadosMonitoreo, contarMonitoreo, normalizarCriticidad, claveMonitoreo, CRITICIDADES, ESTADOS_MONITOREO } from '/js/dominios/hosts/gabineteRack.js';
+import { construirGabineteHtml, construirAvisoSinUbicarHtml, construirSinRackHtml, construirLeyendaHtml, aplicarEstadosMonitoreo, contarMonitoreo, normalizarCriticidad, claveMonitoreo, CRITICIDADES, ESTADOS_MONITOREO } from '/js/dominios/hosts/gabineteRack.js';
 import { confirmAction } from '/js/dominios/ui-system/modalConfirm.js';
 import { pedirTexto } from '/js/dominios/ui-system/modalTexto.js';
 import { trackUIEvent } from '/js/dominios/ui-system/uxTelemetry.js';
@@ -286,7 +286,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
       { key: 'clusters', label: 'Clusters Danec', description: 'Agrupa los hosts por clústeres definidos' },
 
-      { key: 'vsphere', label: 'VMware vSphere', description: 'Hosts dedicados a VMware vSphere' }
+      { key: 'vsphere', label: 'VMware vSphere', description: 'Hosts dedicados a VMware vSphere' },
+      { key: 'todos', label: 'Todos los hosts', description: 'Todos los hosts del inventario, estén o no en un clúster' }
 
     ]
 
@@ -1062,7 +1063,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-    if (!racks || racks.length === 0) {
+    // Físicos sin rack asignado: se muestran aparte (no pertenecen a ningún rack)
+    const sinRack = isVirtuales ? [] : (DATA.servers || []).filter((s) => s.rackId == null || s.rackId === '');
+
+    if ((!racks || racks.length === 0) && !sinRack.length) {
 
       console.log('No racks to display - showing fallback message');
 
@@ -1154,6 +1158,7 @@ document.addEventListener('DOMContentLoaded', function () {
             </div>
             <div class="gab-barra" title="Ocupación ${pct}%"><span class="gab-ancho-${Math.min(100, Math.round(pct / 5) * 5)}"></span></div>
             ${gab.html}
+            ${construirAvisoSinUbicarHtml(gab.sinUbicar, estadosMonitoreo)}
             <div class="rack-tech-hint ${SHOW_SERVER_LABELS ? 'mostrar' : ''}" aria-label="Detalle técnico del rack ${escapeHtml(r.name)}">
               <div class="rack-tech-hint__row"><strong>Ocupación:</strong> ${gab.ocupadas}U de 42U (${pct}%) · ${gab.libres}U libres</div>
               <div class="rack-tech-hint__row"><strong>Modelos:</strong> ${escapeHtml(modelPreview)}</div>
@@ -1161,6 +1166,7 @@ document.addEventListener('DOMContentLoaded', function () {
           </article>`;
         }).join('')}
       </div>
+      ${sinRack.length ? `<div class="gab-grid gab-grid--sin-rack">${construirSinRackHtml(sinRack, estadosMonitoreo)}</div>` : ''}
     `;
       const paginationEl = document.getElementById('rackPagination');
       paginationEl?.addEventListener('click', (event) => {
@@ -1228,7 +1234,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (!isVirtuales) return;
 
-    const allowed = new Set(['menu', 'clusters', 'vsphere']);
+    const allowed = new Set(['menu', 'clusters', 'vsphere', 'todos']);
 
     const nextMode = allowed.has(mode) ? mode : 'menu';
 
@@ -1516,6 +1522,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
       content = renderVirtualClusters();
 
+    } else if (virtualState.mode === 'todos') {
+      content = renderVirtualTodos();
     } else if (virtualState.mode === 'vsphere') {
 
       content = renderVirtualVsphere();
@@ -2235,6 +2243,27 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
+  /** Todos los hosts del inventario (incluidos los que no están en ningún clúster) y las VMs sin host */
+  function renderVirtualTodos() {
+    const hosts = DATA.racks || [];
+    const sinHost = (DATA.servers || []).filter((s) => s.rackId == null || s.rackId === '');
+    return `
+    ${renderVirtualSubnav('Todos los hosts')}
+    <div class="cluster-container cluster-container--todos">
+      <section class="cluster-section cluster-section--todos">
+        <header class="cluster-section__header">
+          <div>
+            <h3>${hosts.length} hosts · ${(DATA.servers || []).length} VMs</h3>
+            ${resumenMonitoreoHtml(DATA.servers || [], { titulo: 'Monitoreo de todas las VMs' })}
+          </div>
+        </header>
+        <div class="cluster-hosts">${renderVirtualHostCards(hosts, 'No hay hosts virtuales registrados.', { preview: true })}</div>
+      </section>
+      ${construirSinRackHtml(sinHost, estadosMonitoreo, { titulo: 'VMs sin host asignado', descripcion: 'Máquinas virtuales del inventario sin host. Ábrelas y edítalas para asignarles un host.', unidad: 'VMs' })}
+    </div>
+  `;
+  }
+
   function renderVirtualVsphere() {
 
     const vsphereCluster = (virtualState.clusters || []).find(c => c.type === 'vsphere');
@@ -2792,7 +2821,7 @@ document.addEventListener('DOMContentLoaded', function () {
       ocupacionHtml = ` · ${gab.ocupadas}/42U ocupadas · ${gab.libres}U libres`;
       cuerpoHtml = `<div class="rack-detail__cuerpo">
         <div class="rack-detail__gab">${gab.html}</div>
-        <div>${listaHtml}${construirLeyendaHtml()}</div>
+        <div>${construirAvisoSinUbicarHtml(gab.sinUbicar, estadosMonitoreo)}${listaHtml}${construirLeyendaHtml()}</div>
       </div>`;
     }
 
@@ -3722,7 +3751,7 @@ document.addEventListener('DOMContentLoaded', function () {
       if (rackEl.dataset.uxBound === '1') return;
       rackEl.dataset.uxBound = '1';
       rackEl.addEventListener('click', (e) => {
-        if (e.target.closest('[data-view="server"]')) return; // lo atiende la navegación a la ficha
+        if (e.target.closest('[data-view="server"], .gab-aviso')) return; // ficha del servidor o aviso desplegable
         if (isReadOnlyUser()) {
           showReadOnlyToast();
           return;
@@ -3790,7 +3819,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const racks = DATA.racks || [];
 
       overview.innerHTML = `
-      ${construirResumenRacksHtml(racks)}
+      ${construirResumenRacksHtml(racks, { servidoresSinRack: (DATA.servers || []).filter((s) => s.rackId == null || s.rackId === '') })}
     `;
 
     }

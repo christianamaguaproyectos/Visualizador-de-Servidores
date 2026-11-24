@@ -56,3 +56,6 @@
 .virtual-page .host-card { min-width: 0; max-width: none; }
 .virtual-page .host-card__header { flex-wrap: wrap; gap: 8px; }
 .virtual-page .host-card__header .estado-consolidado { margin-top: 6px; }
+
+/* Todos los hosts: una sola columna ancha y VMs sin host debajo */
+.virtual-page .cluster-container--todos { grid-template-columns: minmax(0, 1fr); }
