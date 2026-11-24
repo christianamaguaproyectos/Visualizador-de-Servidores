@@ -250,3 +250,32 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   margin: 0 0 10px 0;
   color: #374151;
 }
+
+/* ===== Aspecto común de la plataforma (tabla clara y acciones discretas) ===== */
+.usuarios-cabecera-sub { margin: 2px 0 0; color: var(--color-text-secondary); font-size: .92rem; }
+body > header { background: var(--color-bg-soft); }
+.users-table { border: 1px solid var(--color-border); box-shadow: 0 1px 2px rgba(16, 24, 40, .06); }
+.users-table th {
+  background: var(--color-bg-sunken);
+  color: var(--color-text-secondary);
+  font-size: .78rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  border-bottom: 1px solid var(--color-border);
+}
+.users-table tr:hover td { background: var(--color-primary-50); }
+.user-actions { flex-wrap: wrap; }
+.user-actions button {
+  min-height: 34px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+.user-actions button:hover { background: var(--color-bg-soft); border-color: var(--color-primary-500); color: var(--color-primary-700); }
+.user-actions .btn-delete { color: var(--color-danger-700); border-color: #f5c2bd; }
+.user-actions .btn-delete:hover { background: var(--color-danger-100); color: var(--color-danger-700); border-color: var(--color-danger-500); }
+.user-actions .btn-delete.btn-color-ambar { color: var(--color-warning-700); border-color: #f7d9a8; background: var(--color-bg-surface) !important; }
+.user-actions .btn-delete.btn-color-ambar:hover { background: var(--color-warning-100) !important; border-color: var(--color-warning-500); }
