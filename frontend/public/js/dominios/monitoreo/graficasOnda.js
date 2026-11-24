@@ -6,12 +6,19 @@
  */
 
 const ESTADO_OK = 'ok';
+/** Respondió (aunque sea lento): se dibuja en la onda */
+const respondio = (p) => p[2] === ESTADO_OK || p[2] === 'degraded';
 
 /** Redondea a 1 decimal para un SVG compacto */
 const r1 = (n) => Math.round(n * 10) / 10;
 
 /** Escapa texto para atributos y nodos de texto SVG */
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+/** Latencias de las ejecuciones que respondieron (los timeouts no deforman la escala) */
+const conRespuesta = (puntos) => puntos
+  .filter((p) => respondio(p) && p[1] !== null)
+  .map((p) => Number(p[1])).filter((n) => Number.isFinite(n) && n >= 0);
 
 /** Resumen de una serie: disponibilidad (%), latencia media, p95, última, fallos */
 export function resumirSerie(puntos = []) {
@@ -65,7 +72,7 @@ function tramos(puntos, x, y) {
   let actual = [];
   puntos.forEach((p, i) => {
     const ms = p[1] === null || p[1] === undefined ? NaN : Number(p[1]);
-    if (p[2] === ESTADO_OK && Number.isFinite(ms)) {
+    if (respondio(p) && Number.isFinite(ms)) {
       actual.push([x(i), y(ms)]);
     } else if (actual.length) {
       lista.push(actual);
@@ -86,7 +93,7 @@ export function svgMiniOnda(puntos = [], { ancho = 120, alto = 28 } = {}) {
     return `<svg class="onda-mini onda-mini--vacia" viewBox="0 0 ${ancho} ${alto}" width="${ancho}" height="${alto}" aria-hidden="true" focusable="false">` +
       `<line class="onda-base" x1="0" y1="${alto - pad}" x2="${ancho}" y2="${alto - pad}"/></svg>`;
   }
-  const latencias = puntos.map((p) => Number(p[1])).filter((n) => Number.isFinite(n));
+  const latencias = conRespuesta(puntos);
   const techo = Math.max(1, ...latencias) * 1.15;
   const paso = puntos.length > 1 ? (ancho - pad * 2) / (puntos.length - 1) : 0;
   const x = (i) => (puntos.length > 1 ? pad + i * paso : ancho / 2);
@@ -102,10 +109,10 @@ export function svgMiniOnda(puntos = [], { ancho = 120, alto = 28 } = {}) {
     if (t.length === 1) svg += `<circle class="onda-punto" cx="${r1(t[0][0])}" cy="${r1(t[0][1])}" r="1.6"/>`;
   }
   puntos.forEach((p, i) => {
-    if (p[2] !== ESTADO_OK) svg += `<circle class="onda-fallo" cx="${r1(x(i))}" cy="${alto - pad - 1}" r="2"/>`;
+    if (!respondio(p)) svg += `<circle class="onda-fallo" cx="${r1(x(i))}" cy="${alto - pad - 1}" r="2"/>`;
   });
   const ult = puntos[puntos.length - 1];
-  if (ult[2] === ESTADO_OK && Number.isFinite(Number(ult[1])) && ult[1] !== null) {
+  if (respondio(ult) && Number.isFinite(Number(ult[1])) && ult[1] !== null) {
     svg += `<circle class="onda-actual" cx="${r1(x(puntos.length - 1))}" cy="${r1(y(Number(ult[1])))}" r="2.4"/>`;
   }
   return `${svg}</svg>`;
@@ -130,7 +137,7 @@ export function svgOndaLatencia(puntos = [], { ancho = 640, alto = 180, titulo =
   const base = arriba + altoGrafica;
   const anchoUtil = ancho - izq - der;
 
-  const latencias = puntos.map((p) => Number(p[1])).filter((n) => Number.isFinite(n) && n >= 0);
+  const latencias = conRespuesta(puntos);
   const techo = techoEscala(Math.max(1, ...latencias) * 1.1);
   const n = puntos.length;
   const x = (i) => (n > 1 ? izq + (i * anchoUtil) / (n - 1) : izq + anchoUtil / 2);
@@ -150,7 +157,7 @@ export function svgOndaLatencia(puntos = [], { ancho = 640, alto = 180, titulo =
   }
   // Fallos: banda vertical tenue + marca en la base
   puntos.forEach((p, i) => {
-    if (p[2] !== ESTADO_OK) {
+    if (!respondio(p)) {
       const xx = r1(x(i));
       svg += `<line class="onda-fallo-banda" x1="${xx}" y1="${arriba}" x2="${xx}" y2="${base}"/>`;
     }
@@ -164,7 +171,7 @@ export function svgOndaLatencia(puntos = [], { ancho = 640, alto = 180, titulo =
   }
   // Último valor (punto vivo)
   const ult = puntos[n - 1];
-  if (ult[2] === ESTADO_OK && ult[1] !== null && Number.isFinite(Number(ult[1]))) {
+  if (respondio(ult) && ult[1] !== null && Number.isFinite(Number(ult[1]))) {
     svg += `<circle class="onda-actual-halo" cx="${r1(x(n - 1))}" cy="${r1(y(Number(ult[1])))}" r="6"/>`;
     svg += `<circle class="onda-actual" cx="${r1(x(n - 1))}" cy="${r1(y(Number(ult[1])))}" r="3"/>`;
   }

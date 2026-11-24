@@ -80,7 +80,7 @@ test('SVG: sin style ni scripts, fallos marcados y textos escapados', () => {
     assert.ok(!/style=|<script|on\w+=/i.test(svg));
     assert.ok(/^<svg[\s\S]*<\/svg>$/.test(svg));
   }
-  assert.equal((mini.match(/class="onda-fallo"/g) || []).length, 2, 'fallo y degradado marcados');
+  assert.equal((mini.match(/class="onda-fallo"/g) || []).length, 1, 'solo el fallo se marca; el degradado respondió');
   assert.equal((grande.match(/class="disp-ok"/g) || []).length, 2);
   assert.equal((grande.match(/class="disp-fallo"/g) || []).length, 1);
   assert.equal((grande.match(/class="disp-timeout"/g) || []).length, 1);
