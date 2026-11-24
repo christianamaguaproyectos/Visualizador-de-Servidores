@@ -72,13 +72,17 @@ describe('Seed: telemetría de demostración (integración)', { skip: omitir || 
     const total = async () => (await q('SELECT COUNT(*)::int n FROM monitoring.check_runs'))[0].n;
     const antes = await total();
     seed();
-    assert.ok((await total()) - antes <= 60, 'una segunda ejecución solo completa los minutos transcurridos');
+    assert.ok((await total()) - antes <= 30 * 3, 'una segunda ejecución solo completa los minutos transcurridos');
   });
 
   test('modo continuo: añade un punto por host demo en cada paso', async () => {
     const antes = (await q('SELECT COUNT(*)::int n FROM monitoring.check_runs'))[0].n;
-    const n = await completarTelemetria(bd, { marca: 'demo-topologia', pasoSeg: PASO_CONTINUO_SEG, ahora: Date.now() + 60000 });
-    assert.ok(n >= 30 && n <= 30 * 6, `insertadas: ${n}`);
+    // Instante fijo: 60 s después de la última ejecución de cada host → exactamente 4 puntos por host
+    const ultimas = await q(`SELECT DISTINCT MAX(r.time) AS t FROM monitoring.check_runs r JOIN monitoring.hosts h ON h.id = r.host_id
+      WHERE 'demo-topologia' = ANY(h.group_tags) GROUP BY r.host_id`);
+    assert.equal(ultimas.length, 1, 'todos los hosts demo terminan en el mismo instante');
+    const n = await completarTelemetria(bd, { marca: 'demo-topologia', pasoSeg: PASO_CONTINUO_SEG, ahora: new Date(ultimas[0].t).getTime() + 60000 });
+    assert.equal(n, 30 * (60 / PASO_CONTINUO_SEG), `insertadas: ${n}`);
     assert.equal((await q('SELECT COUNT(*)::int n FROM monitoring.check_runs'))[0].n, antes + n);
   });
 
