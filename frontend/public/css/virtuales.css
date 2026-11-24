@@ -1,0 +1,58 @@
+/*
+ * Servidores Virtuales (/virtuales): estados de los botones (hover/focus/active legibles con
+ * el sistema común), tarjetas de vista, subtítulo del encabezado y LED de monitoreo por VM.
+ * Se carga al final de virtual.html.
+ */
+
+/* Encabezado */
+.virtual-page .header-subtitle { margin: 2px 0 0; font-size: var(--text-sm); color: var(--color-text-secondary); }
+
+/* Botones del encabezado: primario azul con texto blanco, secundario azul claro */
+.virtual-page .header-action { transition: background-color var(--dur-media) ease, box-shadow var(--dur-media) ease, transform var(--dur-rapida) ease, color var(--dur-media) ease; }
+.virtual-page .header-action.btn-primary { background: var(--color-primary-600); border-color: transparent; color: #fff; }
+.virtual-page .header-action.btn-primary:hover:not(:disabled) { background: var(--color-primary-700); color: #fff; }
+.virtual-page .header-action.btn-secondary { background: var(--color-primary-100); border-color: #d0ddff; color: var(--color-primary-700); }
+.virtual-page .header-action.btn-secondary:hover:not(:disabled) { background: #dbe7ff; color: var(--color-primary-700); }
+.virtual-page .header-action.action-reload::before { background: currentColor; }
+.virtual-page .header-action:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.virtual-page .header-action:active:not(:disabled) { transform: translateY(1px); }
+
+/* Tarjetas "Clusters" / "VMware vSphere" / vistas creadas */
+.virtual-page .virtual-option {
+  background: var(--color-bg-surface); color: var(--color-text-primary);
+  border: 1px solid var(--color-border); box-shadow: var(--shadow-1);
+  transition: border-color var(--dur-media) ease, box-shadow var(--dur-media) ease, transform var(--dur-media) ease, background-color var(--dur-media) ease;
+}
+.virtual-page .virtual-option:hover { background: var(--color-primary-50); color: var(--color-text-primary); border-color: #b2ccff; box-shadow: var(--shadow-2); transform: translateY(-2px); }
+.virtual-page .virtual-option:focus-visible { outline: none; box-shadow: var(--focus-ring), var(--shadow-2); }
+.virtual-page .virtual-option:active { transform: translateY(0); }
+.virtual-page .virtual-option__label { color: var(--color-text-primary); }
+.virtual-page .virtual-option__desc { color: var(--color-text-secondary); }
+
+/* "Crear nueva vista": verde con contraste suficiente */
+.virtual-page .btn-color-verde { background: var(--color-success-700) !important; color: #fff !important; } /* gana al !important de estilos-sin-inline.css */
+.virtual-page .btn-color-verde:hover:not(:disabled) { background: #0b6139 !important; }
+.virtual-page .btn-color-verde:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* Leyenda y estado consolidado */
+.virtual-page #app > .gab-leyenda { margin: 20px auto 0; width: min(1400px, calc(100% - 48px)); }
+.virtual-page .cluster-section__header .estado-consolidado { margin-top: 6px; }
+
+/* LED de monitoreo en cada VM */
+.virtual-page .vm-node { position: relative; }
+.virtual-page .vm-node .vm-led { position: absolute; top: 6px; right: 6px; }
+
+/* .u-oculto gana a display de .header-action ("Usuarios" solo para superadmin) */
+.virtual-page .u-oculto { display: none; }
+
+/* VMs: texto oscuro y hover azul muy claro (el estilo genérico de <button> las dejaba con texto blanco) */
+.virtual-page .vm-node { color: var(--color-text-primary); }
+.virtual-page .vm-node:hover { background: var(--color-primary-50); color: var(--color-text-primary); }
+.virtual-page .vm-node:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* Clústeres: columnas con espacio para las tarjetas de host (sin desbordar ni barra horizontal) */
+.virtual-page .cluster-container { grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); }
+.virtual-page .cluster-hosts { overflow: visible; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.virtual-page .host-card { min-width: 0; max-width: none; }
+.virtual-page .host-card__header { flex-wrap: wrap; gap: 8px; }
+.virtual-page .host-card__header .estado-consolidado { margin-top: 6px; }

@@ -106,6 +106,9 @@ export const DEPENDENCIAS = [
 // Estado de monitoreo fijo (el resto queda UP)
 export const ESTADOS_MONITOREO = { 'srv-db-01': 'DOWN', 'srv-bkp-01': 'DEGRADED' };
 
+// Hosts virtuales de demostración por grupo de /virtuales (clave del grupo, host)
+export const ASIGNACION_CLUSTERS = [['danec1', 'srv-hv-01'], ['danec1', 'srv-hv-02'], ['vsphere', 'VCL-01']];
+
 // Criticidad de inventario (campo "estado"); el resto queda como NO_CRITICO
 export const ESTADOS_INVENTARIO = {
   'srv-fw-01': 'CRITICO', 'srv-dc-01': 'CRITICO', 'srv-db-01': 'CRITICO', 'srv-db-02': 'CRITICO',
@@ -138,6 +141,15 @@ export async function sembrar(client) {
     if (r.rowCount) creados.racks += 1;
     const fila = r.rows[0] || (await client.query('SELECT id FROM inventory.racks WHERE name = $1', [nombre])).rows[0];
     idRack.set(nombre, fila.id);
+  }
+
+  // Hosts virtuales de demostración en los grupos de /virtuales (si esos grupos existen)
+  for (const [clave, host] of ASIGNACION_CLUSTERS) {
+    await client.query(
+      `INSERT INTO inventory.cluster_hosts (cluster_id, rack_id)
+       SELECT c.id, r.id FROM inventory.virtual_clusters c, inventory.racks r
+        WHERE c.key = $1 AND r.name = $2 AND r.type = 'virtuales'
+       ON CONFLICT (cluster_id, rack_id) DO NOTHING`, [clave, host]);
   }
 
   // Servidores (identity_key marcada: no choca con los reales y permite borrarlos)

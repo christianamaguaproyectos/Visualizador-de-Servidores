@@ -3,6 +3,7 @@ import { construirResumenRacksHtml } from '/js/dominios/hosts/resumenRacks.js';
 import { formatearDiscos } from '/js/dominios/hosts/colocacionRack.js';
 import { construirGabineteHtml, construirLeyendaHtml, aplicarEstadosMonitoreo, contarMonitoreo, normalizarCriticidad, claveMonitoreo, CRITICIDADES, ESTADOS_MONITOREO } from '/js/dominios/hosts/gabineteRack.js';
 import { confirmAction } from '/js/dominios/ui-system/modalConfirm.js';
+import { pedirTexto } from '/js/dominios/ui-system/modalTexto.js';
 import { trackUIEvent } from '/js/dominios/ui-system/uxTelemetry.js';
 import { escapeHtml, textoSeguro } from '/js/dominios/ui-system/seguridadHtml.js';
 import { apiFetch, apiJson } from '/js/dominios/ui-system/apiFetch.js';
@@ -187,17 +188,34 @@ document.addEventListener('DOMContentLoaded', function () {
   // Estado de monitoreo en vivo por servidor (id → UP/DOWN/DEGRADED/MAINTENANCE/UNKNOWN), solo físicos
   let estadosMonitoreo = new Map();
   let estadosMonitoreoCargados = false;
+  // Virtuales: estado del servidor físico que hace de host (por nombre)
+  let estadosHostPorNombre = new Map();
   let consultandoMonitoreo = false;
 
   async function cargarEstadosMonitoreo() {
-    if (isVirtuales || consultandoMonitoreo) return;
+    if (consultandoMonitoreo) return;
     consultandoMonitoreo = true;
     try {
       // Mismo origen que el Mapa de Dependencias: incluye los servidores sin relaciones
       const grafo = await apiJson('/api/topology/graph?includeIsolated=true');
       const mapa = new Map();
-      for (const n of grafo?.nodes || []) mapa.set(String(n.id), n.monitoring ? n.status : 'UNKNOWN');
+      const porNombre = new Map();
+      for (const n of grafo?.nodes || []) {
+        const estado = n.monitoring ? n.status : 'UNKNOWN';
+        mapa.set(String(n.id), estado);
+        if (n.type === 'fisicos' && n.name) porNombre.set(String(n.name).toLowerCase(), estado);
+      }
+      const firmaAnterior = [...estadosMonitoreo].join();
       estadosMonitoreo = mapa;
+      estadosHostPorNombre = porNombre;
+      if (isVirtuales) {
+        // Virtuales: el resumen consolidado por host/clúster se vuelve a dibujar si algo cambió
+        const primeraCarga = !estadosMonitoreoCargados;
+        estadosMonitoreoCargados = true;
+        if ((primeraCarga || firmaAnterior !== [...mapa].join()) && !location.hash) renderVirtualView();
+        else aplicarEstadosMonitoreo(document, estadosMonitoreo);
+        return;
+      }
       estadosMonitoreoCargados = true;
       aplicarEstadosMonitoreo(document, estadosMonitoreo);
       document.querySelectorAll('[data-led-texto]').forEach((el) => {
@@ -217,9 +235,7 @@ document.addEventListener('DOMContentLoaded', function () {
       consultandoMonitoreo = false;
     }
   }
-  if (!isVirtuales) {
-    setInterval(() => { if (document.visibilityState === 'visible') cargarEstadosMonitoreo(); }, 30000);
-  }
+  setInterval(() => { if (document.visibilityState === 'visible') cargarEstadosMonitoreo(); }, 30000);
 
   let lastUpdatedAt = null; // Para detectar cambios y mostrar toast
 
@@ -607,6 +623,27 @@ document.addEventListener('DOMContentLoaded', function () {
     // Expose openRackModalForEdit globally
 
     window.openRackModalForEdit = openRackModalForEdit;
+
+    // Botón "✏️ Editar" de cada host (sin onclick inline). Se registra aquí, en la parte de
+    // virtuales: dentro de wirePhysicalUX() nunca llegaba a registrarse en esta página.
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.btn-edit-host');
+      if (!btn) return;
+
+      if (isReadOnlyUser()) {
+        e.preventDefault();
+        e.stopPropagation();
+        showReadOnlyToast();
+        return;
+      }
+
+      e.stopPropagation();
+      const id = Number(btn.getAttribute('data-host-id'));
+      const encodedName = btn.getAttribute('data-host-name') || '';
+      if (!Number.isInteger(id) || id <= 0) return;
+
+      window.openRackModalForEdit({ id, name: decodeURIComponent(encodedName) });
+    });
 
 
 
@@ -1493,7 +1530,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     }
 
-    app.innerHTML = `${errorBlock}${content}`;
+    // Inventario + estado de monitoreo consolidado de todas las VMs
+    const todasLasVms = (DATA.racks || []).flatMap((r) => r.servers || []);
+    const leyenda = estadosMonitoreoCargados ? construirLeyendaHtml({ conteos: contarMonitoreo(todasLasVms, estadosMonitoreo), nota: 'Estado de monitoreo en vivo de las VMs (se actualiza cada 30 s)' }) : '';
+    app.innerHTML = `${errorBlock}${leyenda}${content}`;
 
 
 
@@ -1518,6 +1558,8 @@ document.addEventListener('DOMContentLoaded', function () {
     // Aplicar estilos visuales post-render para VMs filtradas
 
     applyVMVisualStyles();
+    // Solo lectura también en los botones recién dibujados (p. ej. tras refrescar el monitoreo)
+    disableReadOnlyActions();
 
 
 
@@ -1535,8 +1577,15 @@ document.addEventListener('DOMContentLoaded', function () {
       const btnCreateView = document.getElementById('btnCreateView');
 
       btnCreateView?.addEventListener('click', async () => {
+        if (isReadOnlyUser()) { showReadOnlyToast(); return; }
 
-        const viewName = prompt('Nombre de la nueva vista (ej: Power Systems, AIX Hosts):');
+        const viewName = await pedirTexto({
+          titulo: 'Nueva vista',
+          etiqueta: 'Nombre de la nueva vista',
+          mensaje: 'Agrupa hosts virtuales bajo un nombre (ej.: Power Systems, Hosts AIX).',
+          textoAceptar: 'Crear',
+          maxLength: 80,
+        });
 
         if (!viewName || !viewName.trim()) return;
 
@@ -1648,7 +1697,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 const currentName = decodeURIComponent(editBtn.getAttribute('data-view-name') || '');
 
-                const newName = prompt('Nuevo nombre de la vista:', currentName);
+                const newName = await pedirTexto({ titulo: 'Renombrar vista', etiqueta: 'Nuevo nombre de la vista', valor: currentName, textoAceptar: 'Guardar', maxLength: 80 });
 
                 if (!newName || !newName.trim() || newName.trim() === currentName) return;
 
@@ -1880,7 +1929,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         btnEditCluster.addEventListener('click', async () => {
 
-          const newName = prompt('Nuevo nombre para el clúster:', cluster.name);
+          const newName = await pedirTexto({ titulo: 'Renombrar clúster', etiqueta: 'Nuevo nombre del clúster', valor: cluster.name, textoAceptar: 'Guardar', maxLength: 80 });
 
           if (!newName || newName.trim() === cluster.name) return;
 
@@ -2138,6 +2187,7 @@ document.addEventListener('DOMContentLoaded', function () {
             <h2>${fmt(group.name)}</h2>
 
             <p class="muted">${fmt(hosts.map(h => h.name).join(', ') || 'Sin hosts asignados')}</p>
+            ${resumenMonitoreoHtml(hosts.flatMap((h) => h.servers || []), { titulo: 'Monitoreo del clúster' })}
 
           </div>
 
@@ -2399,6 +2449,24 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
+  /** Estado de monitoreo consolidado de un conjunto de VMs (y opcionalmente del host físico) */
+  function resumenMonitoreoHtml(vms, { hostNombre = null, titulo = 'Monitoreo' } = {}) {
+    const conteos = contarMonitoreo(vms, estadosMonitoreo);
+    const partes = Object.entries(ESTADOS_MONITOREO)
+      .filter(([k]) => conteos[k])
+      .map(([k, m]) => `<span class="estado-consolidado__item" title="${escapeHtml(m.descripcion)}"><span class="gab-led gab-led--${m.clase}" aria-hidden="true"></span>${conteos[k]} ${escapeHtml(m.texto)}</span>`);
+    let host = '';
+    if (hostNombre) {
+      const clave = estadosHostPorNombre.get(String(hostNombre).toLowerCase());
+      if (clave) {
+        const m = ESTADOS_MONITOREO[claveMonitoreo(clave)];
+        host = `<span class="estado-consolidado__item estado-consolidado__host" title="Estado del host"><span class="gab-led gab-led--${m.clase}" aria-hidden="true"></span>Host ${escapeHtml(m.texto)}</span>`;
+      }
+    }
+    if (!partes.length && !host) return '';
+    return `<div class="estado-consolidado" aria-label="${escapeHtml(titulo)}">${host}${partes.length ? `<span class="estado-consolidado__titulo">VMs:</span>${partes.join('')}` : ''}</div>`;
+  }
+
   function renderVirtualHostCard(host, options = {}) {
 
     const { preview = false } = options;
@@ -2555,6 +2623,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             </svg>
 
+            <span class="gab-led gab-led--${ESTADOS_MONITOREO[claveMonitoreo(estadosMonitoreo.get(String(vm.id)))].clase} vm-led" data-led-id="${escapeHtml(String(vm.id))}" aria-hidden="true"></span>
             <span class="vm-num">${id}</span>
 
             <span class="vm-label">${label}</span>
@@ -2592,6 +2661,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <h3>${fmt(host.name)}</h3>
 
                 <span class="host-card__meta">${vmCount} VMs activas</span>
+                ${resumenMonitoreoHtml(host?.servers || [], { hostNombre: host?.name })}
 
               </div>
 
@@ -3247,8 +3317,10 @@ document.addEventListener('DOMContentLoaded', function () {
       }
 
       const clusterTrigger = e.target.closest('[data-cluster-key]');
+      // Una VM o un host dentro de la tarjeta del clúster abren su propia vista, no la del clúster
+      const vistaInterna = e.target.closest('[data-view]');
 
-      if (clusterTrigger) {
+      if (clusterTrigger && !(vistaInterna && clusterTrigger.contains(vistaInterna))) {
 
         e.preventDefault();
 
@@ -3706,25 +3778,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     });
 
-    // Edición de host virtual sin onclick inline
-    if (registrarGlobales) document.addEventListener('click', (e) => {
-      const btn = e.target.closest('.btn-edit-host');
-      if (!btn) return;
-
-      if (isReadOnlyUser()) {
-        e.preventDefault();
-        e.stopPropagation();
-        showReadOnlyToast();
-        return;
-      }
-
-      e.stopPropagation();
-      const id = Number(btn.getAttribute('data-host-id'));
-      const encodedName = btn.getAttribute('data-host-name') || '';
-      if (!Number.isInteger(id) || id <= 0) return;
-
-      window.openRackModalForEdit({ id, name: decodeURIComponent(encodedName) });
-    });
 
 
 
