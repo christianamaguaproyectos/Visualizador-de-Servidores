@@ -55,20 +55,28 @@ La aplicación tiene las siguientes secciones accesibles desde el menú de naveg
 
 ### Vista General
 
-Al ingresar a **Racks Físicos** se muestra una grilla horizontal con todos los racks. Cada rack muestra:
+Al ingresar a **Servidores Físicos** (`/fisicos`) se muestran, de arriba abajo:
 
-- **Nombre** del rack en la parte superior.
-- **Unidades de servidor** representadas visualmente con LEDs de estado:
-  - 🔴 **Rojo** — Servidor **Crítico** (alta prioridad).
-  - 🟢 **Verde** — Servidor **No Crítico** (funcionando con normalidad).
-  - 🟠 **Naranja** — Servidor **En Mantenimiento**.
-  - ⚪ **Gris/Apagado** — Unidad vacía o servidor inactivo.
-- **Etiquetas laterales** con la IP y hostname de cada servidor.
-- **KPIs en la parte inferior**: conteo de servidores críticos, no críticos y en mantenimiento.
+- **Barra superior**: buscador, filtro de criticidad y los botones *Agregar Servidor*, *Agregar Rack*, *Exportar Excel*, *Mostrar detalles técnicos*, *Usuarios* (solo superadmin) y *Actualizar datos*.
+- **Resumen**: total de racks y servidores, y conteo de servidores críticos, no críticos y en mantenimiento.
+- **Paginación** y botón **🔧 Organizar Racks**.
+- **Leyenda** de los símbolos del rack, con el número de servidores en cada estado de monitoreo.
+- **Racks dibujados como gabinetes de 42U**: marco, rieles con la numeración de cada unidad (U), unidades libres como ranuras vacías y cada servidor ocupando sus U reales (un equipo de 2U ocupa dos unidades). Sobre la tarjeta de cada rack se ven su nombre, cuántos servidores tiene, las unidades ocupadas (`N/42U`), una barra de ocupación y el conteo por criticidad.
 
-### Filtros de Estado
+Cada servidor del gabinete muestra su **nombre**, su **IP** y dos indicadores:
 
-Usa el menú desplegable **"Todos"** en la barra superior para filtrar servidores por estado:
+| Indicador | Forma | Significado |
+|-----------|-------|-------------|
+| **Criticidad** (dato del inventario, campo *Estado*) | cuadrado ■ y franja de color en el borde izquierdo del equipo | 🟥 Crítico · 🟩 No crítico · 🟧 Mantenimiento · ⬜ Inactivo. En equipos de 2U o más también aparece la etiqueta `CRÍTICO` / `MANT.` / `INACTIVO`. |
+| **Monitoreo** (estado en vivo) | LED redondo ● | Verde **UP** (en línea) · Rojo parpadeante **DOWN** (caído) · Ámbar **DEGRADED** (degradado) · Violeta **MAINT** (mantenimiento) · Círculo vacío **SIN DATOS** (sin monitoreo). |
+
+El estado de monitoreo es el mismo que usa el Mapa de Dependencias y se actualiza solo cada 30 segundos. Al pasar el mouse sobre un servidor aparece un recuadro con nombre, IP, unidades, criticidad y monitoreo; sobre una unidad libre, su número de U.
+
+**Mostrar detalles técnicos** añade en cada rack la ocupación detallada (U ocupadas y libres) y los modelos instalados, y en los equipos de 2U o más el modelo y su rango de U.
+
+### Buscador y filtros
+
+El **buscador** resalta los servidores cuyo nombre, hostname, IP, etiqueta, modelo o rango de U contiene el texto, y atenúa el resto. El menú **"Todos"** filtra por criticidad:
 
 | Filtro             | Muestra                                                 |
 |--------------------|----------------------------------------------------------|
@@ -77,21 +85,28 @@ Usa el menú desplegable **"Todos"** en la barra superior para filtrar servidore
 | **No Críticos**    | Servidores que no son críticos ni en mantenimiento        |
 | **En Mantenimiento** | Solo servidores en mantenimiento                        |
 
-### Paginación
+### Paginación y orden de los racks
 
-Puedes controlar cuántos racks se muestran a la vez seleccionando entre 3, 5, 10 o todos desde el selector de paginación. También puedes saltar directamente a un rack específico usando el botón **"Ir a Rack"**.
+El selector **Racks por página** (4, 5, 6, 8, 10 o 12) y los botones *Primera*, *Anterior*, *Siguiente* y *Última* recorren las páginas. **🔧 Organizar Racks** permite cambiar el orden de los racks (arrastrando o con ▲▼), guardarlo o restablecer el orden original; el orden se recuerda en el navegador.
 
 ### Ver Detalle de un Rack
 
-Haz clic en cualquier rack para abrir su vista de detalle, que muestra:
-- Lista completa de servidores instalados.
-- Botones de acción: editar, eliminar y mover servidores.
-- Botón **"🗑️ Eliminar Rack"** (solo si no tiene servidores).
+Haz clic en la tarjeta de un rack (fuera de los servidores) para abrir su vista de detalle:
+- El **gabinete en grande**, con nombre, IP, criticidad, LED de monitoreo, modelo y rango de U de cada servidor.
+- La **lista del inventario** del rack con criticidad y monitoreo de cada servidor y los botones ✏️ editar y 🗑️ eliminar.
+- Botón **"🗑️ Eliminar Rack"** (pide confirmación; si el rack tiene servidores, avisa que también se eliminarán).
 - Botón **"← Volver"** para regresar a la vista general.
+
+Un clic sobre un servidor (en el gabinete o en la lista) abre su ficha.
 
 ### Mover Servidores (Drag & Drop)
 
-Puedes **arrastrar** un servidor de un rack y **soltarlo** en una unidad vacía de otro rack para moverlo visualmente.
+Arrastra un servidor y suéltalo:
+- sobre una **U libre** (se ilumina al pasar por encima) para colocarlo en esa posición, en el mismo rack o en otro;
+- sobre **otro servidor** para intercambiar sus posiciones;
+- sobre la tarjeta de **otro rack** para moverlo a ese rack.
+
+La vista se actualiza sola después de cada movimiento. Los usuarios de solo lectura ven los racks, el buscador y los filtros, pero no pueden abrir el detalle, editar ni mover servidores.
 
 ---
 
@@ -134,7 +149,7 @@ Puedes **arrastrar** un servidor de un rack y **soltarlo** en una unidad vacía 
 
 ### Ver Detalle de un Servidor
 
-Haz clic en cualquier servidor dentro de un rack o en las etiquetas laterales para abrir su ficha completa con toda la información registrada.
+Haz clic en cualquier servidor dentro de un rack para abrir su ficha completa con toda la información registrada. En servidores físicos, bajo el nombre se muestran su **criticidad** (■) y su **estado de monitoreo** (LED ●) con los mismos colores que el rack.
 
 Debajo de la ficha aparece el bloque **🔗 Dependencias e impacto** (igual en físicos y virtuales). El botón del mismo nombre en la fila superior, junto a **Volver**, muestra el número de relaciones y lleva directamente al bloque:
 
