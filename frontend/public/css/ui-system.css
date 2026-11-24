@@ -152,7 +152,7 @@
 .ui-table tbody tr:hover td { background: var(--color-primary-50); }
 
 /* ── Ventanas emergentes (marcado .modal-overlay/.modal existente) ─────── */
-.ui-plataforma .modal-overlay, .ui-plataforma .modal { background: rgba(10, 18, 34, 0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+.ui-plataforma .modal-overlay, .ui-plataforma .modal { background: rgba(10, 18, 34, 0.6); backdrop-filter: none; -webkit-backdrop-filter: none; }
 .ui-plataforma .modal-content {
   position: relative;
   background: var(--color-bg-surface);
@@ -186,7 +186,7 @@
   position: fixed;
   inset: 0;
   background: rgba(10, 18, 34, 0.5);
-  backdrop-filter: blur(3px);
+  backdrop-filter: none;
   display: flex;
   align-items: center;
   justify-content: center;

@@ -4,7 +4,7 @@
   --text-main: #18243c;
   --text-soft: #5c6e8d;
   --glass-stroke: rgba(255, 255, 255, 0.68);
-  --glass-surface: linear-gradient(140deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.44));
+  --glass-surface: linear-gradient(140deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.74));
   --shadow-soft: 0 20px 44px rgba(20, 38, 78, 0.16);
   --shadow-hover: 0 28px 52px rgba(19, 45, 96, 0.22);
 
@@ -112,8 +112,6 @@ body {
 .server-type-card {
   background: var(--glass-surface);
   border: 1px solid var(--glass-stroke);
-  backdrop-filter: blur(9px);
-  -webkit-backdrop-filter: blur(9px);
   padding: 28px 26px;
   border-radius: 22px;
   box-shadow: var(--shadow-soft);

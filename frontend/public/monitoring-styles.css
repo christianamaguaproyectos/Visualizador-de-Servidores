@@ -1447,9 +1447,9 @@ body:not(.rol-admin) .solo-admin {
 .en-vivo { display: inline-flex; align-items: center; gap: 8px; font-size: .8rem; color: var(--text-secondary);
   background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 999px; padding: 4px 12px; }
 .en-vivo .last-update { font-size: inherit; color: inherit; }
-.en-vivo__punto { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success-500); animation: pulso-vivo 2s infinite; }
+.en-vivo__punto { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success-500); animation: pulso-vivo 2s ease-in-out infinite; }
 .en-vivo--error .en-vivo__punto { background: var(--color-danger-500); animation: none; }
-@keyframes pulso-vivo { 0% { box-shadow: 0 0 0 0 rgba(18, 183, 106, .45); } 70% { box-shadow: 0 0 0 7px rgba(18, 183, 106, 0); } 100% { box-shadow: 0 0 0 0 rgba(18, 183, 106, 0); } }
+@keyframes pulso-vivo { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 
 .sala-vivo { margin-bottom: 20px; }
 .sala-vivo__cab { flex-wrap: wrap; gap: 12px; align-items: flex-start; }
@@ -1474,7 +1474,7 @@ body:not(.rol-admin) .solo-admin {
 .led--UNKNOWN { background: var(--color-unknown-500); }
 .led--critico { outline: 2px solid var(--color-danger-700); outline-offset: 1px; }
 .led--grande { width: 16px; height: 16px; }
-@keyframes led-alerta { 0%, 100% { box-shadow: 0 0 0 0 rgba(240, 68, 56, .55); } 50% { box-shadow: 0 0 0 6px rgba(240, 68, 56, 0); } }
+@keyframes led-alerta { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
 
 .racks-vivo { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; padding: 16px 20px 20px; }
 .rack-vivo { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 14px 14px 10px;

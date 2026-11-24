@@ -54,7 +54,7 @@ body {
   inset: -18%;
   background: conic-gradient(from 110deg at 50% 50%, rgba(136, 228, 255, 0), rgba(136, 228, 255, 0.18), rgba(153, 129, 255, 0.26), rgba(136, 228, 255, 0));
   filter: blur(75px);
-  animation: flowShift 18s ease-in-out infinite alternate;
+  /* Fondo estático: animar capas con blur de gran tamaño fuerza a repintar toda la pantalla */
 }
 
 .light-orb {
@@ -68,14 +68,12 @@ body {
   top: 8%;
   right: -90px;
   background: rgba(122, 161, 255, 0.52);
-  animation: floatOrb 11s ease-in-out infinite;
 }
 
 .orb-2 {
   bottom: 10%;
   left: -90px;
   background: rgba(104, 189, 255, 0.42);
-  animation: floatOrb 13s ease-in-out infinite reverse;
 }
 
 .login-scene {
@@ -421,27 +419,6 @@ body {
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes flowShift {
-  from {
-    transform: rotate(0deg) scale(1.03);
-  }
-
-  to {
-    transform: rotate(18deg) scale(1.09);
-  }
-}
-
-@keyframes floatOrb {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-24px);
   }
 }
 
