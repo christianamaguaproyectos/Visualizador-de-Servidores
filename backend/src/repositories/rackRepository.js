@@ -8,6 +8,16 @@ import { parsePositiveBigInt } from '../utils/ids.js';
 
 class RackRepository {
   /**
+   * Racks por ID (p. ej. racks sin tipo que contienen servidores de un tipo)
+   * @param {Array<number|string|bigint>} ids
+   * @returns {Promise<Object[]>}
+   */
+  async findByIds(ids) {
+    if (!ids.length) return [];
+    return prisma.rack.findMany({ where: { id: { in: ids.map((id) => BigInt(id)) } }, orderBy: { name: 'asc' } });
+  }
+
+  /**
    * Obtiene todos los racks de un tipo
    * @param {'fisicos'|'virtuales'} type
    * @returns {Promise<Array>}

@@ -69,7 +69,7 @@ function ledHtml(id, estadoVivo) {
  * @param {boolean} [opciones.grande] gabinete de la vista de detalle (más alto, más datos)
  * @param {boolean} [opciones.detalle] muestra modelo y rango de U (botón "detalles técnicos")
  * @param {boolean} [opciones.numeracionAscendente] etiquetas 1→42 de arriba abajo
- * @returns {{ html: string, ocupadas: number, libres: number }}
+ * @returns {{ html: string, ocupadas: number, libres: number, sinUbicar: object[] }}
  */
 export function construirGabineteHtml({ nombreRack, servidores = [], estados = new Map(), grande = false, detalle = false, numeracionAscendente = false }) {
   const total = UNIDADES_RACK;
@@ -129,7 +129,7 @@ export function construirGabineteHtml({ nombreRack, servidores = [], estados = n
   <div class="gab__cuerpo" role="group" aria-label="Rack ${escapeAttr(nombreRack)}: ${colocacion.ocupadas} de ${total} U ocupadas">${partes.join('')}</div>
   <div class="gab__base" aria-hidden="true"><span></span><span></span></div>
 </div>`;
-  return { html, ocupadas: colocacion.ocupadas, libres: colocacion.libres };
+  return { html, ocupadas: colocacion.ocupadas, libres: colocacion.libres, sinUbicar: colocacion.sinUbicar };
 }
 
 /** Leyenda de criticidad y estado de monitoreo (HTML estático) */
@@ -171,4 +171,35 @@ export function contarMonitoreo(servidores, estados) {
     conteos[k] = (conteos[k] || 0) + 1;
   }
   return conteos;
+}
+
+/** Enlace a la ficha de un servidor (nombre, IP, criticidad y LED) para listas fuera del gabinete */
+function itemServidorHtml(s, estados) {
+  const id = String(s.id ?? '');
+  const crit = normalizarCriticidad(s.estado, s.activo);
+  return `<li><button type="button" class="gab-lista__srv" data-view="server" data-id="${escapeAttr(encodeURIComponent(id))}">${ledHtml(id, estados.get(id))}<span class="gab-crit gab-crit--${crit.replace('_', '-')}" aria-hidden="true"></span><span class="gab-lista__nombre">${escapeHtml(nombreDe(s))}</span><span class="gab-lista__ip">${escapeHtml(s.ip || '')}</span></button></li>`;
+}
+
+/**
+ * Aviso de servidores que no se pueden dibujar en el gabinete (no caben en 42U o su posición
+ * está ocupada): se listan para poder abrirlos y corregir su ubicación.
+ */
+export function construirAvisoSinUbicarHtml(sinUbicar = [], estados = new Map()) {
+  if (!sinUbicar.length) return '';
+  const n = sinUbicar.length;
+  return `<details class="gab-aviso" role="note">
+  <summary>⚠ ${n} ${n === 1 ? 'servidor no cabe' : 'servidores no caben'} en el rack o no tiene${n === 1 ? '' : 'n'} posición libre</summary>
+  <ul class="gab-lista">${sinUbicar.map((s) => itemServidorHtml(s, estados)).join('')}</ul>
+</details>`;
+}
+
+/** Tarjeta "Sin rack asignado" con los servidores físicos que no tienen rack */
+export function construirSinRackHtml(servidores = [], estados = new Map(), { titulo = 'Sin rack asignado', descripcion = 'Servidores del inventario sin rack. Ábrelos y edítalos para asignarles un rack y una posición.', unidad = 'servidores', limite = 300 } = {}) {
+  if (!servidores.length) return '';
+  return `<section class="gab-sin-rack" aria-label="${escapeAttr(titulo)}">
+  <div class="gab-sin-rack__cab"><h2>${escapeHtml(titulo)}</h2><span class="gab-card__ocup">${servidores.length} ${escapeHtml(unidad)}</span></div>
+  <p class="gab-card__sub">${escapeHtml(descripcion)}</p>
+  <ul class="gab-lista gab-lista--columnas">${servidores.slice(0, limite).map((s) => itemServidorHtml(s, estados)).join('')}</ul>
+  ${servidores.length > limite ? `<p class="gab-card__sub">Se muestran ${limite} de ${servidores.length}. La lista completa está en la exportación a Excel.</p>` : ''}
+</section>`;
 }

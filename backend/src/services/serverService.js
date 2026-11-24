@@ -42,8 +42,13 @@ class ServerService {
       }
     }
 
+    // Racks sin tipo (o de otro tipo) que contienen servidores de este tipo: también se muestran
+    const idsConocidos = new Set(allRacks.map((r) => String(r.id)));
+    const idsFaltantes = [...rackServerMap.keys()].filter((id) => !idsConocidos.has(String(id)));
+    const racksExtra = idsFaltantes.length ? await rackRepository.findByIds(idsFaltantes) : [];
+
     // Construir respuesta de racks con servidores
-    const rackGroups = allRacks.map(rack => ({
+    const rackGroups = [...allRacks, ...racksExtra].map(rack => ({
       id: rack.id,
       name: rack.name,
       type: rack.type,

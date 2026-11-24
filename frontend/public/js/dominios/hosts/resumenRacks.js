@@ -1,6 +1,6 @@
 import { normalizarCriticidad } from './gabineteRack.js';
 
-export function calcularResumenRacks(racks = []) {
+export function calcularResumenRacks(racks = [], servidoresSinRack = []) {
   const resumen = {
     totalRacks: racks.length,
     totalServidores: 0,
@@ -9,7 +9,7 @@ export function calcularResumenRacks(racks = []) {
     mantenimiento: 0
   };
 
-  racks.forEach((rack) => {
+  [...racks, { servers: servidoresSinRack }].forEach((rack) => {
     const servidores = Array.isArray(rack?.servers) ? rack.servers : [];
     resumen.totalServidores += servidores.length;
 
@@ -25,13 +25,13 @@ export function calcularResumenRacks(racks = []) {
   return resumen;
 }
 
-export function construirResumenRacksHtml(racks = []) {
-  const resumen = calcularResumenRacks(racks);
+export function construirResumenRacksHtml(racks = [], { servidoresSinRack = [] } = {}) {
+  const resumen = calcularResumenRacks(racks, servidoresSinRack);
   return `
     <div class="stat-card stat-card--racks">
       <div class="stat-card__head"><span class="stat-card__icon" aria-hidden="true">🗄️</span><div class="label">Total Racks</div></div>
       <div class="value">${resumen.totalRacks}</div>
-      <div class="sub">Total Servidores: ${resumen.totalServidores}</div>
+      <div class="sub">Total Servidores: ${resumen.totalServidores}${servidoresSinRack.length ? ` (${servidoresSinRack.length} sin rack)` : ''}</div>
     </div>
     <div class="stat-card stat-card--servers">
       <div class="stat-card__head"><span class="stat-card__icon" aria-hidden="true">🔴</span><div class="label">Críticos</div></div>
