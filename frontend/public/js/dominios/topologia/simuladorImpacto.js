@@ -127,7 +127,7 @@ export function crearSimulador({ banda, resumen, boton, estado, recargar }) {
     }, icono(estado.simulando || imp.simulatedDownIds.length ? 'rayo' : 'alerta', 14), textoPastilla(imp, caidas));
     if (!abierto) { resumen.replaceChildren(pastilla); return; }
 
-    const afect = estado.grafo.nodes.filter((n) => n.cascadeStatus !== 'NONE').sort((a, b) => a.impactLevel - b.impactLevel || a.name.localeCompare(b.name));
+    const afect = estado.grafo.nodes.filter((n) => n.cascadeStatus !== 'NONE').sort((a, b) => a.impactLevel - b.impactLevel || String(a.name || '').localeCompare(String(b.name || '')));
     const fuerte = (t) => h('strong', {}, t);
     // Caídas reales y simuladas por separado, cada una con su conteo
     const grupo = (clave, titulo, ids) => (ids.length

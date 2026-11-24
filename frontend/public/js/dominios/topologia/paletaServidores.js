@@ -25,7 +25,7 @@ export function crearPaleta({ raiz, estado, obtenerCatalogo, agregar }) {
     const libres = obtenerCatalogo()
       .filter((s) => !enVista.has(String(s.id)))
       .filter((s) => !q || `${s.name} ${s.ip || ''}`.toLowerCase().includes(q))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
     if (!libres.length) {
       lista.replaceChildren(h('li', { class: 'topo-paleta__vacio' }, q ? 'Sin coincidencias' : 'Todos los servidores están en la vista'));
       return;

@@ -194,7 +194,7 @@ export function montarBloqueDependencias(contenedor, serverId, { esAdmin = () =>
     if (catalogo) return catalogo;
     const g = await obtenerGrafo({ includeIsolated: true });
     catalogo = g.nodes.map((n) => ({ id: String(n.id), name: n.name, ip: n.ip, type: n.type }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
     return catalogo;
   }
 

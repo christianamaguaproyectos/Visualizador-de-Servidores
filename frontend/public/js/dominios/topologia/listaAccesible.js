@@ -14,7 +14,7 @@ export function crearListaAccesible({ raiz, estado, acciones }) {
   const nombreDe = (id) => estado.nodoPorId.get(String(id))?.name || `#${id}`;
 
   function render() {
-    const nodos = [...estado.nodosVisibles()].sort((a, b) => a.name.localeCompare(b.name));
+    const nodos = [...estado.nodosVisibles()].sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
     cuerpo.replaceChildren(...nodos.map((n) => {
       const id = String(n.id);
       const dep = estado.grafo.edges.filter((e) => String(e.source) === id).map((e) => nombreDe(e.target));

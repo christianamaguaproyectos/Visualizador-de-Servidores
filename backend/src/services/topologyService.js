@@ -215,13 +215,23 @@ function mapView(row) {
   };
 }
 
+/**
+ * Nombre visible de un servidor: en inventarios reales hay equipos sin "nombre"; se usa el
+ * hostname, la primera IP o el id para que el mapa y las listas nunca muestren un vacío.
+ */
+export function nombreVisible(row) {
+  const texto = (v) => (typeof v === 'string' ? v.trim() : '');
+  const ip = texto(row.ip).split(/[\s,;/]+/).find((p) => p && p !== '0.0.0.0');
+  return texto(row.nombre) || texto(row.hostname) || ip || `Servidor #${row.id}`;
+}
+
 /** Resumen de un servidor con su estado de monitoreo */
 function mapServer(row) {
   const monitored = row.monitoring_host_id !== null && row.monitoring_host_id !== undefined;
   return {
     id: row.id,
     type: row.type,
-    name: row.nombre,
+    name: nombreVisible(row),
     ip: row.ip,
     hostname: row.hostname,
     rack: row.rack_norm,

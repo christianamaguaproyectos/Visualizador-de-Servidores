@@ -121,6 +121,9 @@ describe('Base de datos existente (integración)', { skip: omitir || false }, ()
     const grafo = await lector.api('GET', '/api/topology/graph?includeIsolated=true');
     assert.equal(grafo.status, 200);
     assert.equal(grafo.data.nodes.length, 1000);
+    assert.ok(grafo.data.nodes.every((n) => typeof n.name === 'string' && n.name.trim()), 'todo servidor tiene un nombre visible (aunque no tenga "nombre")');
+    const sinNombre = grafo.data.nodes.find((n) => n.name === 'host-7');
+    assert.ok(sinNombre, 'sin nombre se usa el hostname');
     assert.equal(grafo.data.edges.length, 0);
     const vistas = await lector.api('GET', '/api/topology/views');
     assert.equal(vistas.status, 200);

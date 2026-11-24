@@ -800,7 +800,7 @@ export async function iniciarPaginaDependencias() {
   // ── Teclado ──────────────────────────────────────────────────────────────
   escenario.addEventListener('keydown', (ev) => {
     if (ev.target !== escenario && !ev.target.closest('.topo-3d, .topo-lienzo')) return;
-    const nodos = [...estado.nodosVisibles()].sort((a, b) => a.name.localeCompare(b.name));
+    const nodos = [...estado.nodosVisibles()].sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
     const actual = estado.seleccion?.tipo === 'nodo' ? nodos.findIndex((n) => String(n.id) === estado.seleccion.id) : -1;
     const k = ev.key;
     if (k === 'n' || k === 'N') {
