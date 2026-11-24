@@ -251,6 +251,13 @@ body.ui-plataforma {
   padding-right: 46px;
 }
 
+/* Un solo botón para ver la contraseña: se oculta el que añade Edge/IE
+   porque el campo ya tiene el botón propio de la aplicación. */
+.password-shell input::-ms-reveal,
+.password-shell input::-ms-clear {
+  display: none;
+}
+
 .toggle-password {
   position: absolute;
   top: 50%;
