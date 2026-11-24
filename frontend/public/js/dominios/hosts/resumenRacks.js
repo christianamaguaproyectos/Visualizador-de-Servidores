@@ -1,3 +1,5 @@
+import { normalizarCriticidad } from './gabineteRack.js';
+
 export function calcularResumenRacks(racks = []) {
   const resumen = {
     totalRacks: racks.length,
@@ -12,14 +14,11 @@ export function calcularResumenRacks(racks = []) {
     resumen.totalServidores += servidores.length;
 
     servidores.forEach((servidor) => {
-      const estado = String(servidor?.estado || servidor?.activo || '').toLowerCase();
-      if (estado.includes('critico') || estado.includes('crit')) {
-        resumen.criticos += 1;
-      } else if (estado.includes('manten')) {
-        resumen.mantenimiento += 1;
-      } else {
-        resumen.noCriticos += 1;
-      }
+      // "NO_CRITICO" cuenta como no crítico; inactivo se suma a no críticos
+      const estado = normalizarCriticidad(servidor?.estado || servidor?.activo, servidor?.activo);
+      if (estado === 'critico') resumen.criticos += 1;
+      else if (estado === 'mantenimiento') resumen.mantenimiento += 1;
+      else resumen.noCriticos += 1;
     });
   });
 
