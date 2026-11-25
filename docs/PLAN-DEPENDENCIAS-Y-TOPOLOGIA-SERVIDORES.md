@@ -237,3 +237,39 @@ Implementar usando el pool compartido ([db.js](../backend/src/config/db.js) / Pr
   7. Verificar que `dependencies.html` cumple la CSP estricta (cero `<script>` inline, cero `<style>` inline y cero `style="..."`).
   8. Verificar `npm run lint` y `npm test` con 0 errores.
 
+---
+
+## 4. Estado de Ejecución
+
+| Fase | Estado | Rama |
+| :--- | :--- | :--- |
+| **Fase 1** — Backend, esquema y API | ✅ Completada (1.1, 1.2, 1.3) | `feat/dependencias-fase1-backend` |
+| **Fase 2** — Lienzo interactivo `/dependencias` | ⏳ Pendiente | `feat/dependencias-fase2-canvas-drawio` |
+| **Fase 3** — Impacto, vistas, exportación e integración en inventario | ⏳ Pendiente | `feat/dependencias-fase3-impacto-vistas-export` |
+
+### Fase 1: entregado
+
+- **1.1 Esquema y Prisma:** `scripts/sql/08-schema.dependencies.sql` (idempotente, se puede re-ejecutar en cualquier estado) con las tablas `inventory.server_dependencies`, `inventory.topology_views` e `inventory.topology_node_positions`, y modelos `ServerDependency`, `TopologyView` y `TopologyNodePosition` en `schema.prisma`. En bases de datos ya existentes el script se aplica a mano: ver [MIGRACION-POSTGRESQL.md](./MIGRACION-POSTGRESQL.md#aplicar-esquemas-nuevos-en-una-base-existente).
+- **1.2 Servicio:** `backend/src/services/topologyService.js` (acceso a datos, transacciones, cruce con monitoreo) y `backend/src/services/topologyGraph.js` (lógica de grafo pura: impacto en cascada, pares bidireccionales, ciclos, análisis de un servidor), probada sin base de datos.
+- **1.3 API:** `backend/src/controllers/topologyController.js`, `backend/src/routes/topologyRoutes.js` y validación en `backend/src/dtos/topologyDto.js`; los 11 endpoints de la sección 1.3 montados en `server.js`. Referencia completa en [API-REST.md](./API-REST.md#-dependencias-y-topología).
+- **Pruebas:** unitarias del grafo y la validación (`tests/unit/topologia-grafo.test.js`) e integración de la API con PostgreSQL (`tests/integration/dependencies.test.js`), que cubren los puntos 1 a 6 de la sección 3.4. Los puntos 7 y 8 se completan con las Fases 2 y 3.
+
+### Decisiones y diferencias respecto al plan
+
+1. **IDs como string.** Todos los IDs se devuelven como string de dígitos (`"1"`) para no perder precisión con `BIGINT`; por eso los ciclos se ven como `["1","2","1"]` y no `[1, 2, 1]`.
+2. **`cycles` solo incluye los ciclos del propio servidor**, como indica 1.2. En el escenario de 3.4.3 el impacto de `S3` devuelve `cycles: []`, porque `S3` no participa en el ciclo `S1 ↔ S2`; el recorrido atraviesa ese ciclo sin bucles y el ciclo sí aparece en el análisis de `S1` y `S2`. La búsqueda de ciclos tiene un tope (`cyclesTruncated`).
+3. **Transitivos sin repetir directos.** `dependsOnTransitive` y `dependentsTransitive` contienen solo profundidad ≥ 2, con `depth` y `path`. Se añade `totalAffected` (directos + transitivos) y, en los directos, las relaciones concretas (`dependencies`) con su `id`.
+4. **Regla de cruce servidor ↔ host de monitoreo** igual a la de la sincronización de monitoreo: nombre exacto y, si no hay coincidencia, la primera IP del campo `ip` con forma IPv4. Dos diferencias deliberadas: en empate se toma el host de menor ID (resultado determinista) y `0.0.0.0` nunca se usa para el cruce.
+5. **Raíces del impacto real:** solo hosts **habilitados** en `DOWN` o `DEGRADED`. `MAINTENANCE`, `UNKNOWN` y los hosts deshabilitados no propagan impacto.
+6. **Vista por defecto:** sin `?view=` se usa la vista marcada como predeterminada (o la de slug `general`). Solo puede haber una predeterminada: marcar otra desmarca la anterior; no se puede eliminar la predeterminada (409) ni quitarle la marca sin elegir otra (400). La vista `Mapa General` solo se siembra cuando no existe ninguna vista.
+7. **`includeIsolated=false` por defecto:** devuelve los servidores con relaciones, los que tienen posición guardada en la vista y los simulados.
+8. **Extras sobre el plan:**
+   - `POST /api/dependencies` con `bidirectional: true` crea también la inversa en la misma transacción y la informa en `inverse` (si ya existía, no es error).
+   - `PUT .../positions` acepta `removeServerIds` para quitar nodos de una vista; un mismo servidor en `positions` y `removeServerIds` responde 400. `pinned` vale `true` por defecto: el auto-layout de la Fase 2 debe enviar `pinned: false` en los nodos que coloque.
+   - Nodos con contadores de servidores distintos (`*ServerCount`) y de relaciones (`*RelationCount`); aristas con `isBidirectionalPair` y `carriesImpact`; resumen `impact` con caídos reales, simulados e IDs simulados ignorados.
+   - Restricciones adicionales en la base de datos: tipos y criticidades válidos, formato de slug, zoom positivo y una sola vista predeterminada.
+   - Límites de validación: máximo 1000 posiciones por petición, 200 IDs en `simulateDownIds`, longitudes de texto (label 120, notes 2000, description 1000) y `filterConfig` de hasta 8 KB.
+   - Utilidad compartida `withTransaction` en `backend/src/config/db.js`.
+   - Respuestas de error del cuerpo de la petición en toda la API: JSON inválido → 400 `VALIDATION_ERROR`; cuerpo de más de 256 KB → 413 `PAYLOAD_TOO_LARGE`.
+9. **Acceso a datos con `pg`** (pool compartido) en lugar de Prisma, porque las consultas usan `LATERAL`, `unnest` y `ON CONFLICT`. Los modelos Prisma quedan alineados con las tablas.
+

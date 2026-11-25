@@ -25,6 +25,7 @@ import metaController from './src/controllers/metaController.js';
 import authController from './src/controllers/authController.js';
 import userController from './src/controllers/userController.js';
 import clusterRoutes from './src/routes/clusterRoutes.js';
+import { topologyRouter, dependenciesRouter } from './src/routes/topologyRoutes.js';
 
 // Middleware
 import { requireAuth, requireAdmin, requireSuperAdmin, injectUser } from './src/middleware/authMiddleware.js';
@@ -220,6 +221,10 @@ class Application {
     // Se espera (await) la carga para que quede registrada ANTES del errorHandler
     const { default: exportRoutes } = await import('./src/routes/exportRoutes.js');
     this.app.use('/api/export', exportRoutes);
+
+    // API del Mapa de Dependencias y Topología (lectura: autenticado; escritura: admin dentro del router)
+    this.app.use('/api/topology', topologyRouter);
+    this.app.use('/api/dependencies', dependenciesRouter);
 
     // ========================================
     // RUTAS DE ADMINISTRADOR (Solo admin)

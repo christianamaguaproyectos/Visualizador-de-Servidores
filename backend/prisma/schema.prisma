@@ -99,6 +99,11 @@ model Server {
 
   rack Rack? @relation(fields: [rackId], references: [id], onDelete: SetNull)
 
+  // Mapa de dependencias: "source depende de target"
+  dependsOn         ServerDependency[]     @relation("DependencySource")
+  dependents        ServerDependency[]     @relation("DependencyTarget")
+  topologyPositions TopologyNodePosition[]
+
   @@unique([type, identityKey])
   @@index([rackId], map: "servers_rack_idx")
   @@index([type], map: "servers_type_idx")
@@ -135,6 +140,73 @@ model ClusterHost {
 
   @@unique([clusterId, rackId])
   @@map("cluster_hosts")
+  @@schema("inventory")
+}
+
+// Mapa de dependencias y topología (scripts/sql/08-schema.dependencies.sql).
+// Los CHECK (tipos, criticidad, puerto, slug) y el índice parcial de "una sola
+// vista por defecto" viven solo en el SQL: Prisma no los puede expresar.
+model ServerDependency {
+  id             BigInt   @id @default(autoincrement())
+  sourceServerId BigInt   @map("source_server_id")
+  targetServerId BigInt   @map("target_server_id")
+  dependencyType String   @default("SERVICE") @map("dependency_type") @db.VarChar(40)
+  criticality    String   @default("CRITICAL") @db.VarChar(20)
+  port           Int?
+  protocol       String?  @db.VarChar(20)
+  label          String?  @db.VarChar(120)
+  notes          String?
+  createdBy      String?  @map("created_by") @db.VarChar(120)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  sourceServer Server @relation("DependencySource", fields: [sourceServerId], references: [id], onDelete: Cascade)
+  targetServer Server @relation("DependencyTarget", fields: [targetServerId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceServerId, targetServerId, dependencyType], map: "uq_server_dependency")
+  @@index([sourceServerId], map: "idx_server_dependencies_source")
+  @@index([targetServerId], map: "idx_server_dependencies_target")
+  @@map("server_dependencies")
+  @@schema("inventory")
+}
+
+model TopologyView {
+  id           BigInt   @id @default(autoincrement())
+  name         String   @unique @db.VarChar(120)
+  slug         String   @unique @db.VarChar(120)
+  description  String?
+  isDefault    Boolean  @default(false) @map("is_default")
+  viewportZoom Float    @default(1.0) @map("viewport_zoom")
+  viewportX    Float    @default(0) @map("viewport_x")
+  viewportY    Float    @default(0) @map("viewport_y")
+  layoutMode   String   @default("manual") @map("layout_mode") @db.VarChar(30)
+  filterConfig Json     @default("{}") @map("filter_config")
+  createdBy    String?  @map("created_by") @db.VarChar(120)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  positions TopologyNodePosition[]
+
+  @@map("topology_views")
+  @@schema("inventory")
+}
+
+model TopologyNodePosition {
+  id        BigInt   @id @default(autoincrement())
+  viewId    BigInt   @map("view_id")
+  serverId  BigInt   @map("server_id")
+  x         Float
+  y         Float
+  pinned    Boolean  @default(true)
+  collapsed Boolean  @default(false)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  view   TopologyView @relation(fields: [viewId], references: [id], onDelete: Cascade)
+  server Server       @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([viewId, serverId], map: "uq_topology_view_server")
+  @@index([serverId], map: "idx_topology_node_positions_server")
+  @@map("topology_node_positions")
   @@schema("inventory")
 }
 

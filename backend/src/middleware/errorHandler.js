@@ -51,6 +51,24 @@ export class ForbiddenError extends AppError {
  * Se registra DESPUÉS de todas las rutas.
  */
 export function errorHandler(err, req, res, _next) {
+  // Errores del parser del cuerpo (express.json / body-parser): son errores del cliente
+  if (err?.type === 'entity.parse.failed') {
+    Logger.warn(`Cuerpo JSON inválido en ${req.method} ${req.originalUrl}`);
+    return res.status(400).json({
+      error: 'El cuerpo de la petición no es un JSON válido',
+      code: 'VALIDATION_ERROR',
+      requestId: req.requestId || null,
+    });
+  }
+  if (err?.type === 'entity.too.large') {
+    Logger.warn(`Cuerpo demasiado grande en ${req.method} ${req.originalUrl}`);
+    return res.status(413).json({
+      error: 'El cuerpo de la petición supera el tamaño máximo permitido',
+      code: 'PAYLOAD_TOO_LARGE',
+      requestId: req.requestId || null,
+    });
+  }
+
   // Error de Prisma: violación de unicidad
   if (err.code === 'P2002') {
     const field = err.meta?.target?.join(', ') || 'campo desconocido';
