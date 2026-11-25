@@ -563,7 +563,9 @@ GET /api/topology/graph?view=3&simulateDownIds=13,27
 - `isBidirectionalPair`: `true` si también existe la arista inversa (`target → source`) de cualquier tipo. Permite dibujar separadas las dos flechas de un ciclo `1 ↔ 2`.
 - `carriesImpact`: `true` si el `target` está caído o afectado y el `source` está afectado, es decir, el impacto se propaga por esa flecha.
 
-**Totales de `impact`:** `rootIds` (todos los caídos), `monitoringDownIds` (caídos según monitoreo), `simulatedDownIds` (simulados que existen), `ignoredSimulateIds`, `directCount`, `transitiveCount` y `totalImpacted` (afectados, sin contar los caídos).
+**Totales de `impact`:** `rootIds` (todos los caídos), `monitoringDownIds` (caídos según monitoreo), `simulatedDownIds` (simulados que existen), `ignoredSimulateIds`, `directCount`, `transitiveCount`, `totalImpacted` (afectados, sin contar los caídos), `applications` (aplicaciones que caen: `[{ name, servers: [{ id, name, motivo }] }]`, con `motivo` = `CAIDO_REAL`, `SIMULADO`, `DIRECTO` o `CASCADA`; el nombre sale del campo `software` del inventario) y `hostingLinks` (número de relaciones implícitas VM → host).
+
+**Alojamiento VM → host:** cada servidor virtual depende implícitamente del servidor no virtual cuyo `nombre` o `hostname` coincide con su host (`rack_norm`), comparando solo letras y dígitos sin distinguir mayúsculas. Estas relaciones propagan el impacto pero no se devuelven en `edges`. Cada nodo incluye `application` (su aplicación o `null`), `hostServerId` (host de la VM o `null`) y `hostedVmCount` (VMs alojadas si es un host).
 
 **Notas:**
 - `view` es `null` solo si no existe ninguna vista (en ese caso todas las `position` son `null`).
@@ -880,7 +882,9 @@ Responde "¿de qué depende este servidor?" y "¿qué se ve afectado si este ser
 **Campos:**
 - `dependsOnDirect` / `dependentsDirect`: resumen de cada servidor vecino con `depth: 1` y `dependencies`, las relaciones concretas entre ambos (puede haber varias de distinto tipo), con su `id` para editarlas o eliminarlas.
 - `dependsOnTransitive` / `dependentsTransitive`: **solo profundidad ≥ 2** (los directos no se repiten), con `depth` y `path` (ruta más corta desde este servidor).
-- `totalAffected`: número total de servidores afectados si este cae (directos + transitivos).
+- `totalAffected`: número total de servidores afectados si este cae (directos + transitivos), incluidas las VMs alojadas si es un host.
+- `applications`: aplicaciones que caerían si cae este servidor (la suya y las de sus dependientes), con el mismo formato que en el grafo.
+- Las relaciones implícitas de alojamiento aparecen en `dependencies` con `dependencyType: "HOSTING"`, `implicit: true` e `id: null` (no se pueden editar ni eliminar).
 - `cycles`: ciclos **en los que participa este servidor**, como lista cerrada de IDs. Para el servidor `1` del ejemplo: `[["1", "2", "1"]]`. Para el `3` es `[]`: no forma parte del ciclo `1 ↔ 2` aunque sus dependientes sí (el recorrido lo atraviesa sin bucles). Se devuelven como máximo 50 ciclos; si se alcanza el límite de la búsqueda, `cyclesTruncated` es `true`.
 
 **Errores:** `400` (ID inválido), `404` (el servidor no existe).

@@ -10,7 +10,8 @@
 }
 .topo-3d__canvas { display: block; width: 100%; height: 100%; outline: none; touch-action: none; }
 .topo-3d__canvas.es-apuntable { cursor: pointer; }
-.topo-3d__rotulos { position: absolute; inset: 0; pointer-events: none; }
+/* Capa propia: el z-index que three.js pone a cada rótulo no sube por encima de los paneles */
+.topo-3d__rotulos { position: absolute; inset: 0; pointer-events: none; z-index: 1; isolation: isolate; }
 
 /* Etiqueta de nodo */
 .topo-etq {

@@ -250,14 +250,17 @@ body.topo-sin-filtros .topo-filtros { display: none; }
 .topo-leyenda__nota, .topo-leyenda__badges { margin: 8px 0 0; font-size: 12px; color: var(--color-text-secondary); line-height: 1.6; }
 
 .topo-resumen {
-  position: absolute; top: 12px; right: 12px; z-index: 16; max-width: min(420px, calc(100% - 24px));
+  position: absolute; top: 12px; right: 12px; z-index: 16; max-width: min(460px, calc(100% - 24px));
   font-size: 14px;
 }
 .topo-resumen__pastilla {
   display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px;
   border: 1px solid var(--topo-directo); border-radius: 999px; background: #fff; box-shadow: var(--shadow-2);
   font: 700 13px var(--font-family-sans); color: var(--color-text-primary); cursor: pointer; white-space: nowrap;
+  max-width: 100%;
 }
+/* Abierto, el texto largo de la pastilla pasa a dos líneas en lugar de cortarse */
+.topo-resumen.es-abierto .topo-resumen__pastilla { height: auto; min-height: 32px; padding: 6px 12px; white-space: normal; text-align: left; }
 .topo-resumen__pastilla .topo-icono { color: var(--topo-directo); }
 .topo-resumen__pastilla:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .topo-resumen.es-abierto {
@@ -278,6 +281,15 @@ body.topo-sin-filtros .topo-filtros { display: none; }
 .topo-resumen__item--directo .topo-resumen__punto { background: var(--topo-directo); }
 .topo-resumen__meta { font-weight: 400; color: var(--color-text-muted); }
 .topo-resumen__acciones { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.topo-resumen__apps { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--topo-borde); }
+.topo-resumen__apps .topo-resumen__caidas-titulo { margin: 0 0 4px; font-weight: 600; }
+.topo-resumen__apps .topo-resumen__lista { display: grid; gap: 4px; }
+.topo-resumen__item--app { display: block; font-weight: 400; }
+.topo-resumen__apps-vacio { margin: 8px 0 0; font-size: 13px; color: var(--color-text-muted); }
+/* Con el inspector superpuesto, el resumen de impacto se corre a su izquierda (no queda tapado) */
+@media (min-width: 1025px) and (max-width: 1599px) {
+  .topo-cuerpo:has(.topo-inspector.es-abierto) .topo-resumen { right: 352px; }
+}
 
 .topo-controles {
   position: absolute; left: 12px; bottom: 12px; z-index: 15;

@@ -8,6 +8,7 @@ import { LIMITE_SIMULACION, textoCriticidad } from './constantesVisuales.js';
 export function crearSimulador({ banda, resumen, boton, estado, recargar }) {
   let temporizador = 0;
   let expandido = false;
+  let appsExpandido = false;
   const nombreDe = (id) => estado.nodoPorId.get(String(id))?.name || `#${id}`;
 
   banda.querySelector('[data-accion="salir-simulacion"]').addEventListener('click', () => { desactivar(); boton.focus(); });
@@ -76,6 +77,7 @@ export function crearSimulador({ banda, resumen, boton, estado, recargar }) {
     const ruta = n.impactPath || [];
     if (ruta.length < 2) return null;
     const siguiente = ruta[ruta.length - 2];
+    if (String(n.hostServerId) === String(siguiente)) return 'VM en el host';
     const e = estado.grafo.edges.find((x) => String(x.source) === String(n.id) && String(x.target) === String(siguiente));
     return e ? textoCriticidad(e.criticality) : null;
   }
@@ -109,7 +111,52 @@ export function crearSimulador({ banda, resumen, boton, estado, recargar }) {
     if (reales.length) partes.push(`${reales.length} ${reales.length === 1 ? 'caída real' : 'caídas reales'}`);
     if (simuladas.length) partes.push(`${simuladas.length} ${simuladas.length === 1 ? 'simulada' : 'simuladas'}`);
     partes.push(`${imp.totalImpacted} ${imp.totalImpacted === 1 ? 'afectado' : 'afectados'}`);
+    const apps = (imp.applications || []).length;
+    if (apps) partes.push(`${apps} ${apps === 1 ? 'aplicación' : 'aplicaciones'}`);
     return partes.join(' · ');
+  }
+
+  const MOTIVOS = { CAIDO_REAL: 'caído', SIMULADO: 'simulado', DIRECTO: 'directo', CASCADA: 'en cascada' };
+
+  /** Aplicaciones que caen, con los servidores donde corre cada una */
+  function bloqueAplicaciones(imp) {
+    // Primero las que caen por la simulación o la cascada; al final las que solo están caídas de verdad
+    const soloReal = (a) => a.servers.every((s) => s.motivo === 'CAIDO_REAL');
+    const apps = [...(imp.applications || [])].sort((a, b) => Number(soloReal(a)) - Number(soloReal(b)));
+    if (!apps.length) return h('p', { class: 'topo-resumen__apps-vacio' }, 'Aplicaciones afectadas: ninguna registrada en el campo Software de estos servidores.');
+    const visibles = appsExpandido ? apps : apps.slice(0, 5);
+    return h('div', { class: 'topo-resumen__apps' },
+      h('p', { class: 'topo-resumen__caidas-titulo' }, `Aplicaciones afectadas (${apps.length})`),
+      h('ul', { class: 'topo-resumen__lista' }, visibles.map((a) => h('li', { class: 'topo-resumen__item topo-resumen__item--app' },
+        h('strong', {}, a.name),
+        h('span', { class: 'topo-resumen__meta' }, ` ${a.servers.map((s) => `${s.name} (${MOTIVOS[s.motivo] || s.motivo})`).join(', ')}`)))),
+      apps.length > 5 ? h('button', { type: 'button', class: 'topo-enlace', onClick: () => { appsExpandido = !appsExpandido; render(); } },
+        appsExpandido ? 'Ver menos' : `+${apps.length - 5} más`) : null);
+  }
+
+  /** Celda CSV segura: comillas escapadas y sin fórmulas de hoja de cálculo */
+  function celdaCsv(v) {
+    let t = String(v ?? '');
+    if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`;
+    return `"${t.replace(/"/g, '""')}"`;
+  }
+
+  /** Descarga el impacto actual (servidores y aplicaciones) como CSV para Excel */
+  function descargarCsv(imp, afect) {
+    const filas = [['Tipo', 'Nombre', 'Motivo', 'Nivel', 'Aplicación / servidores']];
+    for (const id of imp.rootIds || []) {
+      const n = estado.nodoPorId.get(String(id));
+      filas.push(['Servidor', nombreDe(id), (imp.simulatedDownIds || []).map(String).includes(String(id)) && !(imp.monitoringDownIds || []).map(String).includes(String(id)) ? 'Caída simulada' : 'Caída real', 0, n?.application || '']);
+    }
+    for (const n of afect) filas.push(['Servidor', n.name, n.cascadeStatus === 'DIRECT_IMPACT' ? 'Directo' : 'En cascada', n.impactLevel, n.application || '']);
+    for (const a of imp.applications || []) filas.push(['Aplicación', a.name, '', '', a.servers.map((s) => s.name).join(', ')]);
+    const csv = '﻿' + filas.map((f) => f.map(celdaCsv).join(';')).join('\r\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const a = h('a', { href: url, download: `impacto-${new Date().toISOString().slice(0, 10)}.csv` });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   function render() {
@@ -151,11 +198,12 @@ export function crearSimulador({ banda, resumen, boton, estado, recargar }) {
     })) : null;
     const mas = afect.length > 6 ? h('button', { type: 'button', class: 'topo-enlace', onClick: () => { expandido = !expandido; render(); } }, expandido ? 'Ver menos' : `+${afect.length - 6} más`) : null;
     const cerrar = h('button', { type: 'button', class: 'topo-icon-btn topo-resumen__cerrar', 'aria-label': 'Plegar detalle del impacto', title: 'Plegar', onClick: () => fijarAbierto(false) }, icono('cerrar', 14));
-    const foco = afect.length ? h('div', { class: 'topo-resumen__acciones' },
-      h('button', { type: 'button', class: 'btn btn-secondary topo-btn-sm', 'aria-pressed': estado.focoImpacto ? 'true' : 'false', onClick: alternarFoco }, estado.focoImpacto ? 'Ver todo' : 'Ver solo impacto')) : null;
+    const foco = h('div', { class: 'topo-resumen__acciones' },
+      afect.length ? h('button', { type: 'button', class: 'btn btn-secondary topo-btn-sm', 'aria-pressed': estado.focoImpacto ? 'true' : 'false', onClick: alternarFoco }, estado.focoImpacto ? 'Ver todo' : 'Ver solo impacto') : null,
+      h('button', { type: 'button', class: 'btn btn-secondary topo-btn-sm', title: 'Servidores y aplicaciones afectados, para abrir en Excel', onClick: () => descargarCsv(imp, afect) }, 'Descargar CSV'));
     resumen.replaceChildren(
       h('div', { class: 'topo-resumen__cabecera' }, pastilla, cerrar),
-      h('div', { class: 'topo-resumen__detalle', id: 'topo-resumen-detalle' }, ...[frase, lista, mas, foco].filter(Boolean)));
+      h('div', { class: 'topo-resumen__detalle', id: 'topo-resumen-detalle' }, ...[frase, lista, mas, bloqueAplicaciones(imp), foco].filter(Boolean)));
   }
 
   return { activar, desactivar, alternar, render, alternarFoco };

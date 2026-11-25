@@ -85,6 +85,8 @@ export function textoCriticidad(c) {
 }
 
 export function textoTipo(t) {
+  // HOSTING = relación implícita VM → host (no se registra: se deduce del inventario)
+  if (t === 'HOSTING') return 'Alojamiento';
   return TIPOS_DEPENDENCIA[t]?.corto || t || '—';
 }
 

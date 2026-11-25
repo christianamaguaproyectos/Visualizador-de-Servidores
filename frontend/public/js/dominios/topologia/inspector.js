@@ -143,6 +143,8 @@ export function crearInspector({ raiz, estado, acciones }) {
         filaDato('Hostname', n.hostname, 'topo-mono'),
         ...(n.type === 'fisicos' ? filaUbicacion(id, n) : filaDato('Host', n.rack)),
         filaDato('Inventario', n.estadoInventario),
+        filaDato('Aplicación', n.application),
+        n.hostedVmCount ? filaDato('VMs alojadas', String(n.hostedVmCount)) : null,
         filaDato('Monitoreo', n.monitoring ? `${(ESTADOS[n.status] || ESTADOS.UNKNOWN).descripcion} desde ${fechaCorta(n.monitoring.changedAt)}` : 'Sin host de monitoreo')),
     ];
     if (n.isDown || n.cascadeStatus !== 'NONE') {
@@ -156,7 +158,8 @@ export function crearInspector({ raiz, estado, acciones }) {
     }
     bloques.push(
       h('section', { class: 'topo-insp__seccion' }, h('h3', {}, `Depende de (${salientes.length})`), listaRelaciones(salientes, 'out')),
-      h('section', { class: 'topo-insp__seccion' }, h('h3', {}, `Dependen de él (${entrantes.length})`), listaRelaciones(entrantes, 'in')),
+      h('section', { class: 'topo-insp__seccion' }, h('h3', {}, `Dependen de él (${entrantes.length})`), listaRelaciones(entrantes, 'in'),
+        n.hostedVmCount ? h('p', { class: 'topo-insp__vacio' }, `Además, ${n.hostedVmCount === 1 ? 'la VM alojada en este host cae' : `las ${n.hostedVmCount} VMs alojadas en este host caen`} con él.`) : null),
       h('section', { class: 'topo-insp__seccion' }, h('h3', {}, 'Análisis'), analisis),
       h('div', { class: 'topo-insp__acciones' },
         h('button', { type: 'button', class: 'btn btn-secondary topo-btn-sm', onClick: () => acciones.enfocar(id) }, icono('enfocar', 14), 'Enfocar'),
@@ -180,6 +183,7 @@ export function crearInspector({ raiz, estado, acciones }) {
       contenedor.replaceChildren(...[
         h('dl', { class: 'topo-insp__datos' },
           filaDato('Afectados si cae', String(a.totalAffected)),
+          filaDato('Aplicaciones si cae', (a.applications || []).length ? a.applications.map((x) => x.name).join(', ') : 'Ninguna registrada'),
           filaDato('Depende (directo)', String(a.dependsOnDirect.length)),
           filaDato('Depende (cascada)', String(a.dependsOnTransitive.length)),
           filaDato('Dependientes', `${a.dependentsDirect.length} directos · ${a.dependentsTransitive.length} en cascada`)),

@@ -40,7 +40,8 @@ import { withClient, withTransaction } from '../config/db.js';
 import { AppError, ConflictError, NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import Logger from '../utils/logger.js';
 import {
-  analyzeServer, buildAdjacency, CASCADE_STATUS, compareIds, computeCascadeImpact, markBidirectionalPairs,
+  agruparAplicaciones, aristasDeAlojamiento, analyzeServer, buildAdjacency, CASCADE_STATUS, compareIds,
+  computeCascadeImpact, markBidirectionalPairs, nombreAplicacion,
 } from './topologyGraph.js';
 
 // Funciones de grafo del plan (1.2), reexportadas para quien importe el servicio
@@ -70,7 +71,7 @@ const RE_PRIMER_TOKEN_IP = `^[^${SEPARADORES_IP}]*`;
  */
 const SQL_SERVIDORES = `
   WITH sv AS MATERIALIZED (
-    SELECT s.id, s.type, s.nombre, s.ip, s.hostname, s.rack_norm, s.estado, s.activo,
+    SELECT s.id, s.type, s.nombre, s.ip, s.hostname, s.rack_norm, s.estado, s.activo, s.software,
            CASE WHEN t.token ~ '^[0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}$'
                  AND t.token <> '0.0.0.0'
                 THEN t.token END AS ip_limpia
@@ -99,7 +100,7 @@ const SQL_SERVIDORES = `
     SELECT server_id, host_id FROM por_ip
   )
   SELECT sv.id::text AS id, sv.type::text AS type, sv.nombre, sv.ip, sv.hostname, sv.rack_norm,
-         sv.estado AS estado_inventario, sv.activo,
+         sv.estado AS estado_inventario, sv.activo, sv.software,
          h.id::text AS monitoring_host_id, h.estado_actual, h.enabled AS monitoring_enabled,
          h.estado_changed_at,
          p.x, p.y, p.pinned, p.collapsed
@@ -237,6 +238,8 @@ function mapServer(row) {
     rack: row.rack_norm,
     estadoInventario: row.estado_inventario,
     activo: row.activo,
+    // Aplicación del servidor (campo Software del inventario); null si no tiene
+    application: nombreAplicacion(row.software),
     status: monitored ? row.estado_actual : 'UNKNOWN',
     monitoring: monitored ? {
       hostId: row.monitoring_host_id,
@@ -319,8 +322,15 @@ class TopologyService {
       const simuladoSet = new Set(simulados);
       const monitoreoSet = new Set(monitoringDownIds);
 
+      // Las VMs caen con su host: relaciones implícitas de alojamiento (no se dibujan
+      // como aristas; solo propagan el impacto). Los contadores de relaciones siguen
+      // contando únicamente las relaciones registradas.
+      const alojamiento = aristasDeAlojamiento(serverRows);
+      const hostDe = new Map(alojamiento.map((a) => [a.source, a.target]));
+      const vmsPorHost = new Map();
+      for (const a of alojamiento) vmsPorHost.set(a.target, (vmsPorHost.get(a.target) || 0) + 1);
       const adjacency = buildAdjacency(edgesRaw);
-      const impact = computeCascadeImpact({ adjacency, rootIds });
+      const impact = computeCascadeImpact({ adjacency: buildAdjacency([...edgesRaw, ...alojamiento]), rootIds });
 
       const conRelacion = new Set();
       // Relaciones (filas de server_dependencies) salientes y entrantes por servidor
@@ -349,6 +359,9 @@ class TopologyService {
             dependentServerCount: adjacency.in.get(r.id)?.length ?? 0,
             dependsOnRelationCount: relSalientes.get(r.id) ?? 0,
             dependentRelationCount: relEntrantes.get(r.id) ?? 0,
+            // Host físico donde corre la VM (si su nombre coincide con un equipo del inventario)
+            hostServerId: hostDe.get(r.id) ?? null,
+            hostedVmCount: vmsPorHost.get(r.id) ?? 0,
             isDown: rootSet.has(r.id),
             downSource,
             cascadeStatus: imp ? imp.cascadeStatus : CASCADE_STATUS.NONE,
@@ -372,6 +385,15 @@ class TopologyService {
         else transitiveCount++;
       }
 
+      // Aplicaciones que caen: las de los servidores caídos (reales o simulados) y afectados
+      const afectadosConMotivo = [];
+      for (const r of serverRows) {
+        let motivo = null;
+        if (rootSet.has(r.id)) motivo = monitoreoSet.has(r.id) ? 'CAIDO_REAL' : 'SIMULADO';
+        else if (impact.has(r.id)) motivo = impact.get(r.id).cascadeStatus === CASCADE_STATUS.DIRECT ? 'DIRECTO' : 'CASCADA';
+        if (motivo) afectadosConMotivo.push({ id: r.id, name: nombreVisible(r), software: r.software, motivo });
+      }
+
       return {
         view,
         nodes,
@@ -384,6 +406,8 @@ class TopologyService {
           directCount,
           transitiveCount,
           totalImpacted: impact.size,
+          applications: agruparAplicaciones(afectadosConMotivo),
+          hostingLinks: alojamiento.length,
         },
         generatedAt: new Date().toISOString(),
       };
@@ -393,26 +417,45 @@ class TopologyService {
   /** Dependencias y dependientes (directos y transitivos) de un servidor + ciclos */
   async getServerImpactAnalysis(serverId) {
     return withTransaction(async (client) => {
-      const [serverRow] = await fetchServers(client, { ids: [serverId] });
-      if (!serverRow) throw new NotFoundError('Servidor', serverId);
+      const filas = await fetchServers(client);
+      const porId = new Map(filas.map((r) => [r.id, r]));
+      if (!porId.has(serverId)) throw new NotFoundError('Servidor', serverId);
       const edges = await fetchEdges(client);
-      const a = analyzeServer(serverId, edges);
+      // Una VM depende de su host aunque nadie haya registrado la relación
+      const alojamiento = aristasDeAlojamiento(filas);
+      const a = analyzeServer(serverId, edges, alojamiento);
+      const resumen = new Map();
+      const resumir = (sid) => {
+        if (!resumen.has(sid)) resumen.set(sid, mapServer(porId.get(sid)));
+        return resumen.get(sid);
+      };
 
-      const ids = new Set([serverId]);
-      for (const i of [...a.dependsOnDirect, ...a.dependentsDirect]) ids.add(i);
-      for (const n of [...a.dependsOnTransitive, ...a.dependentsTransitive]) ids.add(n.id);
-      const resumen = new Map((await fetchServers(client, { ids: [...ids] })).map((r) => [r.id, mapServer(r)]));
-
-      const directos = (lista, campoPropio, campoOtro) => lista.map((otroId) => ({
-        ...resumen.get(otroId),
-        depth: 1,
+      const relacionAlojamiento = (vm, host) => ({
+        id: null, source: vm, target: host, sourceName: nombreVisible(porId.get(vm)), targetName: nombreVisible(porId.get(host)),
+        dependencyType: 'HOSTING', criticality: 'CRITICAL', implicit: true,
+      });
+      const directos = (lista, campoPropio, campoOtro) => lista.map((otroId) => {
         // Relaciones concretas (puede haber varias de distinto tipo con el mismo servidor)
-        dependencies: edges.filter((e) => e[campoPropio] === serverId && e[campoOtro] === otroId),
-      }));
-      const transitivos = (lista) => lista.map((n) => ({ ...resumen.get(n.id), depth: n.depth, path: n.path }));
+        const dependencies = edges.filter((e) => e[campoPropio] === serverId && e[campoOtro] === otroId);
+        const par = { [campoPropio]: serverId, [campoOtro]: otroId };
+        if (alojamiento.some((x) => x.source === par.source && x.target === par.target)) {
+          dependencies.push(relacionAlojamiento(par.source, par.target));
+        }
+        return { ...resumir(otroId), depth: 1, dependencies };
+      });
+      const transitivos = (lista) => lista.map((n) => ({ ...resumir(n.id), depth: n.depth, path: n.path }));
+
+      // Aplicaciones que caerían si cae este servidor: la suya y las de sus dependientes
+      const caen = [{ id: serverId, motivo: 'SIMULADO' },
+        ...a.dependentsDirect.map((i) => ({ id: i, motivo: 'DIRECTO' })),
+        ...a.dependentsTransitive.map((n) => ({ id: n.id, motivo: 'CASCADA' }))];
+      const applications = agruparAplicaciones(caen.map((c) => ({
+        id: c.id, name: nombreVisible(porId.get(c.id)), software: porId.get(c.id).software, motivo: c.motivo,
+      })));
 
       return {
-        server: resumen.get(serverId),
+        server: resumir(serverId),
+        applications,
         dependsOnDirect: directos(a.dependsOnDirect, 'source', 'target'),
         dependsOnTransitive: transitivos(a.dependsOnTransitive),
         dependentsDirect: directos(a.dependentsDirect, 'target', 'source'),

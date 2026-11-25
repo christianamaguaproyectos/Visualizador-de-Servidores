@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import {
   analyzeServer, bfsFrom, bfsTree, buildAdjacency, CASCADE_STATUS, compareIds, computeCascadeImpact, findCyclesThrough,
   isBidirectionalPair, markBidirectionalPairs, pathFromParents,
+  agruparAplicaciones, aristasDeAlojamiento, claveEquipo, nombreAplicacion,
 } from '../../backend/src/services/topologyGraph.js';
 import {
   cleanText, parseBooleanQuery, parseDependencyCreate, parseDependencyUpdate, parseIdList, parsePositionsPayload,
@@ -334,5 +335,53 @@ describe('validación de entradas: reglas añadidas', () => {
     assert.throws(() => parsePositionsPayload({ viewport: { zoom: 11 } }), { statusCode: 400 });
     assert.throws(() => parsePositionsPayload({ viewport: { x: 1e8 } }), { statusCode: 400 });
     assert.throws(() => parseViewCreate({ name: 'ok', filterConfig: { x: 'a'.repeat(LIMITS.maxFilterConfigBytes) } }), { statusCode: 400 });
+  });
+});
+
+describe('alojamiento VM → host y aplicaciones afectadas', () => {
+  const SERVIDORES = [
+    { id: '1', type: 'fisicos', nombre: 'SRVESXI10', software: 'VMWARE ESXI 8.2' },
+    { id: '2', type: 'virtuales', nombre: 'VM-JDE', rack_norm: 'srvesxi10', software: 'JDE FAT' },
+    { id: '3', type: 'virtuales', nombre: 'VM-BI', rack_norm: 'SRV-ESXI-10 ', software: 'jde fat' },
+    { id: '4', type: 'virtuales', nombre: 'VM-HUERFANA', rack_norm: 'SRVEXSI99', software: 'N/A' },
+    { id: '5', type: 'fisicos', nombre: 'WEB', software: '  Portal   web ' },
+  ];
+
+  test('cada VM depende del equipo cuyo nombre coincide con su host (solo letras y dígitos, sin mayúsculas)', () => {
+    assert.deepEqual(aristasDeAlojamiento(SERVIDORES), [{ source: '2', target: '1' }, { source: '3', target: '1' }]);
+    assert.equal(claveEquipo('Srv-Esxi 10'), 'SRVESXI10');
+  });
+
+  test('una VM sin host conocido no genera relación y una VM nunca es host de otra', () => {
+    const aristas = aristasDeAlojamiento([...SERVIDORES, { id: '6', type: 'virtuales', nombre: 'VM-X', rack_norm: 'VM-JDE' }]);
+    assert.equal(aristas.some((a) => a.source === '4' || a.source === '6'), false);
+  });
+
+  test('si cae el host caen sus VMs (directo) y lo que dependa de ellas (en cascada)', () => {
+    const edges = [{ source: '5', target: '2' }, ...aristasDeAlojamiento(SERVIDORES)];
+    const impacto = computeCascadeImpact({ edges, rootIds: ['1'] });
+    assert.equal(impacto.get('2').cascadeStatus, CASCADE_STATUS.DIRECT);
+    assert.equal(impacto.get('3').cascadeStatus, CASCADE_STATUS.DIRECT);
+    assert.equal(impacto.get('5').cascadeStatus, CASCADE_STATUS.TRANSITIVE);
+    assert.deepEqual(impacto.get('5').impactPath, ['1', '2', '5']);
+    assert.equal(analyzeServer('1', [{ source: '5', target: '2' }], aristasDeAlojamiento(SERVIDORES)).totalAffected, 3);
+  });
+
+  test('nombreAplicacion ignora vacíos y N/A y normaliza espacios', () => {
+    for (const v of [null, '', '  ', 'N/A', 'n/a', 'NA', '-', 'Ninguno']) assert.equal(nombreAplicacion(v), null);
+    assert.equal(nombreAplicacion('  Portal   web '), 'Portal web');
+  });
+
+  test('agruparAplicaciones agrupa sin distinguir mayúsculas, con la forma más frecuente, más servidores primero', () => {
+    const apps = agruparAplicaciones([
+      { id: 1, name: 'SRVESXI10', software: 'VMWARE ESXI 8.2', motivo: 'SIMULADO' },
+      { id: 2, name: 'VM-JDE', software: 'JDE FAT', motivo: 'DIRECTO' },
+      { id: 3, name: 'VM-BI', software: 'jde fat', motivo: 'DIRECTO' },
+      { id: 7, name: 'VM-C', software: 'JDE FAT', motivo: 'CASCADA' },
+      { id: 4, name: 'VM-HUERFANA', software: 'N/A', motivo: 'CASCADA' },
+    ]);
+    assert.deepEqual(apps.map((a) => a.name), ['JDE FAT', 'VMWARE ESXI 8.2']);
+    assert.deepEqual(apps[0].servers.map((s) => s.id), ['3', '7', '2']);
+    assert.equal(apps[0].servers[0].motivo, 'DIRECTO');
   });
 });

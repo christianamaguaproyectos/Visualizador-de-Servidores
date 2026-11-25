@@ -192,6 +192,82 @@ export function computeCascadeImpact({ edges, rootIds, adjacency }) {
   return impact;
 }
 
+// ─────────────────────────────────────────────
+//  Alojamiento (VM → host) y aplicaciones
+// ─────────────────────────────────────────────
+
+/** Clave de comparación de nombres de equipo: solo letras y dígitos, en mayúsculas */
+export function claveEquipo(texto) {
+  return String(texto ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+/**
+ * Relaciones implícitas de alojamiento: cada servidor virtual depende del servidor
+ * no virtual cuyo nombre (o hostname) coincide con su host (`rack_norm`), comparando
+ * solo letras y dígitos sin distinguir mayúsculas. Si varios coinciden se usa el de
+ * menor id. Los nombres que no coinciden con ningún equipo no generan relación.
+ *
+ * @param {Array<{id, type, nombre?, hostname?, rack_norm?}>} servidores
+ * @returns {Array<{ source: string, target: string }>} source = VM, target = host
+ */
+export function aristasDeAlojamiento(servidores) {
+  const hosts = new Map();
+  const ordenados = [...(servidores || [])].filter((s) => s.type !== 'virtuales').sort((a, b) => compareIds(a.id, b.id));
+  for (const s of ordenados) {
+    for (const nombre of [s.nombre, s.hostname]) {
+      const k = claveEquipo(nombre);
+      if (k && !hosts.has(k)) hosts.set(k, id(s.id));
+    }
+  }
+  const aristas = [];
+  for (const s of servidores || []) {
+    if (s.type !== 'virtuales') continue;
+    const host = hosts.get(claveEquipo(s.rack_norm));
+    if (host && host !== id(s.id)) aristas.push({ source: id(s.id), target: host });
+  }
+  return aristas;
+}
+
+/** Valores del campo Software que no nombran una aplicación */
+const SIN_APLICACION = new Set(['', 'NA', 'N/A', 'N.A', 'N.A.', '-', '--', 'NINGUNO', 'NINGUNA', 'NO', 'NO APLICA', 'S/N', 'SN']);
+
+/**
+ * Nombre de aplicación a partir del campo Software (texto libre del inventario):
+ * espacios normalizados; null si está vacío o es un "N/A".
+ */
+export function nombreAplicacion(software) {
+  const nombre = String(software ?? '').replace(/\s+/g, ' ').trim();
+  return SIN_APLICACION.has(nombre.toUpperCase()) ? null : nombre;
+}
+
+/**
+ * Aplicaciones afectadas: agrupa los servidores afectados por su aplicación
+ * (campo Software), sin distinguir mayúsculas. Se muestra la forma escrita más
+ * frecuente (en empate, la primera en orden alfabético).
+ *
+ * @param {Array<{ id, name, software, motivo }>} servidores afectados (motivo: CAIDO_REAL|SIMULADO|DIRECTO|CASCADA)
+ * @returns {Array<{ name: string, servers: Array<{ id, name, motivo }> }>} más servidores primero
+ */
+export function agruparAplicaciones(servidores) {
+  const grupos = new Map();
+  for (const s of servidores || []) {
+    const nombre = nombreAplicacion(s.software);
+    if (!nombre) continue;
+    const clave = nombre.toUpperCase();
+    if (!grupos.has(clave)) grupos.set(clave, { formas: new Map(), servers: [] });
+    const g = grupos.get(clave);
+    g.formas.set(nombre, (g.formas.get(nombre) || 0) + 1);
+    g.servers.push({ id: id(s.id), name: s.name, motivo: s.motivo });
+  }
+  const porNombre = (a, b) => String(a).localeCompare(String(b), 'es');
+  return [...grupos.values()]
+    .map((g) => ({
+      name: [...g.formas].sort((a, b) => b[1] - a[1] || porNombre(a[0], b[0]))[0][0],
+      servers: g.servers.sort((a, b) => porNombre(a.name, b.name)),
+    }))
+    .sort((a, b) => b.servers.length - a.servers.length || porNombre(a.name, b.name));
+}
+
 /**
  * Marca `isBidirectionalPair` en cada arista: true si existe también la arista
  * inversa (B -> A) de cualquier tipo. Devuelve copias (no muta la entrada).
@@ -281,8 +357,8 @@ export function findCyclesThrough(serverId, adjacency, limits = CYCLE_LIMITS) {
  *   totalAffected: number, cycles: string[][], cyclesTruncated: boolean
  * }}
  */
-export function analyzeServer(serverId, edges) {
-  const adj = buildAdjacency(edges);
+export function analyzeServer(serverId, edges, implicitEdges = []) {
+  const adj = buildAdjacency([...(edges || []), ...implicitEdges]);
   const up = dependsOnClosure(serverId, adj);
   const down = dependentsClosure(serverId, adj);
   const { cycles, truncated } = findCyclesThrough(serverId, adj);

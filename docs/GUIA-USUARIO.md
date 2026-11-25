@@ -283,6 +283,10 @@ Los archivos se descargan con el nombre `topologia-<vista>-<fecha>.<extensión>`
 - Si Monitoreo detecta servidores caídos o degradados, aparece arriba a la derecha un indicador compacto (por ejemplo, *2 caídas · 4 afectados*). Haz clic para ver el detalle (qué servidores se ven afectados y a qué nivel) y en **×** para plegarlo; el mapa recuerda si lo dejaste abierto.
 - **Simular caída:** activa el modo simulación y haz clic en uno o varios servidores para ver qué pasaría si cayeran (o pulsa `S` con un servidor seleccionado). El mapa resalta la cadena de impacto por niveles, atenúa los servidores no relacionados y el indicador muestra el resumen con las **caídas reales (monitoreo)** y las **caídas simuladas** por separado, cada una con su conteo, y el total de servidores afectados (por ejemplo, *«1 caída real · 1 simulada · 12 afectados»*). Un segundo clic en un servidor quita su caída simulada. No modifica datos ni envía alertas. Sales con el mismo botón, con la **×** de la banda superior o con `Esc`.
 - **Ver solo impacto** (en el detalle del indicador) atenúa todo lo que no está afectado.
+- **VMs y su host:** una máquina virtual cae automáticamente con el host donde corre, sin necesidad de registrar esa relación. El host se reconoce porque su nombre coincide con el host de la VM en el inventario (sin distinguir mayúsculas, guiones ni espacios). En el inspector del host se indica cuántas **VMs alojadas** tiene, y en el resumen esas VMs aparecen como *«VM en el host»*.
+- **Aplicaciones afectadas:** el detalle del indicador lista las aplicaciones que caen (tomadas del campo **Software** de cada servidor), cada una con los servidores donde corre y si está caído, simulado, afectado directo o en cascada. Primero aparecen las que caen por la simulación. Los servidores con el campo vacío o «N/A» no cuentan como aplicación.
+- **Descargar CSV** (en el detalle del indicador) guarda la lista de servidores y aplicaciones afectados para abrirla en Excel.
+- El buscador del mapa también encuentra servidores por el nombre de su aplicación (por ejemplo, *pentaho*).
 
 ### Leyenda de colores
 

@@ -772,7 +772,7 @@ export async function iniciarPaginaDependencias() {
   function pintarBusqueda() {
     const q = buscador.value.trim().toLowerCase();
     if (q.length < 2) { listaBusqueda.hidden = true; buscador.setAttribute('aria-expanded', 'false'); return; }
-    coincidencias = estado.nodosVisibles().filter((n) => `${n.name} ${n.ip || ''} ${n.hostname || ''}`.toLowerCase().includes(q)).slice(0, 8);
+    coincidencias = estado.nodosVisibles().filter((n) => `${n.name} ${n.ip || ''} ${n.hostname || ''} ${n.application || ''}`.toLowerCase().includes(q)).slice(0, 8);
     activa = Math.min(activa, Math.max(0, coincidencias.length - 1));
     listaBusqueda.replaceChildren(...(coincidencias.length ? coincidencias.map((n, i) => h('li', {
       role: 'option', id: `topo-busq-${i}`, class: `topo-combo__op${i === activa ? ' es-activa' : ''}`, 'aria-selected': i === activa ? 'true' : 'false',

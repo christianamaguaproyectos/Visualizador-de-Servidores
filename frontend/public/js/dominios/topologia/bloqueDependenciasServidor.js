@@ -29,7 +29,8 @@ export function montarBloqueDependencias(contenedor, serverId, { esAdmin = () =>
     try {
       datos = await analisisImpacto(id);
       pintar();
-      const relaciones = [...datos.dependsOnDirect, ...datos.dependentsDirect].reduce((n, s) => n + (s.dependencies || []).length, 0);
+      const relaciones = [...datos.dependsOnDirect, ...datos.dependentsDirect]
+        .reduce((n, s) => n + (s.dependencies || []).filter((d) => !d.implicit).length, 0);
       alCargar?.({ relaciones, afectados: Number(datos.totalAffected || 0) });
     } catch (err) {
       datos = null;
@@ -72,8 +73,17 @@ export function montarBloqueDependencias(contenedor, serverId, { esAdmin = () =>
         columna('Depende de', 'proveedores', datos.dependsOnDirect, 'target', admin, 'No depende de otros servidores.'),
         columna('Dependen de él', 'dependientes', datos.dependentsDirect, 'source', admin, 'Ningún servidor depende de este.')),
       cascada(),
+      aplicaciones(),
       ciclos,
     ].filter(Boolean));
+  }
+
+  /** Aplicaciones que caerían si cae este servidor (campo Software del inventario) */
+  function aplicaciones() {
+    const apps = datos.applications || [];
+    if (!apps.length) return h('p', { class: 'dep-detalle__nota' }, 'Aplicaciones afectadas si cae: ninguna registrada (campo Software vacío).');
+    return h('p', { class: 'dep-detalle__nota dep-detalle__apps' }, `Aplicaciones afectadas si cae (${apps.length}): `,
+      apps.map((a, i) => [i ? ', ' : '', h('strong', {}, a.name), ` (${a.servers.map((s) => s.name).join(', ')})`]), '.');
   }
 
   function nombreDe(sid) {
@@ -97,7 +107,7 @@ export function montarBloqueDependencias(contenedor, serverId, { esAdmin = () =>
           h('span', { class: 'dep-detalle__nombre' }, s.name),
           h('span', { class: 'dep-detalle__tipo' }, `${(TIPOS_SERVIDOR[s.type] || {}).badge || ''}`),
           h('span', { class: 'dep-detalle__meta' }, `${textoTipo(d.dependencyType)} · ${textoCriticidad(d.criticality)}${d.port ? ` · ${d.protocol || ''}:${d.port}` : ''}`),
-          admin ? h('button', {
+          admin && !d.implicit ? h('button', {
             type: 'button', class: 'dep-detalle__quitar', 'aria-label': `Eliminar relación con ${s.name}`, title: 'Eliminar relación',
             onClick: () => quitar(d, extremo),
           }, icono('papelera', 14)) : null));
