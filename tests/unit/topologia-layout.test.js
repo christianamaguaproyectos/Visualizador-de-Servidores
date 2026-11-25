@@ -227,3 +227,18 @@ test('sala de racks: dibuja todo el inventario aunque un rack esté lleno o haya
   assert.deepEqual([sinUno.enMapa, sinUno.faltan], [48, ['srv-vm-02']]);
   assert.equal(coberturaInventario(nodos, null), null);
 });
+
+test('capas: muchos servidores sin relaciones forman un bloque casi cuadrado (no una fila larga)', () => {
+  const ns = Array.from({ length: 176 }, (_, i) => ({ id: String(i + 1), type: i < 62 ? 'fisicos' : 'virtuales', name: `S${i}` }));
+  const pos = Object.values(capas(ns, []));
+  const ancho = Math.max(...pos.map((p) => p.x)) - Math.min(...pos.map((p) => p.x));
+  const alto = Math.max(...pos.map((p) => p.y)) - Math.min(...pos.map((p) => p.y));
+  assert.ok(ancho / alto < 1.5 && alto / ancho < 1.5, `bloque ${ancho}×${alto}`);
+  assert.equal(new Set(pos.map((p) => `${p.x},${p.y}`)).size, 176, 'sin tarjetas superpuestas');
+});
+
+test('capas: cada VM queda en el nivel siguiente al de su host (relación implícita hostServerId)', () => {
+  const ns = [{ id: '1', type: 'fisicos' }, { id: '2', type: 'virtuales', hostServerId: '1' }, { id: '3', type: 'virtuales', hostServerId: '1' }];
+  const pos = capas(ns, []);
+  assert.ok(pos['2'].y > pos['1'].y && pos['3'].y === pos['2'].y);
+});

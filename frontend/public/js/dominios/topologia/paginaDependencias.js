@@ -255,7 +255,11 @@ export async function iniciarPaginaDependencias() {
             h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => { includeIsolated = true; recargar(); } }, 'Mostrar todos los servidores'))
           : h('p', {}, 'Pide a un administrador que registre dependencias.'));
     } else if (tipo === 'filtrado') {
+      const f = estado.filtros;
+      const sinRegistradas = f.dependencia && f.dependencia !== 'HOSTING'
+        && !estado.grafo.edges.some((e) => e.dependencyType === f.dependencia);
       elEstado.append(h('h2', {}, 'Ningún servidor coincide con los filtros'),
+        sinRegistradas ? h('p', {}, 'Todavía no hay relaciones de este tipo registradas. Créalas con «Nueva relación».') : null,
         h('button', { type: 'button', class: 'btn btn-secondary', onClick: limpiarFiltros }, 'Limpiar filtros'));
     } else if (tipo === 'error') {
       elEstado.append(h('h2', {}, 'No se pudo cargar la topología.'), extra.detalle ? h('p', {}, extra.detalle) : null,
@@ -417,7 +421,10 @@ export async function iniciarPaginaDependencias() {
     rack.replaceChildren(h('option', { value: '' }, 'Todos'), ...racks.map((r) => h('option', { value: r }, r)));
     rack.value = racks.includes(previo) ? previo : '';
     const dep = $('#topo-filtro-dependencia');
-    if (dep.options.length <= 1) dep.append(...Object.entries(TIPOS_DEPENDENCIA).map(([k, v]) => h('option', { value: k }, v.largo)));
+    if (dep.options.length <= 1) {
+      dep.append(...Object.entries(TIPOS_DEPENDENCIA).map(([k, v]) => h('option', { value: k }, v.largo)),
+        h('option', { value: 'HOSTING' }, 'Alojamiento (VM en su host)'));
+    }
   }
   document.querySelectorAll('.topo-segmentado [data-tipo]').forEach((b) => b.addEventListener('click', () => {
     document.querySelectorAll('.topo-segmentado [data-tipo]').forEach((x) => x.setAttribute('aria-checked', x === b ? 'true' : 'false'));
@@ -436,7 +443,9 @@ export async function iniciarPaginaDependencias() {
   function actualizarConteo() {
     const n = estado.nodosVisibles();
     const e = estado.aristasVisibles(n);
-    $('#topo-conteo').textContent = `${n.length} servidores · ${e.length} relaciones`;
+    const ids = new Set(n.map((x) => String(x.id)));
+    const vmHost = n.filter((x) => x.hostServerId && ids.has(String(x.hostServerId))).length;
+    $('#topo-conteo').textContent = `${n.length} servidores · ${e.length} relaciones${vmHost ? ` · ${vmHost} VM en su host` : ''}`;
     pintarCobertura();
   }
   /** Verificación visible: servidores del inventario (/fisicos + /virtuales) que el mapa dibuja */

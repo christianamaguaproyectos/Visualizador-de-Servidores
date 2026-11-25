@@ -287,6 +287,8 @@ Los archivos se descargan con el nombre `topologia-<vista>-<fecha>.<extensión>`
 - **Aplicaciones afectadas:** el detalle del indicador lista las aplicaciones que caen (tomadas del campo **Software** de cada servidor), cada una con los servidores donde corre y si está caído, simulado, afectado directo o en cascada. Primero aparecen las que caen por la simulación. Los servidores con el campo vacío o «N/A» no cuentan como aplicación.
 - **Descargar CSV** (en el detalle del indicador) guarda la lista de servidores y aplicaciones afectados para abrirla en Excel.
 - El buscador del mapa también encuentra servidores por el nombre de su aplicación (por ejemplo, *pentaho*).
+- **Solo con relaciones** también cuenta la relación de cada VM con su host, y el filtro **Dependencia** incluye la opción **Alojamiento (VM en su host)**. El contador indica cuántas VMs están junto a su host.
+- **Auto-ordenar → Por capas** (y la vista inicial del editor 2D sin posiciones guardadas) reparte los servidores en un bloque casi cuadrado: los equipos físicos arriba agrupados por rack y, debajo, las VMs agrupadas por su host.
 
 ### Leyenda de colores
 

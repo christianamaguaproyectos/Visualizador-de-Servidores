@@ -185,7 +185,12 @@ export function crearEstadoTopologia() {
     /** Nodos tras aplicar filtros */
     nodosVisibles() {
       const f = st.filtros;
-      const aristasTipo = f.dependencia ? st.grafo.edges.filter((e) => e.dependencyType === f.dependencia) : st.grafo.edges;
+      // Relaciones implícitas VM → host: cuentan como relación en los filtros
+      const alojamiento = st.grafo.nodes.filter((n) => n.hostServerId).map((n) => ({ source: n.id, target: n.hostServerId }));
+      let aristasTipo;
+      if (f.dependencia === 'HOSTING') aristasTipo = alojamiento;
+      else if (f.dependencia) aristasTipo = st.grafo.edges.filter((e) => e.dependencyType === f.dependencia);
+      else aristasTipo = [...st.grafo.edges, ...alojamiento];
       let nodos = st.grafo.nodes.filter((n) => (f.tipo === 'todos' || n.type === f.tipo) && (!f.rack || n.rack === f.rack));
       if (f.soloConRelaciones || f.dependencia) {
         const ids = new Set(nodos.map((n) => String(n.id)));

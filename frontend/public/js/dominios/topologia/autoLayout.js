@@ -80,7 +80,20 @@ export function calcularNiveles(nodos, aristas) {
   return { sccs, compDe, nivelComp, sucComp, suc };
 }
 
-function ordenarPorNiveles(nodos, aristas) {
+/** Relaciones implícitas VM → host (hostServerId) para ordenar: cada VM queda junto a su host */
+function conAlojamiento(nodos, aristas) {
+  const extra = [];
+  for (const n of nodos) if (n.hostServerId) extra.push({ source: String(n.id), target: String(n.hostServerId) });
+  return extra.length ? [...aristas, ...extra] : aristas;
+}
+
+/** Clave de agrupación de los servidores sin relaciones: físicos primero, luego por rack/host y nombre */
+function claveGrupo(n) {
+  return `${n?.type === 'fisicos' ? 0 : 1}|${String(n?.rack || '').toLowerCase()}|${String(n?.name || '').toLowerCase()}`;
+}
+
+function ordenarPorNiveles(nodos, aristasRegistradas) {
+  const aristas = conAlojamiento(nodos, aristasRegistradas);
   const { sccs, nivelComp, sucComp } = calcularNiveles(nodos, aristas);
   const predComp = sccs.map(() => new Set());
   sucComp.forEach((s, i) => s.forEach((j) => predComp[j].add(i)));
@@ -106,18 +119,43 @@ function ordenarPorNiveles(nodos, aristas) {
       fijar();
     }
   }
-  // Expande componentes: sus miembros quedan contiguos
-  return niveles.map((l) => l.flatMap((c) => sccs[c]));
+  // Expande componentes: sus miembros quedan contiguos. Los servidores sin ninguna
+  // relación van al final de su nivel, agrupados por tipo, rack/host y nombre.
+  const nodoPorId = new Map(nodos.map((n) => [String(n.id), n]));
+  const conRelacion = new Set();
+  for (const e of aristas) { conRelacion.add(String(e.source)); conRelacion.add(String(e.target)); }
+  return niveles.map((l) => {
+    const ids = l.flatMap((c) => sccs[c]);
+    const aislados = ids.filter((id) => !conRelacion.has(id))
+      .sort((a, b) => claveGrupo(nodoPorId.get(a)).localeCompare(claveGrupo(nodoPorId.get(b))) || compararIds(a, b));
+    return [...ids.filter((id) => conRelacion.has(id)), ...aislados];
+  });
 }
 
-/** Disposición por capas (arriba = infraestructura, abajo = aplicaciones) */
+/** Columnas de un bloque casi cuadrado (en px) para `n` tarjetas; mínimo 8 */
+export function columnasCuadradas(n) {
+  return Math.max(8, Math.ceil(Math.sqrt((n * SEP_NIVEL) / SEP_X)));
+}
+
+/**
+ * Disposición por capas (arriba = infraestructura, abajo = aplicaciones). Un nivel con
+ * muchos servidores se reparte en varias filas formando un bloque casi cuadrado, para
+ * no tener que desplazarse a lo ancho.
+ */
 export function capas(nodos, aristas) {
   const filas = ordenarPorNiveles(nodos, aristas);
   const res = {};
-  filas.forEach((fila, nivel) => {
-    const inicio = -((fila.length - 1) * SEP_X) / 2;
-    fila.forEach((id, i) => { res[id] = { x: Math.round(inicio + i * SEP_X), y: nivel * SEP_NIVEL }; });
-  });
+  let y = 0;
+  // Mismo ancho para todos los niveles: el conjunto completo forma un cuadrado
+  const columnasTotal = columnasCuadradas(nodos.length);
+  for (const fila of filas) {
+    const columnas = Math.min(fila.length, columnasTotal);
+    const inicio = -((columnas - 1) * SEP_X) / 2;
+    fila.forEach((id, i) => {
+      res[id] = { x: Math.round(inicio + (i % columnas) * SEP_X), y: y + Math.floor(i / columnas) * SEP_NIVEL };
+    });
+    y += Math.max(1, Math.ceil(fila.length / Math.max(1, columnas))) * SEP_NIVEL;
+  }
   return res;
 }
 
