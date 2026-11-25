@@ -121,7 +121,11 @@ export function crearEtiquetas3D(escena) {
       reg.distancia = camara.position.distanceTo(reg.obj.position);
       // Prioridad: hover/selección > caídos > impactados > resto
       reg.prioridad = completos.has(reg.id) || siempre.has(reg.id) ? 3 : reg.nodo.isDown ? 2 : reg.nodo.cascadeStatus !== 'NONE' ? 1 : 0;
-      reg.importante = reg.prioridad > 0;
+      // Siempre visibles: el seleccionado, el del hover y las caídas simuladas. Las caídas
+      // reales e impactados se ven en rojo/naranja en el propio equipo; su etiqueta solo
+      // aparece de cerca o al pulsarlos (al entrar no se llena la sala de burbujas).
+      const simulado = reg.nodo.downSource === 'SIMULATED' || reg.nodo.downSource === 'BOTH';
+      reg.importante = reg.prioridad === 3 || simulado;
       lista.push(reg);
     }
     // Las importantes primero y luego por cercanía; el resto se oculta pasado el máximo
