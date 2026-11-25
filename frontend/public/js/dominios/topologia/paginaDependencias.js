@@ -420,11 +420,21 @@ export async function iniciarPaginaDependencias() {
     const previo = rack.value;
     rack.replaceChildren(h('option', { value: '' }, 'Todos'), ...racks.map((r) => h('option', { value: r }, r)));
     rack.value = racks.includes(previo) ? previo : '';
+    // Cada tipo con su número de relaciones; los que no tienen ninguna quedan desactivados
+    // (se activan solos al registrar la primera relación de ese tipo)
     const dep = $('#topo-filtro-dependencia');
-    if (dep.options.length <= 1) {
-      dep.append(...Object.entries(TIPOS_DEPENDENCIA).map(([k, v]) => h('option', { value: k }, v.largo)),
-        h('option', { value: 'HOSTING' }, 'Alojamiento (VM en su host)'));
-    }
+    const previoDep = dep.value;
+    const porTipo = new Map();
+    for (const e of estado.grafo.edges) porTipo.set(e.dependencyType, (porTipo.get(e.dependencyType) || 0) + 1);
+    const alojadas = estado.grafo.nodes.filter((n) => n.hostServerId).length;
+    const opcion = (valor, texto, n) => h('option', { value: valor, disabled: n === 0 }, `${texto} (${n})`);
+    dep.replaceChildren(
+      h('option', { value: '' }, 'Todas'),
+      opcion('HOSTING', 'Alojamiento (VM en su host)', alojadas),
+      ...Object.entries(TIPOS_DEPENDENCIA).map(([k, v]) => opcion(k, v.largo, porTipo.get(k) || 0)));
+    const sigueValida = previoDep === 'HOSTING' ? alojadas > 0 : (porTipo.get(previoDep) || 0) > 0;
+    dep.value = previoDep && sigueValida ? previoDep : '';
+    if (previoDep && !sigueValida && estado.filtros.dependencia) estado.fijarFiltros({ dependencia: '' });
   }
   document.querySelectorAll('.topo-segmentado [data-tipo]').forEach((b) => b.addEventListener('click', () => {
     document.querySelectorAll('.topo-segmentado [data-tipo]').forEach((x) => x.setAttribute('aria-checked', x === b ? 'true' : 'false'));
