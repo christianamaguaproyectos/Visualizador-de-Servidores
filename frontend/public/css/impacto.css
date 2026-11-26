@@ -78,10 +78,6 @@ html, body { height: 100%; }
 .imp-mon { background: var(--color-bg-soft, #f8fafc); color: var(--color-text-secondary, #475467); font-weight: 600; }
 .imp-mon__punto { width: 8px; height: 8px; border-radius: 50%; background: var(--estado-unknown, #98a2b3); }
 .imp-mon--up .imp-mon__punto { background: var(--estado-up, #12b76a); }
-.imp-mon--down .imp-mon__punto { background: var(--estado-down, #f04438); }
-.imp-mon--down { color: var(--color-danger-700, #b42318); }
-.imp-mon--degraded .imp-mon__punto { background: var(--estado-degraded, #f79009); }
-.imp-mon--maint .imp-mon__punto { background: var(--estado-maint, #7a5af8); }
 
 
 

@@ -198,7 +198,7 @@ Menú lateral → **Impacto de servicios** (o la tarjeta del mismo nombre en Ini
   - **Función** en el servicio (por ejemplo, *Base de datos de JD Edwards*);
   - **Si cae**: *Deja de funcionar* (cae todo el servicio), *Sigue funcionando* o *Por definir* (falta confirmarlo con el equipo responsable);
   - **Qué deja de funcionar**;
-  - **Ahora**: estado de Monitoreo (*En línea*, *Caído*, *Sin monitoreo*…).
+  - **En línea**: todos los servidores se muestran en línea; la página sirve para simular caídas.
 - **Máquinas virtuales y su host:** una VM cae con el servidor físico donde corre. El host se reconoce porque el campo **Host** de la VM coincide con el nombre de un servidor de **Servidores Físicos** (sin distinguir mayúsculas, guiones ni espacios). Si no coincide, la tarjeta lo indica (*ese host no está en Físicos*).
 
 ### Simular una caída

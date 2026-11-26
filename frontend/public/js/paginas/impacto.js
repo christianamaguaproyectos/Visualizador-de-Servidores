@@ -26,13 +26,6 @@ const ESTADO_SERVICIO = {
   NO_FUNCIONA: { texto: 'Deja de funcionar', clase: 'no-funciona' },
   REVISAR: { texto: 'Revisar', clase: 'revisar' },
 };
-const MONITOREO = {
-  UP: { texto: 'En línea', clase: 'up' },
-  DOWN: { texto: 'Caído', clase: 'down' },
-  DEGRADED: { texto: 'Degradado', clase: 'degraded' },
-  MAINTENANCE: { texto: 'Mantenimiento', clase: 'maint' },
-  UNKNOWN: { texto: 'Sin monitoreo', clase: 'unknown' },
-};
 
 /** Elemento DOM: h('p', { class: 'x', onClick: fn }, 'texto', otroNodo) */
 function h(tag, attrs = {}, ...hijos) {
@@ -95,9 +88,9 @@ function ubicacion(s) {
   return s.rack ? `VM en ${s.rack}${host ? '' : ' (ese host no está en Físicos)'}` : 'VM sin host';
 }
 
-function pildoraMonitoreo(s) {
-  const m = MONITOREO[s?.status] || MONITOREO.UNKNOWN;
-  return h('span', { class: `imp-mon imp-mon--${m.clase}` }, h('span', { class: 'imp-mon__punto', 'aria-hidden': 'true' }), m.texto);
+// Todos los servidores se muestran en línea: la página sirve para simular caídas
+function pildoraEnLinea() {
+  return h('span', { class: 'imp-mon imp-mon--up' }, h('span', { class: 'imp-mon__punto', 'aria-hidden': 'true' }), 'En línea');
 }
 
 function pildoraNivel(nivel) {
@@ -254,7 +247,7 @@ function tablaComponentes(s, comps) {
         h('div', {},
           h('h4', { class: 'imp-comp__nombre' }, nombre(c.serverId)),
           h('p', { class: 'imp-comp__sub' }, [String(sv?.ip || '').split(/[\s,;]+/)[0], ubicacion(sv)].filter(Boolean).join(' · '))),
-        pildoraMonitoreo(sv)),
+        pildoraEnLinea()),
       h('p', { class: 'imp-comp__rol' }, c.role || 'Función sin describir'),
       // Con la simulación, las tarjetas rojas y verdes solo muestran su estado (la etiqueta de arriba)
       soloEstado ? null : h('div', { class: 'imp-comp__si-cae' },
