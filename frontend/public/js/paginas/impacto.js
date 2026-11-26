@@ -250,6 +250,10 @@ function bloqueSimulacionServicio(s) {
   const e = ESTADO_SERVICIO[sim.estado] || ESTADO_SERVICIO.FUNCIONA;
   const causa = sim.componentesCaidos.filter((c) => !c.respaldoPor?.length && c.impactoEfectivo !== 'NINGUNO');
   const conAlternativa = sim.componentesCaidos.filter((c) => c.workaround && !c.respaldoPor?.length);
+  const conRespaldo = sim.componentesCaidos.filter((c) => c.respaldoPor?.length);
+  // Qué sigue en pie del servicio (si el servicio no cae del todo)
+  const idsCaidos = new Set(sim.componentesCaidos.map((c) => String(c.serverId)));
+  const enPie = sim.estado === 'NO_FUNCIONA' ? [] : (s.components || []).filter((c) => !idsCaidos.has(String(c.serverId)));
   const titulo = {
     NO_FUNCIONA: `${s.name} no funciona`,
     PARCIAL: `${s.name} sigue funcionando, con limitaciones`,
@@ -263,7 +267,11 @@ function bloqueSimulacionServicio(s) {
         ? `Por la caída de ${causa.map((c) => nombre(c.serverId)).join(', ')}.`
         : `Cae ${sim.componentesCaidos.map((c) => nombre(c.serverId)).join(', ')}, pero el servicio sigue por su respaldo.`)
       : h('p', { class: 'imp-sim-aviso__texto' }, 'Ningún servidor de este servicio cae con la simulación.'),
-    ...conAlternativa.map((c) => h('p', { class: 'imp-sim-aviso__alt' }, h('strong', {}, `Alternativa (${nombre(c.serverId)}): `), c.workaround)),
+    // Lo que se puede hacer: respaldo que entra en servicio y alternativas registradas
+    ...conRespaldo.map((c) => h('p', { class: 'imp-sim-aviso__ok' },
+      h('strong', {}, 'Se puede seguir operando: '), `${c.respaldoPor.map(nombre).join(', ')} atiende en lugar de ${nombre(c.serverId)} (respaldo).`)),
+    ...conAlternativa.map((c) => h('p', { class: 'imp-sim-aviso__alt' }, h('strong', {}, `Se puede realizar (${nombre(c.serverId)}): `), c.workaround)),
+    enPie.length ? h('p', { class: 'imp-sim-aviso__texto' }, h('strong', {}, 'Siguen funcionando: '), enPie.map((c) => nombre(c.serverId)).join(', '), '.') : null,
     h('button', { type: 'button', class: 'imp-enlace', onClick: () => { st.simulados = []; simular(); } }, 'Quitar simulación'));
 }
 
@@ -276,17 +284,25 @@ function tablaComponentes(s, comps) {
     const sv = servidor(c.serverId);
     const simulado = st.simulados.includes(String(c.serverId));
     const req = necesita(c.serverId);
-    // Con la simulación: rojo el que cae; si el servicio no funciona, todos quedan sin servicio
+    // Con la simulación: rojo lo que cae (o todo, si el servicio no funciona) y verde lo que sigue
     const caida = caidos.get(String(c.serverId));
     const sinServicio = !caida && sim?.estado === 'NO_FUNCIONA';
-    const claseSim = caida ? ' es-caido' : (sinServicio ? ' es-sin-servicio' : '');
+    const reemplazaA = sim ? sim.componentesCaidos.filter((x) => x.respaldoPor?.includes(String(c.serverId))) : [];
+    let claseSim = '';
     let etiquetaSim = null;
     if (caida) {
+      claseSim = ' es-caido';
       etiquetaSim = caida.respaldoPor?.length
-        ? `Caído (simulación) · sigue por ${caida.respaldoPor.map(nombre).join(', ')}`
+        ? `Caído (simulación) · lo reemplaza ${caida.respaldoPor.map(nombre).join(', ')}`
         : `Caído (simulación)${caida.caida.motivo === 'CAIDO' ? '' : ` · ${textoCaida(caida.caida)}`}`;
     } else if (sinServicio) {
+      claseSim = ' es-sin-servicio';
       etiquetaSim = `Sin servicio: ${s.name} no funciona`;
+    } else if (sim) {
+      claseSim = ' es-funciona';
+      etiquetaSim = reemplazaA.length
+        ? `Funciona · atiende en lugar de ${reemplazaA.map((x) => nombre(x.serverId)).join(', ')}`
+        : 'Funciona';
     }
     return h('li', { class: `imp-comp imp-comp--${(NIVEL[c.impact] || NIVEL.SIN_DEFINIR).clase}${claseSim}` },
       etiquetaSim ? h('p', { class: 'imp-comp__sim' }, etiquetaSim) : null,
