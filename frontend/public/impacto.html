@@ -24,6 +24,29 @@
     <p class="imp-cabecera__hora" id="imp-hora" aria-live="polite"></p>
   </header>
 
+  <!-- Semaforización: significado de los colores de las tarjetas -->
+  <section class="imp-semaforo" aria-labelledby="imp-semaforo-titulo">
+    <h2 class="imp-semaforo__titulo" id="imp-semaforo-titulo">Semaforización</h2>
+    <ul class="imp-semaforo__lista">
+      <li class="imp-semaforo__item imp-semaforo__item--verde">
+        <span class="imp-semaforo__luz" aria-hidden="true"></span>
+        <span><strong>Operativo</strong><small>Servidor en funcionamiento, sin afectación</small></span>
+      </li>
+      <li class="imp-semaforo__item imp-semaforo__item--amarillo">
+        <span class="imp-semaforo__luz" aria-hidden="true"></span>
+        <span><strong>Operación degradada</strong><small>Servidor en funcionamiento con limitaciones</small></span>
+      </li>
+      <li class="imp-semaforo__item imp-semaforo__item--rojo">
+        <span class="imp-semaforo__luz" aria-hidden="true"></span>
+        <span><strong>Fuera de servicio</strong><small>Servidor sin disponibilidad</small></span>
+      </li>
+      <li class="imp-semaforo__item imp-semaforo__item--azul">
+        <span class="imp-semaforo__luz" aria-hidden="true"></span>
+        <span><strong>Caída simulada</strong><small>Servidor elegido para la prueba de impacto</small></span>
+      </li>
+    </ul>
+  </section>
+
   <main class="imp-pagina">
     <!-- Servicios -->
     <aside class="imp-servicios" aria-labelledby="imp-servicios-titulo">
