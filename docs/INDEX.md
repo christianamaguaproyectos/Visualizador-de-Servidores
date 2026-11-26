@@ -8,9 +8,6 @@
 ### Si eres **Usuario/Admin**
 👉 Empieza aquí: [**GUIA-RAPIDA.md**](./GUIA-RAPIDA.md)
 
-### Si vas a **mostrar el sistema en Docker** (demostración en Windows)
-👉 Sigue: [**GUIA-DEMO-DOCKER.md**](./GUIA-DEMO-DOCKER.md)
-
 ### Si vas a **usar la base de datos real**
 👉 Sigue: [**GUIA-BASE-DATOS-REAL.md**](./GUIA-BASE-DATOS-REAL.md) (respaldo, conexión, actualización del esquema sin perder datos y comprobación)
 
@@ -160,9 +157,8 @@
 ### 🏗️ Arquitectura y Diseño
 1. [ARQUITECTURA.md](./ARQUITECTURA.md) → Documento completo
 2. [COMPARACION.md](./COMPARACION.md) → Ejemplos visuales
-3. [PLAN-DEPENDENCIAS-Y-TOPOLOGIA-SERVIDORES.md](./PLAN-DEPENDENCIAS-Y-TOPOLOGIA-SERVIDORES.md) → Mapa de Dependencias y Topología (plan y estado de ejecución)
-4. [API-REST.md](./API-REST.md) → Referencia de endpoints (incluye Dependencias y Topología)
-5. [GUIA-DEMO-DOCKER.md](./GUIA-DEMO-DOCKER.md) → Levantar todo en Docker, cargar datos de demostración y recorrido del Mapa de Dependencias
+3. [GUIA-USUARIO.md](./GUIA-USUARIO.md#impacto-de-servicios) → Impacto de servicios (qué pasa con cada servicio si cae un servidor)
+4. [API-REST.md](./API-REST.md) → Referencia de endpoints (incluye Impacto de servicios)
 
 ### 🔄 Migración
 0. [GUIA-BASE-DATOS-REAL.md](./GUIA-BASE-DATOS-REAL.md) → Poner al día una base existente con `scripts/actualizar-bd.js`

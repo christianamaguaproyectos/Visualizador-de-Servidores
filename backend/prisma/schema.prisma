@@ -99,10 +99,10 @@ model Server {
 
   rack Rack? @relation(fields: [rackId], references: [id], onDelete: SetNull)
 
-  // Mapa de dependencias: "source depende de target"
-  dependsOn         ServerDependency[]     @relation("DependencySource")
-  dependents        ServerDependency[]     @relation("DependencyTarget")
-  topologyPositions TopologyNodePosition[]
+  // Impacto de servicios: papel del servidor en cada servicio y servidores que necesita
+  serviceComponents ServiceComponent[]
+  requires          ServerRequirement[] @relation("RequirementServer")
+  requiredBy        ServerRequirement[] @relation("RequirementTarget")
 
   @@unique([type, identityKey])
   @@index([rackId], map: "servers_rack_idx")
@@ -143,70 +143,63 @@ model ClusterHost {
   @@schema("inventory")
 }
 
-// Mapa de dependencias y topología (scripts/sql/08-schema.dependencies.sql).
-// Los CHECK (tipos, criticidad, puerto, slug) y el índice parcial de "una sola
-// vista por defecto" viven solo en el SQL: Prisma no los puede expresar.
-model ServerDependency {
-  id             BigInt   @id @default(autoincrement())
-  sourceServerId BigInt   @map("source_server_id")
-  targetServerId BigInt   @map("target_server_id")
-  dependencyType String   @default("SERVICE") @map("dependency_type") @db.VarChar(40)
-  criticality    String   @default("CRITICAL") @db.VarChar(20)
-  port           Int?
-  protocol       String?  @db.VarChar(20)
-  label          String?  @db.VarChar(120)
-  notes          String?
-  createdBy      String?  @map("created_by") @db.VarChar(120)
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+// Impacto de servicios (scripts/sql/08-schema.impacto.sql). Los CHECK (nivel de
+// impacto, servidor que no se requiere a sí mismo) viven solo en el SQL.
 
-  sourceServer Server @relation("DependencySource", fields: [sourceServerId], references: [id], onDelete: Cascade)
-  targetServer Server @relation("DependencyTarget", fields: [targetServerId], references: [id], onDelete: Cascade)
+/// Servicio de negocio (p. ej. JD Edwards)
+model Service {
+  id          BigInt   @id @default(autoincrement())
+  name        String   @unique @db.VarChar(120)
+  description String?
+  createdBy   String?  @map("created_by") @db.VarChar(120)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  @@unique([sourceServerId, targetServerId, dependencyType], map: "uq_server_dependency")
-  @@index([sourceServerId], map: "idx_server_dependencies_source")
-  @@index([targetServerId], map: "idx_server_dependencies_target")
-  @@map("server_dependencies")
+  components ServiceComponent[]
+
+  @@map("services")
   @@schema("inventory")
 }
 
-model TopologyView {
+/// Papel de un servidor en un servicio y qué le pasa al servicio si ese servidor cae
+model ServiceComponent {
   id           BigInt   @id @default(autoincrement())
-  name         String   @unique @db.VarChar(120)
-  slug         String   @unique @db.VarChar(120)
-  description  String?
-  isDefault    Boolean  @default(false) @map("is_default")
-  viewportZoom Float    @default(1.0) @map("viewport_zoom")
-  viewportX    Float    @default(0) @map("viewport_x")
-  viewportY    Float    @default(0) @map("viewport_y")
-  layoutMode   String   @default("manual") @map("layout_mode") @db.VarChar(30)
-  filterConfig Json     @default("{}") @map("filter_config")
+  serviceId    BigInt   @map("service_id")
+  serverId     BigInt   @map("server_id")
+  role         String?  @db.VarChar(200)
+  impact       String   @default("SIN_DEFINIR") @db.VarChar(20)
+  impactDetail String?  @map("impact_detail")
+  workaround   String?
+  /// Servidores redundantes entre sí: el servicio solo se afecta si caen todos los del grupo
+  redundancyGroup String? @map("redundancy_group") @db.VarChar(60)
   createdBy    String?  @map("created_by") @db.VarChar(120)
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  positions TopologyNodePosition[]
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  server  Server  @relation(fields: [serverId], references: [id], onDelete: Cascade)
 
-  @@map("topology_views")
+  @@unique([serviceId, serverId], map: "uq_service_component")
+  @@index([serverId], map: "idx_service_components_server")
+  @@map("service_components")
   @@schema("inventory")
 }
 
-model TopologyNodePosition {
-  id        BigInt   @id @default(autoincrement())
-  viewId    BigInt   @map("view_id")
-  serverId  BigInt   @map("server_id")
-  x         Float
-  y         Float
-  pinned    Boolean  @default(true)
-  collapsed Boolean  @default(false)
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+/// "serverId necesita requiredServerId para funcionar": si el segundo cae, el primero también
+model ServerRequirement {
+  id               BigInt   @id @default(autoincrement())
+  serverId         BigInt   @map("server_id")
+  requiredServerId BigInt   @map("required_server_id")
+  note             String?
+  createdBy        String?  @map("created_by") @db.VarChar(120)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  view   TopologyView @relation(fields: [viewId], references: [id], onDelete: Cascade)
-  server Server       @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  server         Server @relation("RequirementServer", fields: [serverId], references: [id], onDelete: Cascade)
+  requiredServer Server @relation("RequirementTarget", fields: [requiredServerId], references: [id], onDelete: Cascade)
 
-  @@unique([viewId, serverId], map: "uq_topology_view_server")
-  @@index([serverId], map: "idx_topology_node_positions_server")
-  @@map("topology_node_positions")
+  @@unique([serverId, requiredServerId], map: "uq_server_requirement")
+  @@index([requiredServerId], map: "idx_server_requirements_required")
+  @@map("server_requirements")
   @@schema("inventory")
 }
 

@@ -72,7 +72,7 @@ docker compose exec postgres sh -c 'pg_restore -U $POSTGRES_USER -d $POSTGRES_DB
 
 ## 3. Poner el esquema al día
 
-`scripts/actualizar-bd.js` compara la base con lo que necesita la aplicación y aplica **solo lo que falta** (tablas del Mapa de Dependencias, columnas de posición en rack, índices de telemetría, etc.). Todos los scripts son idempotentes: no borran ni modifican datos, y se puede ejecutar tantas veces como quieras.
+`scripts/actualizar-bd.js` compara la base con lo que necesita la aplicación y aplica **solo lo que falta** (tablas de Impacto de servicios, columnas de posición en rack, índices de telemetría, etc.). Todos los scripts son idempotentes: no borran ni modifican datos, y se puede ejecutar tantas veces como quieras.
 
 1. **Revisar** (no cambia nada; muestra lo que falta y cuántas filas tiene cada tabla):
 
@@ -114,13 +114,7 @@ docker compose run --rm tools node scripts/manage-users.js add --username admin 
 
 ---
 
-## 5. No cargues datos de demostración
-
-**No ejecutes** `scripts/seed-demo-topologia.js` sobre la base real. Si se ejecutó por error, `node scripts/seed-demo-topologia.js --borrar` elimina únicamente lo que ese script creó (servidores `srv-…` marcados como demostración, sus relaciones, sus hosts de monitoreo con su telemetría y sus racks vacíos); tus datos no se tocan.
-
----
-
-## 6. Comprobar que todo funciona
+## 5. Comprobar que todo funciona
 
 Arranca la aplicación (`npm start` o `docker compose up -d --build`), inicia sesión y revisa:
 
@@ -129,15 +123,15 @@ Arranca la aplicación (`npm start` o `docker compose up -d --build`), inicia se
 | **Inicio** | Las tarjetas de acceso a cada sección. |
 | **Servidores Físicos** | Tus racks como gabinetes con sus servidores en su posición (los que no tienen posición ocupan el primer hueco libre). Buscar, filtrar y abrir el detalle de un servidor. |
 | **Servidores Virtuales** | Tus VMs agrupadas por host o clúster, con su estado de inventario y de monitoreo. |
-| **Mapa de Dependencias** | La sala de racks 3D con todo el inventario (el contador superior derecho debe indicar `Inventario N/N`). Sin relaciones todavía: el mapa muestra los servidores y permite crear la primera con **Nueva relación**. Con la base vacía indica que el inventario no tiene servidores. |
+| **Impacto de servicios** | La lista de servicios (vacía al principio: un administrador crea el primero con **+ Nuevo** y le agrega sus servidores). La simulación de caídas funciona con cualquier servidor del inventario. |
 | **Monitoreo** | Un gabinete por rack con el estado de cada host de monitoreo y su onda de latencia si ya hay ejecuciones. Sin hosts, un mensaje indica cómo importarlos (**Hosts → Importar Hosts**). Los checks se programan en la pestaña **Checks**; para que lleguen a los servidores internos, define `MONITORING_ALLOWED_CIDRS` con las subredes permitidas (por defecto se bloquean las direcciones privadas). |
 | **Usuarios** | La lista de cuentas (solo superadministrador). |
 
-Ninguna página debe quedarse en "Cargando": si una petición falla, la página muestra el motivo y un botón **Reintentar**. Con muchos servidores (miles), las páginas siguen respondiendo; el mapa 3D puede tardar unos segundos más la primera vez.
+Ninguna página debe quedarse en "Cargando": si una petición falla, la página muestra el motivo y un botón **Reintentar**. Con muchos servidores (miles), las páginas siguen respondiendo.
 
 ---
 
-## 7. Volver atrás
+## 6. Volver atrás
 
 Si algo no sale como esperabas, restaura el respaldo del paso 1:
 
@@ -152,4 +146,4 @@ docker compose cp ./respaldo-antes-de-actualizar.dump postgres:/tmp/respaldo.dum
 docker compose exec postgres sh -c 'pg_restore -U $POSTGRES_USER -d $POSTGRES_DB --clean --if-exists --no-owner /tmp/respaldo.dump'
 ```
 
-Las tablas que añadió la actualización (por ejemplo, las del Mapa de Dependencias) no existen en el respaldo y quedan vacías; no afectan a las versiones anteriores de la aplicación.
+Las tablas que añadió la actualización (por ejemplo, las de Impacto de servicios) no existen en el respaldo y quedan vacías; no afectan a las versiones anteriores de la aplicación.

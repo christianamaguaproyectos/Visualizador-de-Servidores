@@ -11,7 +11,7 @@
 1. [Autenticación](#autenticación)
 2. [API de Servidores](#api-de-servidores)
 3. [API de Racks](#api-de-racks)
-4. [Dependencias y Topología](#-dependencias-y-topología)
+4. [Impacto de servicios](#️-impacto-de-servicios)
 5. [Telemetría de Monitoreo](#-telemetría-de-monitoreo)
 6. [Eventos en Tiempo Real (SSE)](#eventos-en-tiempo-real-sse)
 7. [Ejemplos de Uso](#ejemplos-de-uso)
@@ -365,645 +365,104 @@ DELETE /api/racks/15?force=true
 
 ---
 
-## 🔗 Dependencias y Topología
+## ⚠️ Impacto de servicios
 
-API del Mapa de Dependencias: relaciones "servidor A **depende de** servidor B" entre servidores físicos y virtuales, vistas (diagramas) guardadas con la posición de cada nodo, e impacto en cascada calculado con el estado de Monitoreo.
+Qué le pasa a cada servicio (por ejemplo, JD Edwards) si cae uno de sus servidores. Lectura y simulación: cualquier usuario autenticado. Escritura: administradores (con el token CSRF de la sesión).
 
-> Todos los nombres, IPs y usuarios de los ejemplos de esta sección son **ficticios** (`srv-app-01`, `10.0.0.11`, ...).
+**Cómo se calcula una caída:**
+1. Caen los servidores indicados (simulación) o los que Monitoreo tiene en `DOWN`/`DEGRADED` con el host habilitado (estado actual).
+2. Cae también cada servidor que **necesita** a uno caído (requisitos, en cadena) y cada **VM** cuyo host físico cae. El host de una VM es el servidor físico cuyo nombre o hostname coincide con el campo Host de la VM, comparando solo letras y números.
+3. Cada servicio toma el efecto más grave entre sus servidores caídos: `TOTAL` → `NO_FUNCIONA`, `PARCIAL` → `PARCIAL`, `SIN_DEFINIR` → `REVISAR`, `NINGUNO` (o nada caído) → `FUNCIONA`. En un **grupo de respaldo** (`redundancyGroup`) la caída solo cuenta si caen todos los servidores del grupo.
 
-**Convenciones comunes**
-
-- **Semántica de la flecha:** `source ──depende de──▶ target`. `source` es el servidor dependiente (cliente) y `target` el proveedor que necesita para funcionar. Si `target` cae, el impacto se propaga hacia `source` (en sentido inverso a la flecha).
-- **IDs como string:** todos los IDs (servidores, dependencias, vistas, hosts) se devuelven como **string de dígitos** (`"12"`), para no perder precisión con IDs grandes. En las peticiones se aceptan como número entero o como string de dígitos; cualquier otro valor (texto, negativo, decimal, notación científica) responde `400 "<campo> debe ser un número entero positivo"`.
-- **Roles:** lectura (`GET`) para cualquier usuario autenticado; escritura (`POST`/`PUT`/`DELETE`) solo administradores. Un usuario `viewer` recibe `403 {"error":"Acceso denegado"}`.
-- **CSRF:** toda escritura debe enviar la cabecera `X-CSRF-Token` (token obtenido con `GET /api/auth/csrf`), igual que el resto de la API. Sin token o con token inválido: `403` con `code: "CSRF_INVALID"`.
-- **Textos:** se eliminan los caracteres invisibles y de control de dirección de texto de Unicode. En los textos de una línea (`label`, `name`, `protocol`, `slug`) los caracteres de control se sustituyen por espacio; en `notes` y `description` se eliminan, conservando saltos de línea y tabuladores. Después se recortan los espacios de los extremos. Un texto que supera el máximo **se rechaza con 400** (no se trunca). Un texto vacío equivale a `null`.
-- **Los textos se devuelven tal como se guardaron** (sin escapar HTML): el cliente debe mostrarlos con `textContent` o con escape HTML.
-- **Parámetros de query repetidos** (`?view=1&view=2`) responden `400`.
-- **Formato de error:** `{ "error": "<mensaje>", "code": "VALIDATION_ERROR" | "NOT_FOUND" | "CONFLICT" | ..., "requestId": "..." }` (ver [Códigos de Error](#-códigos-de-error)).
-
-**Valores permitidos (enums)** — no distinguen mayúsculas (`"api"` se guarda como `"API"`):
-
-| Campo | Valores | Por defecto |
-|-------|---------|-------------|
-| `dependencyType` | `DATABASE`, `NETWORK`, `STORAGE`, `API`, `AUTH`, `HYPERVISOR`, `BACKUP`, `DNS_INFRA`, `SERVICE` | `SERVICE` |
-| `criticality` | `CRITICAL`, `HIGH`, `MEDIUM`, `LOW` | `CRITICAL` |
-| `cascadeStatus` (respuesta) | `DIRECT_IMPACT` (nivel 1), `TRANSITIVE_IMPACT` (nivel ≥ 2), `NONE` | — |
-| `downSource` (respuesta) | `MONITORING`, `SIMULATED`, `BOTH`, `null` | — |
-
-**Resumen de endpoints**
-
-| Método | Ruta | Rol | Respuesta correcta |
-|--------|------|-----|--------------------|
-| GET | `/api/topology/graph` | autenticado | `200 { view, nodes, edges, impact, generatedAt }` |
-| GET | `/api/topology/views` | autenticado | `200 { views }` |
-| POST | `/api/topology/views` | admin | `201 { view }` |
-| PUT | `/api/topology/views/:id` | admin | `200 { view }` |
-| PUT | `/api/topology/views/:id/positions` | admin | `200 { ok, viewId, saved, removed, viewport }` |
-| DELETE | `/api/topology/views/:id` | admin | `200 { ok, id }` |
-| GET | `/api/dependencies` | autenticado | `200 { dependencies }` |
-| GET | `/api/dependencies/server/:id/impact` | autenticado | `200 { server, dependsOnDirect, ... }` |
-| POST | `/api/dependencies` | admin | `201 { dependency, dependencies, inverse }` |
-| PUT | `/api/dependencies/:id` | admin | `200 { dependency }` |
-| DELETE | `/api/dependencies/:id` | admin | `200 { ok, id }` |
-
----
-
-### 📖 Grafo de Topología con Impacto en Cascada
+### 📖 Panorama
 
 ```http
-GET /api/topology/graph
-GET /api/topology/graph?view=general&includeIsolated=true
-GET /api/topology/graph?view=3&simulateDownIds=13,27
+GET /api/impacto
 ```
 
-**Parámetros (query, todos opcionales):**
-- `view`: ID numérico o `slug` de la vista. Sin `view` se usa la vista predeterminada (`isDefault`) o, si ninguna lo está, la de slug `general`. Las posiciones (`position`) se leen de esa vista.
-- `includeIsolated`: `true`/`false` (también `1`/`0`, `yes`/`si`/`no`). Por defecto `false`: se devuelven solo los servidores que tienen alguna dependencia, los que tienen posición guardada en la vista y los simulados. Con `true` se devuelven todos los servidores del inventario.
-- `simulateDownIds`: lista de IDs separados por comas (máximo **200**; los duplicados se ignoran). Simula la caída de esos servidores **sin modificar la base de datos ni generar alertas**. Los IDs que no existen no dan error: se informan en `impact.ignoredSimulateIds`.
-
-**Cómo se calcula el impacto:**
-- **Servidores caídos (raíces):** los servidores cuyo host de monitoreo está **habilitado** y en estado `DOWN` o `DEGRADED`, más los de `simulateDownIds`. `MAINTENANCE`, `UNKNOWN` y los hosts deshabilitados no se consideran caídos.
-- Desde cada servidor caído se recorre el grafo de proveedor a dependientes llevando registro de los nodos visitados, por lo que los ciclos (`1 ↔ 2`) se recorren sin bucles. Distancia 1 = `DIRECT_IMPACT`; distancia ≥ 2 = `TRANSITIVE_IMPACT`.
-- `impactedByServers`: todos los servidores caídos que afectan al nodo. `impactPath`: ruta más corta `[caído, ..., nodo]` (en empate, la del servidor caído de menor ID). Un servidor caído no se marca como afectado por sí mismo, pero sí por otro servidor caído del que dependa.
-- **Relación servidor ↔ host de monitoreo:** la misma regla que usa la sincronización del módulo de Monitoreo. Primero por nombre exacto del servidor; si no hay coincidencia, por la primera IP del campo `ip` del servidor (el texto hasta el primer espacio, salto de línea, `,` o `;`) si tiene forma IPv4. Si varios hosts coinciden se toma el de menor ID. La IP `0.0.0.0` (marcador de "sin IP") nunca se usa para relacionar. Un servidor sin host tiene `status: "UNKNOWN"` y `monitoring: null`.
-- Vista, servidores, hosts y dependencias se leen en una misma instantánea consistente de la base de datos.
-
-**Respuesta** (ejemplo con `srv-app-01 → vm-api-02`, `vm-api-02 → srv-app-01`, `vm-api-02 → srv-db-03` y `simulateDownIds=3`):
+**Respuesta (200):**
 ```json
 {
-  "view": {
-    "id": "1",
-    "name": "Mapa General",
-    "slug": "general",
-    "description": "Vista general con todos los servidores y sus dependencias",
-    "isDefault": true,
-    "viewport": { "zoom": 1, "x": 0, "y": 0 },
-    "layoutMode": "manual",
-    "filterConfig": {},
-    "nodeCount": 3,
-    "createdBy": null,
-    "createdAt": "2026-11-18T14:02:11.204Z",
-    "updatedAt": "2026-11-19T09:15:40.871Z"
-  },
-  "nodes": [
-    {
-      "id": "1",
-      "type": "fisicos",
-      "name": "srv-app-01",
-      "ip": "10.0.0.11",
-      "hostname": "srv-app-01.ejemplo.local",
-      "rack": "Rack A",
-      "estadoInventario": "ACTIVO",
-      "activo": "SI",
-      "status": "UP",
-      "monitoring": { "hostId": "4", "status": "UP", "enabled": true, "changedAt": "2026-11-19T08:00:02.000Z" },
-      "position": { "x": 100.5, "y": -20, "pinned": true, "collapsed": false },
-      "dependsOnServerCount": 1,
-      "dependentServerCount": 1,
-      "dependsOnRelationCount": 1,
-      "dependentRelationCount": 1,
-      "isDown": false,
-      "downSource": null,
-      "cascadeStatus": "TRANSITIVE_IMPACT",
-      "impactLevel": 2,
-      "impactedByServers": ["3"],
-      "impactPath": ["3", "2", "1"]
-    },
-    {
-      "id": "2",
-      "type": "virtuales",
-      "name": "vm-api-02",
-      "ip": "10.0.0.12",
-      "hostname": "vm-api-02.ejemplo.local",
-      "rack": "Cluster A",
-      "estadoInventario": "ACTIVO",
-      "activo": "SI",
-      "status": "UNKNOWN",
-      "monitoring": null,
-      "position": { "x": 300, "y": 40, "pinned": true, "collapsed": false },
-      "dependsOnServerCount": 2,
-      "dependentServerCount": 1,
-      "dependsOnRelationCount": 2,
-      "dependentRelationCount": 1,
-      "isDown": false,
-      "downSource": null,
-      "cascadeStatus": "DIRECT_IMPACT",
-      "impactLevel": 1,
-      "impactedByServers": ["3"],
-      "impactPath": ["3", "2"]
-    },
-    {
-      "id": "3",
-      "type": "fisicos",
-      "name": "srv-db-03",
-      "ip": "10.0.0.13",
-      "hostname": "srv-db-03.ejemplo.local",
-      "rack": "Rack A",
-      "estadoInventario": "ACTIVO",
-      "activo": "SI",
-      "status": "UP",
-      "monitoring": { "hostId": "6", "status": "UP", "enabled": true, "changedAt": "2026-11-19T08:00:02.000Z" },
-      "position": { "x": 500, "y": 80, "pinned": true, "collapsed": false },
-      "dependsOnServerCount": 0,
-      "dependentServerCount": 1,
-      "dependsOnRelationCount": 0,
-      "dependentRelationCount": 1,
-      "isDown": true,
-      "downSource": "SIMULATED",
-      "cascadeStatus": "NONE",
-      "impactLevel": 0,
-      "impactedByServers": [],
-      "impactPath": []
-    }
-  ],
-  "edges": [
-    {
-      "id": "10",
-      "source": "1",
-      "target": "2",
-      "sourceName": "srv-app-01",
-      "targetName": "vm-api-02",
-      "dependencyType": "API",
-      "criticality": "CRITICAL",
-      "port": 8443,
-      "protocol": "HTTPS",
-      "label": "API de aplicación",
-      "notes": null,
-      "createdBy": "admin",
-      "createdAt": "2026-11-18T15:20:00.000Z",
-      "updatedAt": "2026-11-18T15:20:00.000Z",
-      "isBidirectionalPair": true,
-      "carriesImpact": true
-    }
-  ],
-  "impact": {
-    "rootIds": ["3"],
-    "monitoringDownIds": [],
-    "simulatedDownIds": ["3"],
-    "ignoredSimulateIds": [],
-    "directCount": 1,
-    "transitiveCount": 1,
-    "totalImpacted": 2
-  },
-  "generatedAt": "2026-11-19T09:20:00.123Z"
+  "servers": [ { "id": "12", "type": "virtuales", "name": "APP-01", "ip": "10.0.0.12", "rack": "HOST-A", "application": "ERP", "status": "UP", "monitoring": { "hostId": "4", "status": "UP", "enabled": true, "changedAt": "..." } } ],
+  "services": [ { "id": "1", "name": "ERP", "description": "...", "components": [ { "id": "3", "serverId": "12", "role": "Base de datos", "impact": "TOTAL", "impactDetail": "...", "workaround": null, "redundancyGroup": null } ] } ],
+  "requirements": [ { "id": "2", "serverId": "15", "requiredServerId": "12", "note": "..." } ],
+  "hosts": { "12": "7" },
+  "actual": { "servicios": [], "servidoresCaidos": [] },
+  "generatedAt": "2026-11-26T15:00:00.000Z"
 }
 ```
-*(En `edges` se muestra solo una de las tres aristas.)*
+`hosts` relaciona cada VM con su host físico (id de la VM → id del host). `actual` tiene el mismo formato que la simulación, con las caídas reales de Monitoreo. `status` es `UNKNOWN` si el servidor no tiene host de monitoreo.
 
-**Campos de cada nodo:**
-- `type`: `fisicos` o `virtuales`. `estadoInventario` y `activo` son los valores del inventario.
-- `status`: estado de monitoreo del host relacionado (`UP`, `DOWN`, `DEGRADED`, `MAINTENANCE`, `UNKNOWN`) o `UNKNOWN` si no tiene host.
-- `position`: `{ x, y, pinned, collapsed }` en la vista, o `null` si el servidor no se ha colocado en ella.
-- `dependsOnServerCount` / `dependentServerCount`: número de servidores **distintos** de los que depende / que dependen de él. `dependsOnRelationCount` / `dependentRelationCount`: número de **relaciones** (dos dependencias de distinto tipo con el mismo servidor cuentan como 1 servidor y 2 relaciones).
-- `isDown`: el servidor está caído (en monitoreo o simulado); `downSource` indica el origen.
-- `impactLevel`: `0` si no está afectado; si lo está, la distancia al servidor caído más cercano.
-
-**Campos de cada arista:** los del [Objeto Dependencia](#objeto-dependencia) más:
-- `isBidirectionalPair`: `true` si también existe la arista inversa (`target → source`) de cualquier tipo. Permite dibujar separadas las dos flechas de un ciclo `1 ↔ 2`.
-- `carriesImpact`: `true` si el `target` está caído o afectado y el `source` está afectado, es decir, el impacto se propaga por esa flecha.
-
-**Totales de `impact`:** `rootIds` (todos los caídos), `monitoringDownIds` (caídos según monitoreo), `simulatedDownIds` (simulados que existen), `ignoredSimulateIds`, `directCount`, `transitiveCount`, `totalImpacted` (afectados, sin contar los caídos), `applications` (aplicaciones que caen: `[{ name, servers: [{ id, name, motivo }] }]`, con `motivo` = `CAIDO_REAL`, `SIMULADO`, `DIRECTO` o `CASCADA`; el nombre sale del campo `software` del inventario) y `hostingLinks` (número de relaciones implícitas VM → host).
-
-**Alojamiento VM → host:** cada servidor virtual depende implícitamente del servidor no virtual cuyo `nombre` o `hostname` coincide con su host (`rack_norm`), comparando solo letras y dígitos sin distinguir mayúsculas. Estas relaciones propagan el impacto pero no se devuelven en `edges`. Cada nodo incluye `application` (su aplicación o `null`), `hostServerId` (host de la VM o `null`) y `hostedVmCount` (VMs alojadas si es un host).
-
-**Notas:**
-- `view` es `null` solo si no existe ninguna vista (en ese caso todas las `position` son `null`).
-- El tamaño de la respuesta crece con la longitud de `impactPath` de cada nodo afectado.
-
-**Errores:**
-
-| Código | Causa |
-|--------|-------|
-| 400 | `view` no es un ID ni un slug válido; `includeIsolated` no es booleano; `simulateDownIds` con IDs inválidos o más de 200; parámetro repetido |
-| 404 | La vista indicada (ID o slug) no existe |
-
----
-
-### 📖 Listar Vistas
+### 📖 Simular una caída
 
 ```http
-GET /api/topology/views
+GET /api/impacto/simular?ids=12,15
 ```
-
-Devuelve todas las vistas: primero la predeterminada y luego por nombre.
-
-**Respuesta:**
+No modifica nada. Hasta 200 ids. **Respuesta (200):**
 ```json
 {
-  "views": [
+  "simulados": ["12", "15"],
+  "ignorados": [],
+  "servicios": [
     {
-      "id": "1",
-      "name": "Mapa General",
-      "slug": "general",
-      "description": "Vista general con todos los servidores y sus dependencias",
-      "isDefault": true,
-      "viewport": { "zoom": 1, "x": 0, "y": 0 },
-      "layoutMode": "manual",
-      "filterConfig": {},
-      "nodeCount": 3,
-      "createdBy": null,
-      "createdAt": "2026-11-18T14:02:11.204Z",
-      "updatedAt": "2026-11-19T09:15:40.871Z"
-    },
-    {
-      "id": "2",
-      "name": "Servicio de Ejemplo",
-      "slug": "servicio-de-ejemplo",
-      "description": "Servidores del servicio de ejemplo",
-      "isDefault": false,
-      "viewport": { "zoom": 1.25, "x": -40, "y": 15 },
-      "layoutMode": "manual",
-      "filterConfig": { "type": "fisicos" },
-      "nodeCount": 0,
-      "createdBy": "admin",
-      "createdAt": "2026-11-19T09:30:00.000Z",
-      "updatedAt": "2026-11-19T09:30:00.000Z"
-    }
-  ]
-}
-```
-
-`nodeCount` es el número de servidores con posición guardada en la vista. En una instalación nueva existe la vista `Mapa General` (slug `general`) marcada como predeterminada.
-
----
-
-### ➕ Crear Vista (Solo Admin)
-
-```http
-POST /api/topology/views
-Content-Type: application/json
-X-CSRF-Token: <token>
-
-{
-  "name": "Servicio de Ejemplo",
-  "description": "Servidores del servicio de ejemplo",
-  "isDefault": false,
-  "layoutMode": "manual",
-  "filterConfig": { "type": "fisicos" },
-  "viewport": { "zoom": 1.25, "x": -40, "y": 15 }
-}
-```
-
-**Campos:**
-- `name` (string, **obligatorio**, máx. 120, único).
-- `slug` (string, opcional, máx. 120, único, solo minúsculas, números y guiones simples: `^[a-z0-9]+(-[a-z0-9]+)*$`). Si no se envía se genera desde `name` sin acentos, en minúsculas y con guiones (`"Servicio Núcleo"` → `"servicio-nucleo"`).
-- `description` (string multilínea, opcional, máx. 1000).
-- `isDefault` / `is_default` (booleano, opcional). Si es `true`, la vista que era predeterminada deja de serlo en la misma operación.
-- `layoutMode` / `layout_mode` (string, opcional, máx. 30, solo `[a-z0-9_-]`; por defecto `manual`).
-- `filterConfig` / `filter_config` (objeto JSON, opcional, máx. 8 KB serializado; se guarda tal cual para uso del cliente).
-- `viewport` (objeto `{ zoom, x, y }`, opcional): `zoom` entre 0,05 y 10; `x` e `y` entre -10 000 000 y 10 000 000. Por defecto `{ zoom: 1, x: 0, y: 0 }`.
-
-**Respuesta (`201`):** `{ "view": { ...objeto vista como en el listado... } }`
-
-**Errores:**
-
-| Código | Causa |
-|--------|-------|
-| 400 | `name` ausente o vacío; longitudes o formatos inválidos; `filterConfig` no es objeto o supera 8 KB; `viewport` fuera de rango |
-| 409 | `Ya existe una vista con ese nombre` / `Ya existe una vista con ese slug` |
-| 409 | `Otra operación cambió la vista predeterminada al mismo tiempo; reintente` (excepcional: los cambios simultáneos de vista predeterminada se aplican uno tras otro) |
-
----
-
-### ✏️ Actualizar Vista (Solo Admin)
-
-```http
-PUT /api/topology/views/2
-Content-Type: application/json
-X-CSRF-Token: <token>
-
-{
-  "name": "Servicio de Ejemplo (sede 2)",
-  "isDefault": true,
-  "viewport": { "zoom": 0.8 }
-}
-```
-
-**Actualización parcial:** solo se modifican los campos enviados (mismos campos y límites que al crear; si se envía `slug`, no puede ir vacío). En `viewport` se puede enviar solo `zoom`, `x` o `y`.
-
-**Vista predeterminada:**
-- `isDefault: true` marca esta vista como predeterminada y desmarca la anterior en la misma operación.
-- `isDefault: false` sobre la vista que **es** la predeterminada responde `400` ("Para cambiar la vista por defecto, marque otra vista como predeterminada"): siempre debe haber una.
-
-**Respuesta (`200`):** `{ "view": { ... } }`
-
-**Errores:** `400` (ID inválido, cuerpo sin campos, datos inválidos, quitar `isDefault` a la predeterminada), `404` (la vista no existe), `409` (nombre o slug duplicado).
-
----
-
-### 💾 Guardar Posiciones de una Vista (Solo Admin)
-
-```http
-PUT /api/topology/views/1/positions
-Content-Type: application/json
-X-CSRF-Token: <token>
-
-{
-  "positions": [
-    { "serverId": "1", "x": 100.5, "y": -20 },
-    { "serverId": "2", "x": 300, "y": 40, "pinned": false },
-    { "serverId": "3", "x": 500, "y": 80, "collapsed": true }
-  ],
-  "viewport": { "zoom": 1.5, "x": 10, "y": 20 },
-  "removeServerIds": ["7"]
-}
-```
-
-Guarda en una sola operación atómica las posiciones (crea o actualiza la de cada servidor), quita nodos de la vista y actualiza el viewport.
-
-**Campos** (debe venir al menos uno de los tres):
-- `positions` (array, máximo **1000** elementos por petición): `{ serverId | server_id, x, y, pinned?, collapsed? }`.
-  - `x`, `y`: números finitos entre -1 000 000 y 1 000 000.
-  - `pinned` (booleano): **por defecto `true`**. Un nodo colocado a mano queda fijado. Quien coloque nodos automáticamente (auto-ordenar) debe enviar `pinned: false` de forma explícita, para que un reordenamiento posterior pueda moverlos y respete los fijados a mano.
-  - `collapsed` (booleano): por defecto `false`.
-  - Si un `serverId` aparece varias veces, gana la última posición.
-- `removeServerIds` / `remove_server_ids` (array de IDs, máximo 1000): quita esos servidores de la vista (borra su posición; el servidor y sus dependencias no se modifican). Los IDs sin posición se ignoran.
-- `viewport` (`{ zoom?, x?, y? }`, mismos límites que en las vistas): solo se actualizan los valores enviados.
-
-**Regla:** un mismo servidor no puede estar a la vez en `positions` y en `removeServerIds` → `400`.
-
-**Respuesta (`200`):**
-```json
-{
-  "ok": true,
-  "viewId": "1",
-  "saved": 3,
-  "removed": 1,
-  "viewport": { "zoom": 1.5, "x": 10, "y": 20 }
-}
-```
-
-**Errores:**
-
-| Código | Causa |
-|--------|-------|
-| 400 | `positions` no es array o supera 1000 elementos; coordenadas no finitas o fuera de rango; `pinned`/`collapsed` no booleanos; `viewport` inválido; mismo servidor en `positions` y `removeServerIds`; cuerpo sin `positions`, `removeServerIds` ni `viewport` |
-| 404 | La vista no existe; `Servidor con ID 99 no encontrado` / `No se encontraron los servidores con ID 98, 99` (servidores de `positions`) |
-
----
-
-### 🗑️ Eliminar Vista (Solo Admin)
-
-```http
-DELETE /api/topology/views/2
-X-CSRF-Token: <token>
-```
-
-Elimina la vista y sus posiciones (los servidores y las dependencias no se modifican).
-
-**Respuesta (`200`):**
-```json
-{ "ok": true, "id": "2" }
-```
-
-**Errores:** `400` (ID inválido), `404` (la vista no existe), `409` `No se puede eliminar la vista por defecto` (primero hay que marcar otra como predeterminada).
-
----
-
-### 📖 Listar Dependencias
-
-```http
-GET /api/dependencies
-GET /api/dependencies?serverId=2
-```
-
-**Parámetros:**
-- `serverId` (opcional): solo las dependencias en las que ese servidor es origen **o** destino. Un servidor inexistente devuelve una lista vacía.
-
-**Respuesta:**
-```json
-{
-  "dependencies": [
-    {
-      "id": "10",
-      "source": "1",
-      "target": "2",
-      "sourceName": "srv-app-01",
-      "targetName": "vm-api-02",
-      "dependencyType": "API",
-      "criticality": "CRITICAL",
-      "port": 8443,
-      "protocol": "HTTPS",
-      "label": "API de aplicación",
-      "notes": null,
-      "createdBy": "admin",
-      "createdAt": "2026-11-18T15:20:00.000Z",
-      "updatedAt": "2026-11-18T15:20:00.000Z"
-    }
-  ]
-}
-```
-
-**Errores:** `400` (`serverId` inválido o repetido).
-
----
-
-### 📖 Análisis de Impacto de un Servidor
-
-```http
-GET /api/dependencies/server/3/impact
-```
-
-Responde "¿de qué depende este servidor?" y "¿qué se ve afectado si este servidor cae?", independientemente de su estado actual de monitoreo.
-
-**Respuesta** (servidor `3` del ejemplo anterior):
-```json
-{
-  "server": {
-    "id": "3",
-    "type": "fisicos",
-    "name": "srv-db-03",
-    "ip": "10.0.0.13",
-    "hostname": "srv-db-03.ejemplo.local",
-    "rack": "Rack A",
-    "estadoInventario": "ACTIVO",
-    "activo": "SI",
-    "status": "UP",
-    "monitoring": { "hostId": "6", "status": "UP", "enabled": true, "changedAt": "2026-11-19T08:00:02.000Z" }
-  },
-  "dependsOnDirect": [],
-  "dependsOnTransitive": [],
-  "dependentsDirect": [
-    {
-      "id": "2",
-      "type": "virtuales",
-      "name": "vm-api-02",
-      "ip": "10.0.0.12",
-      "hostname": "vm-api-02.ejemplo.local",
-      "rack": "Cluster A",
-      "estadoInventario": "ACTIVO",
-      "activo": "SI",
-      "status": "UNKNOWN",
-      "monitoring": null,
-      "depth": 1,
-      "dependencies": [
-        {
-          "id": "12",
-          "source": "2",
-          "target": "3",
-          "sourceName": "vm-api-02",
-          "targetName": "srv-db-03",
-          "dependencyType": "DATABASE",
-          "criticality": "CRITICAL",
-          "port": 5432,
-          "protocol": "TCP",
-          "label": null,
-          "notes": null,
-          "createdBy": "admin",
-          "createdAt": "2026-11-18T15:22:00.000Z",
-          "updatedAt": "2026-11-18T15:22:00.000Z"
-        }
+      "serviceId": "1", "name": "ERP", "estado": "NO_FUNCIONA", "nivel": "TOTAL",
+      "componentesCaidos": [
+        { "id": "3", "serverId": "12", "role": "Base de datos", "impact": "TOTAL", "impactoEfectivo": "TOTAL", "respaldoPor": [],
+          "caida": { "motivo": "CAIDO", "por": null, "nivel": 0 } }
       ]
     }
   ],
-  "dependentsTransitive": [
-    {
-      "id": "1",
-      "type": "fisicos",
-      "name": "srv-app-01",
-      "ip": "10.0.0.11",
-      "hostname": "srv-app-01.ejemplo.local",
-      "rack": "Rack A",
-      "estadoInventario": "ACTIVO",
-      "activo": "SI",
-      "status": "UP",
-      "monitoring": { "hostId": "4", "status": "UP", "enabled": true, "changedAt": "2026-11-19T08:00:02.000Z" },
-      "depth": 2,
-      "path": ["3", "2", "1"]
-    }
-  ],
-  "totalAffected": 2,
-  "cycles": [],
-  "cyclesTruncated": false
+  "servidoresCaidos": [ { "id": "12", "motivo": "CAIDO", "por": null, "nivel": 0 }, { "id": "20", "motivo": "REQUIERE", "por": "12", "nivel": 1 } ]
 }
 ```
+`motivo`: `CAIDO` (indicado o caído en Monitoreo), `REQUIERE` (necesita al servidor `por`) o `HOST` (VM cuyo host `por` cayó). `respaldoPor` lista los servidores del mismo grupo de respaldo que siguen en pie (entonces `impactoEfectivo` es `NINGUNO`). Sin `ids` o con un id no numérico: 400.
 
-**Campos:**
-- `dependsOnDirect` / `dependentsDirect`: resumen de cada servidor vecino con `depth: 1` y `dependencies`, las relaciones concretas entre ambos (puede haber varias de distinto tipo), con su `id` para editarlas o eliminarlas.
-- `dependsOnTransitive` / `dependentsTransitive`: **solo profundidad ≥ 2** (los directos no se repiten), con `depth` y `path` (ruta más corta desde este servidor).
-- `totalAffected`: número total de servidores afectados si este cae (directos + transitivos), incluidas las VMs alojadas si es un host.
-- `applications`: aplicaciones que caerían si cae este servidor (la suya y las de sus dependientes), con el mismo formato que en el grafo.
-- Las relaciones implícitas de alojamiento aparecen en `dependencies` con `dependencyType: "HOSTING"`, `implicit: true` e `id: null` (no se pueden editar ni eliminar).
-- `cycles`: ciclos **en los que participa este servidor**, como lista cerrada de IDs. Para el servidor `1` del ejemplo: `[["1", "2", "1"]]`. Para el `3` es `[]`: no forma parte del ciclo `1 ↔ 2` aunque sus dependientes sí (el recorrido lo atraviesa sin bucles). Se devuelven como máximo 50 ciclos; si se alcanza el límite de la búsqueda, `cyclesTruncated` es `true`.
-
-**Errores:** `400` (ID inválido), `404` (el servidor no existe).
-
----
-
-### ➕ Crear Dependencia (Solo Admin)
+### 📖 Estado de monitoreo de cada servidor
 
 ```http
-POST /api/dependencies
-Content-Type: application/json
-X-CSRF-Token: <token>
-
-{
-  "sourceServerId": "1",
-  "targetServerId": "2",
-  "dependencyType": "API",
-  "criticality": "CRITICAL",
-  "port": 8443,
-  "protocol": "HTTPS",
-  "label": "API de aplicación",
-  "notes": "Llamadas síncronas del módulo de ejemplo",
-  "bidirectional": true
-}
+GET /api/impacto/servidores
 ```
+Devuelve `{ "servers": [...] }` con el mismo formato que `servers` del panorama. Lo usan Servidores Físicos y Virtuales para los LED de estado.
 
-**Campos** (se aceptan en camelCase o snake_case):
-- `sourceServerId` / `source_server_id` (**obligatorio**): servidor que depende.
-- `targetServerId` / `target_server_id` (**obligatorio**): servidor proveedor. Debe ser distinto del origen.
-- `dependencyType` / `dependency_type` (enum, por defecto `SERVICE`).
-- `criticality` (enum, por defecto `CRITICAL`).
-- `port` (entero 1–65535, como número o string de dígitos; opcional).
-- `protocol` (string, máx. 20, solo letras, números y `. _ + -`; ej. `TCP`, `HTTPS`, `NFS`, `iSCSI`).
-- `label` (string, máx. 120).
-- `notes` (string multilínea, máx. 2000).
-- `bidirectional` / `mutual` (booleano, por defecto `false`): crea también la relación inversa (`target → source`, con los mismos datos) en la misma operación.
-
-El autor (`createdBy`) se toma del usuario de la sesión.
-
-**Respuesta (`201`)** del ejemplo, con `"bidirectional": true`:
-```json
-{
-  "dependency": { "id": "10", "source": "1", "target": "2", "dependencyType": "API", "...": "..." },
-  "dependencies": [
-    { "id": "10", "source": "1", "target": "2", "...": "..." },
-    { "id": "11", "source": "2", "target": "1", "...": "..." }
-  ],
-  "inverse": {
-    "created": true,
-    "dependency": { "id": "11", "source": "2", "target": "1", "...": "..." }
-  }
-}
-```
-*(Cada objeto es un [Objeto Dependencia](#objeto-dependencia) completo; aquí se abrevia.)*
-
-- `dependency`: la relación pedida (`source → target`).
-- `dependencies`: **solo** las relaciones creadas en esta petición (1 o 2).
-- `inverse`: `null` si no se pidió `bidirectional`; `{ "created": true, "dependency": {...} }` si se creó la inversa; `{ "created": false, "dependency": {...la existente...} }` si la inversa del mismo tipo ya existía (se conserva sin cambios y no es un error).
-
-**Errores:**
-
-| Código | Causa |
-|--------|-------|
-| 400 | Falta `sourceServerId` o `targetServerId`; IDs inválidos; `Un servidor no puede depender de sí mismo`; enum, puerto, protocolo o longitud inválidos; `bidirectional` no booleano |
-| 404 | `Servidor con ID 999 no encontrado` / `No se encontraron los servidores con ID 998, 999` |
-| 409 | `Ya existe una dependencia de ese tipo entre esos servidores` (mismo origen, destino y tipo). Sí se permiten `1 → 2` y `2 → 1`, y varias relaciones de distinto tipo entre el mismo par |
-
----
-
-### ✏️ Actualizar Dependencia (Solo Admin)
+### ➕ Servicios (Solo Admin)
 
 ```http
-PUT /api/dependencies/10
-Content-Type: application/json
-X-CSRF-Token: <token>
-
-{
-  "criticality": "HIGH",
-  "port": null,
-  "label": "API de aplicación (v2)"
-}
+POST   /api/impacto/servicios        { "name": "JD Edwards", "description": "ERP" }  → 201 { "service": {...} }
+PUT    /api/impacto/servicios/:id    { "name"?, "description"? }                       → 200 { "service": {...} }
+DELETE /api/impacto/servicios/:id                                                     → 204
 ```
+`name` es obligatorio, único (409 si se repite) y de hasta 120 caracteres; `description` hasta 1000. Eliminar un servicio elimina sus componentes; los servidores del inventario no se tocan.
 
-**Actualización parcial:** se aceptan los mismos campos que al crear, excepto `bidirectional`; solo se modifican los enviados. `port`, `protocol`, `label` y `notes` se borran enviando `null`. También se pueden cambiar `sourceServerId` y `targetServerId`.
-
-**Respuesta (`200`):** `{ "dependency": { ...Objeto Dependencia actualizado... } }`
-
-**Errores:** `400` (ID inválido, cuerpo sin campos, datos inválidos, el cambio deja origen = destino), `404` (la dependencia o alguno de los servidores no existe), `409` (el cambio duplica otra relación existente).
-
----
-
-### 🗑️ Eliminar Dependencia (Solo Admin)
+### ➕ Servidores de un servicio (Solo Admin)
 
 ```http
-DELETE /api/dependencies/10
-X-CSRF-Token: <token>
+POST /api/impacto/servicios/:id/componentes
+{
+  "serverId": "12",
+  "role": "Base de datos",
+  "impact": "TOTAL",
+  "impactDetail": "Sin la base de datos ningún módulo funciona",
+  "workaround": null,
+  "redundancyGroup": null
+}
+→ 201 { "component": {...} }
+
+PUT    /api/impacto/componentes/:id   (solo los campos enviados; serverId no se puede cambiar) → 200 { "component": {...} }
+DELETE /api/impacto/componentes/:id                                                         → 204
 ```
+`impact`: `TOTAL`, `PARCIAL`, `NINGUNO` o `SIN_DEFINIR` (por defecto). `role` hasta 200 caracteres, `impactDetail` y `workaround` hasta 2000, `redundancyGroup` hasta 60. El mismo servidor dos veces en un servicio: 409. Servidor o servicio inexistente: 404.
 
-**Respuesta (`200`):**
-```json
-{ "ok": true, "id": "10" }
+### ➕ Requisitos entre servidores (Solo Admin)
+
+```http
+POST   /api/impacto/requisitos      { "serverId": "15", "requiredServerId": "12", "note": "..." } → 201 { "requirement": {...} }
+DELETE /api/impacto/requisitos/:id                                                              → 204
 ```
+«`serverId` necesita `requiredServerId`»: si el segundo cae, el primero también. Un servidor no puede necesitarse a sí mismo (400); el mismo requisito dos veces: 409.
 
-**Errores:** `400` (ID inválido), `404` (la dependencia no existe).
+### Página
 
-> Al eliminar un servidor del inventario se eliminan también sus dependencias (como origen y como destino) y sus posiciones en todas las vistas.
-
-### Página del mapa y recursos de la vista 3D
-
-No son endpoints de datos, pero también requieren sesión:
-
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| GET | `/dependencias` | Página del Mapa de Dependencias (`dependencies.html`). Sin sesión redirige al login. Parámetros opcionales: `vista=<slug>`, `modo=3d` o `modo=2d` y `focus=<serverId>` (selecciona y centra ese servidor; lo usa **Abrir en el mapa** del detalle de servidor). |
-| GET | `/vendor/three/three.module.js` | three.js (r170) auto-alojado desde el paquete npm `three`. |
-| GET | `/vendor/three/addons/controls/OrbitControls.js` | Controles de cámara de la vista 3D. |
-| GET | `/vendor/three/addons/renderers/CSS2DRenderer.js` | Etiquetas HTML de la vista 3D. |
-
-- `/vendor/three` sirve **solo** esos tres módulos (lista cerrada); cualquier otra ruta bajo `/vendor/three` responde `404`. Los módulos se entregan como `text/javascript` con `ETag` (`304` si no cambiaron) y con el especificador `'three'` ya reescrito a `/vendor/three/three.module.js`, así el navegador los carga sin CDN ni *import map*, compatible con la CSP (`script-src 'self'`).
+`GET /impacto` sirve la página (requiere sesión). Usa `/css/impacto.css` y `/js/paginas/impacto.js`.
 
 ---
 
@@ -1335,10 +794,9 @@ updateServersBySubnet('192.168.1.');
 - `GET /api/racks`
 - `GET /api/servers`
 - `GET /api/racks/:id`
-- `GET /api/topology/graph`
-- `GET /api/topology/views`
-- `GET /api/dependencies`
-- `GET /api/dependencies/server/:id/impact`
+- `GET /api/impacto`
+- `GET /api/impacto/simular`
+- `GET /api/impacto/servidores`
 - `GET /events`
 
 ### Rutas de Administrador (Solo Admin)
@@ -1349,13 +807,9 @@ updateServersBySubnet('192.168.1.');
 - `POST /api/racks` (Crear rack)
 - `PUT /api/racks/:id` (Actualizar rack)
 - `DELETE /api/racks/:id` (Eliminar rack)
-- `POST /api/topology/views` (Crear vista de topología)
-- `PUT /api/topology/views/:id` (Actualizar vista)
-- `PUT /api/topology/views/:id/positions` (Guardar posiciones y viewport)
-- `DELETE /api/topology/views/:id` (Eliminar vista)
-- `POST /api/dependencies` (Crear dependencia)
-- `PUT /api/dependencies/:id` (Actualizar dependencia)
-- `DELETE /api/dependencies/:id` (Eliminar dependencia)
+- `POST /api/impacto/servicios`, `PUT|DELETE /api/impacto/servicios/:id` (Servicios)
+- `POST /api/impacto/servicios/:id/componentes`, `PUT|DELETE /api/impacto/componentes/:id` (Servidores de un servicio)
+- `POST /api/impacto/requisitos`, `DELETE /api/impacto/requisitos/:id` (Requisitos entre servidores)
 
 ---
 
@@ -1413,40 +867,18 @@ updateServersBySubnet('192.168.1.');
 }
 ```
 
-### Objeto Dependencia
-
-```typescript
-{
-  id: string,               // ID de la dependencia
-  source: string,           // ID del servidor que depende (cliente)
-  target: string,           // ID del servidor del que depende (proveedor)
-  sourceName: string,       // Nombre del servidor origen
-  targetName: string,       // Nombre del servidor destino
-  dependencyType: string,   // DATABASE | NETWORK | STORAGE | API | AUTH | HYPERVISOR | BACKUP | DNS_INFRA | SERVICE
-  criticality: string,      // CRITICAL | HIGH | MEDIUM | LOW
-  port: number | null,      // 1-65535
-  protocol: string | null,  // TCP, HTTPS, NFS, ...
-  label: string | null,     // Etiqueta corta (máx. 120)
-  notes: string | null,     // Notas (máx. 2000)
-  createdBy: string | null, // Usuario que la creó
-  createdAt: string,        // Fecha de creación (ISO 8601)
-  updatedAt: string         // Fecha de actualización (ISO 8601)
-}
-```
-
-### Objeto Vista de Topología
+### Objeto Componente de servicio
 
 ```typescript
 {
   id: string,
-  name: string,                            // Único (máx. 120)
-  slug: string,                            // Único, minúsculas/números/guiones
-  description: string | null,
-  isDefault: boolean,                      // Solo una vista es la predeterminada
-  viewport: { zoom: number, x: number, y: number },
-  layoutMode: string,                      // 'manual' por defecto
-  filterConfig: object,                    // Configuración libre del cliente (máx. 8 KB)
-  nodeCount: number,                       // Servidores con posición en la vista
+  serviceId: string,               // Servicio al que pertenece
+  serverId: string,                // Servidor del inventario
+  role: string | null,             // Función en el servicio (máx. 200)
+  impact: string,                  // TOTAL | PARCIAL | NINGUNO | SIN_DEFINIR
+  impactDetail: string | null,     // Qué deja de funcionar (máx. 2000)
+  workaround: string | null,       // Alternativa o contingencia (máx. 2000)
+  redundancyGroup: string | null,  // Grupo de respaldo (máx. 60)
   createdBy: string | null,
   createdAt: string,
   updatedAt: string
@@ -1551,6 +983,6 @@ async function apiCall(url, options) {
 
 ---
 
-**Última actualización:** 19 de noviembre de 2026 (API de Dependencias y Topología)  
+**Última actualización:** 26 de noviembre de 2026 (API de Impacto de servicios)
 **Versión API:** 1.0.0  
 **Mantenedor:** Equipo TI - Grupo Danec

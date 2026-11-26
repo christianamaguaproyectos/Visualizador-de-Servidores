@@ -46,7 +46,7 @@ La aplicación tiene las siguientes secciones accesibles desde el menú de naveg
 | 🖥️ **Racks Físicos** | Visualización y gestión de servidores físicos en racks         |
 | 💻 **Virtuales**      | Gestión de máquinas virtuales agrupadas por host/cluster       |
 | 👥 **Usuarios**       | Gestión de usuarios del sistema (solo superadmin)              |
-| 🔗 **Mapa de Dependencias** | Relaciones entre servidores en 3D y editor 2D, con impacto de caídas |
+| ⚠️ **Impacto de servicios** | Qué le pasa a cada servicio (por ejemplo, JD Edwards) si cae uno de sus servidores |
 | 📡 **Monitoreo**      | Panel de monitoreo con checks de disponibilidad y alertas      |
 
 ---
@@ -70,7 +70,7 @@ Cada servidor del gabinete muestra su **nombre**, su **IP** y dos indicadores:
 | **Criticidad** (dato del inventario, campo *Estado*) | cuadrado ■ y franja de color en el borde izquierdo del equipo | 🟥 Crítico · 🟩 No crítico · 🟧 Mantenimiento · ⬜ Inactivo. En equipos de 2U o más también aparece la etiqueta `CRÍTICO` / `MANT.` / `INACTIVO`. |
 | **Monitoreo** (estado en vivo) | LED redondo ● | Verde **UP** (en línea) · Rojo parpadeante **DOWN** (caído) · Ámbar **DEGRADED** (degradado) · Violeta **MAINT** (mantenimiento) · Círculo vacío **SIN DATOS** (sin monitoreo). |
 
-El estado de monitoreo es el mismo que usa el Mapa de Dependencias y se actualiza solo cada 30 segundos. Al pasar el mouse sobre un servidor aparece un recuadro con nombre, IP, unidades, criticidad y monitoreo; sobre una unidad libre, su número de U.
+El estado de monitoreo es el mismo que usa Impacto de servicios y se actualiza solo cada 30 segundos. Al pasar el mouse sobre un servidor aparece un recuadro con nombre, IP, unidades, criticidad y monitoreo; sobre una unidad libre, su número de U.
 
 Si un rack tiene más servidores de los que caben en 42U, o varios con la misma posición, su tarjeta muestra el aviso **⚠ N servidores no caben en el rack o no tienen posición libre**; al desplegarlo se listan para abrirlos y corregir su ubicación. Los servidores del inventario **sin rack** aparecen debajo de los racks en el bloque **Sin rack asignado** (y se cuentan en el resumen). Los racks sin tipo que contienen servidores físicos también se muestran.
 
@@ -153,14 +153,6 @@ La vista se actualiza sola después de cada movimiento. Los usuarios de solo lec
 
 Haz clic en cualquier servidor dentro de un rack para abrir su ficha completa con toda la información registrada. En servidores físicos, bajo el nombre se muestran su **criticidad** (■) y su **estado de monitoreo** (LED ●) con los mismos colores que el rack.
 
-Debajo de la ficha aparece el bloque **🔗 Dependencias e impacto** (igual en físicos y virtuales). El botón del mismo nombre en la fila superior, junto a **Volver**, muestra el número de relaciones y lleva directamente al bloque:
-
-- **Depende de** y **Dependen de él:** cada relación con el estado de monitoreo del otro servidor (UP, DOWN, DEGRADED…), su tipo y su criticidad.
-- **Resumen de impacto:** cuántos servidores se verían afectados si este cae (directos y en cascada) y, si existe, la dependencia circular en la que participa.
-- **Relacionar con otro servidor** (administradores): abre un formulario breve dentro del mismo bloque (dirección, servidor, tipo y criticidad); se cierra con su **×** o con `Esc`.
-- **🗑 Eliminar relación** (administradores): pide confirmación antes de borrar.
-- **Abrir en el mapa:** abre el Mapa de Dependencias con este servidor seleccionado y centrado (`/dependencias?focus=<id>`), aunque todavía no tenga relaciones.
-
 ---
 
 ## Servidores Virtuales
@@ -184,141 +176,47 @@ Al entrar se elige una vista:
 ### Inventario y estado operativo consolidado
 
 - **Leyenda** arriba de cada vista con el número de VMs en cada estado de monitoreo (UP, DOWN, DEGRADED, MAINT, sin datos); se actualiza sola cada 30 segundos.
-- Cada **VM** muestra un LED de monitoreo con los mismos colores que en Servidores Físicos y en el Mapa de Dependencias.
+- Cada **VM** muestra un LED de monitoreo con los mismos colores que en Servidores Físicos.
 - Cada **host** muestra el estado del servidor físico que lo aloja (*Host UP/DOWN…*) y el resumen de sus VMs por estado; cada **clúster**, el resumen de todas sus VMs.
 
 ### Acciones
 
-- Clic en una **VM**: abre su ficha (con el bloque **🔗 Dependencias e impacto**, *Editar*, *Eliminar* y *Volver*).
+- Clic en una **VM**: abre su ficha (con *Editar*, *Eliminar* y *Volver*).
 - Clic en un **host**: abre su vista con *➕ Agregar VM*, *🗑️ Eliminar Rack* y *← Volver*. **✏️ Editar** en la tarjeta del host cambia su nombre.
 - Los usuarios de solo lectura ven las vistas, los estados y el buscador, pero no pueden crear, editar ni abrir el detalle.
 
 ---
 
-## Mapa de Dependencias
+## Impacto de servicios
 
-Accede desde **🔗 Mapa de Dependencias** en el menú lateral o desde su tarjeta en el panel de inicio (`/dependencias`). El mapa muestra qué servidores **dependen de** otros (por ejemplo, una aplicación que necesita su base de datos) y qué se vería afectado si uno de ellos cae.
+Menú lateral → **Impacto de servicios** (o la tarjeta del mismo nombre en Inicio). Responde a una pregunta concreta: **si cae este servidor, ¿qué le pasa al servicio?** (por ejemplo, JD Edwards).
 
-> La flecha va del servidor que depende (origen) al servidor del que depende (destino). Si el destino cae, el impacto se propaga hacia el origen.
+### Servicios y sus servidores
 
-### Vista 3D (por defecto)
+- A la izquierda está la lista de **servicios**, cada uno con su **estado actual** según Monitoreo: *Funciona*, *Funciona parcial*, *No funciona* o *Revisar*.
+- Al elegir un servicio se ve una tarjeta por cada uno de sus servidores, con:
+  - **Función** en el servicio (por ejemplo, *Base de datos de JD Edwards*);
+  - **Si cae**: *No funciona* (cae todo el servicio), *Funciona parcial*, *Sigue funcionando* o *Sin definir* (falta confirmarlo con el equipo responsable);
+  - **Qué deja de funcionar** y la **alternativa** o contingencia, si existe;
+  - **Necesita**: otros servidores sin los que este no funciona;
+  - **Ahora**: estado de Monitoreo (*En línea*, *Caído*, *Sin monitoreo*…).
+- **Grupo de respaldo:** servidores redundantes llevan el mismo grupo (por ejemplo, dos nodos BSSV). Si cae uno, el servicio sigue por el otro; solo se afecta si caen todos los del grupo.
+- **Requisitos entre servidores:** «A necesita B» significa que si B cae, A también cae (por ejemplo, *SRVNFSSYN necesita SRVNFS*).
+- **Máquinas virtuales y su host:** una VM cae con el servidor físico donde corre. El host se reconoce porque el campo **Host** de la VM coincide con el nombre de un servidor de **Servidores Físicos** (sin distinguir mayúsculas, guiones ni espacios). Si no coincide, la tarjeta lo indica (*ese host no está en Físicos*).
 
-La vista 3D representa el centro de datos como una **sala de racks** fiel al inventario de **Servidores Físicos**:
+### Simular una caída
 
-- **Sala de racks:** cada rack físico del inventario (también los vacíos) es un gabinete de **42U** en una fila de la sala, con el frente hacia ti. Su nombre y su ocupación (por ejemplo `RACK-A3 · 14/42U`) aparecen en la cabecera del gabinete y en el suelo, delante de él.
-- **Cada servidor en su unidad:** los servidores ocupan las mismas U que en la vista de rack de **Servidores Físicos** (posición `1-42` desde abajo y altura en U; los que no tienen posición ocupan el primer hueco libre, igual que en esa vista). El frente del rack muestra la numeración de las U, y el nombre y la IP de cada servidor; las U libres llevan paneles ciegos.
-- **Estado de monitoreo:** el frontal y el LED de cada servidor toman el color de su estado (UP verde, DOWN rojo, DEGRADED ámbar, MAINT violeta). Los servidores **caídos** muestran siempre su nombre en una **etiqueta roja**, sin necesidad de pasar el puntero.
-- **Virtualización:** a la derecha de la sala, cada host o clúster tiene su bloque con sus máquinas virtuales (cubos translúcidos); el rótulo del bloque lista los nombres de sus VMs.
-- **Dependencias:** arcos que salen del frente de la unidad del servidor y pasan por encima de los gabinetes, con partículas del origen al destino. Al pasar el puntero sobre un servidor, o al seleccionarlo, sus relaciones se resaltan y las demás se atenúan.
-- Los servidores que oculta un filtro siguen ocupando su U (en gris), para que el rack refleje siempre el inventario. Si un servidor físico no tiene rack o no cabe en el suyo, aparece en un rack aparte rotulado **Sin ubicar**.
-- Al abrir el mapa (y con **Encajar**) la cámara se ajusta para que toda la sala ocupe la vista.
+- Pulsa **Simular caída** en la tarjeta de un servidor, o escribe cualquier servidor (también un host ESXi o Power) en **Agregar servidor** del panel derecho. Se pueden simular varios a la vez.
+- El panel muestra, por servicio, el resultado (*No funciona*, *Funciona parcial*…) y cada servidor que cae con el motivo: *caído*, *cae porque necesita X* o *cae con su host X*. Si un servidor tiene respaldo, se indica *Sigue por …*.
+- **Otros servidores que caen** lista los que caen pero no forman parte de ningún servicio registrado.
+- La simulación no modifica datos ni envía alertas. **Quitar simulación**, la **×** de cada servidor o **Limpiar todo** la deshacen.
 
-**Pasar el puntero** sobre un servidor muestra su resumen (nombre, IP, rack y U, modelo o sistema operativo, estado). **Clic** abre el inspector con el detalle completo: datos de monitoreo, impacto, de quién depende y quién depende de él, análisis de impacto y la **ficha de inventario** con los mismos campos que el detalle de **Servidores Físicos** o **Virtuales**. **Clic en un gabinete** (fuera de un servidor) abre la ficha del rack: ocupación, huecos libres y servidores por unidad; doble clic lo muestra de frente.
+### Registrar la información (administradores)
 
-Accesos desde el inspector:
-
-- **Ver en inventario:** abre el detalle del servidor en **Servidores Físicos** o **Virtuales** (o el rack en la vista de racks).
-- **Editar servidor** (administradores): abre el formulario de edición de **Servidores Físicos** o **Virtuales** con ese servidor.
-- **Agregar servidor en este rack** (administradores, en la ficha del rack): abre el formulario de alta de **Servidores Físicos** con el rack elegido y la primera posición libre para un equipo de 2U.
-
-**Tiempo real:** el mapa se actualiza sin recargar la página ni mover la cámara. Las altas, cambios y bajas de servidores o racks (desde **Servidores Físicos**, **Virtuales** o la API) llegan al instante; el estado de monitoreo se consulta cada 30 segundos mientras la pestaña está visible. La pastilla de resumen (caídas y afectados) se actualiza sola.
-
-| Acción | Cómo |
-|--------|------|
-| Girar la vista | Arrastrar con el botón izquierdo |
-| Desplazar | Arrastrar con el botón derecho (o flechas del teclado) |
-| Acercar / alejar | Rueda del ratón, botones **+** / **−** o teclas `+` / `−` |
-| Ver todo | Botón **Encajar** o tecla `F`; **100%** restablece el zoom |
-| Detalle de un servidor o relación | Clic sobre él: se abre el panel lateral (inspector) |
-| Acercarse a un servidor | Doble clic, o **Enfocar** en el inspector |
-| Buscar un servidor | Cuadro **Buscar…** (nombre, IP o hostname) y `Enter` |
-
-En el menú **⋯ (Más opciones)**:
-
-- **Disposición 3D:** *sala de datos* (la sala de racks, por defecto) o *posiciones del editor*, que coloca los servidores donde los dejaste en el Editor 2D.
-- **Modo rendimiento 3D:** menor resolución y sin animaciones de fondo para que el giro sea fluido en portátiles. Es el modo inicial en equipos con gráficos integrados y se activa solo (con un aviso) si el equipo no alcanza unos 45 fps al abrir el mapa; puedes cambiarlo cuando quieras y se recuerda en tu navegador.
-- **Animaciones**, **Mostrar filtros**, **Mostrar todos los servidores** (en el Editor 2D y con las posiciones del editor; la sala de racks ya los muestra todos) y **Atajos de teclado**.
-
-Si el navegador no admite WebGL, el mapa se abre directamente en el Editor 2D.
-
-### Editor 2D
-
-Pulsa **Editor 2D** en la barra superior para ver el mapa como un diagrama editable:
-
-- Cada servidor es una tarjeta con su tipo (FÍSICO / VM), nombre, IP, rack o host, estado de monitoreo y número de relaciones.
-- **Mover:** arrastra las tarjetas (se ajustan a una cuadrícula de 10 px).
-- **Auto-ordenar ▾:** *Por capas* (proveedores arriba, aplicaciones abajo) o *Anillos*.
-- **Guardar:** el botón inferior indica si hay cambios sin guardar; las posiciones también se guardan solas poco después de mover algo.
-- **Paleta de servidores** (izquierda): arrastra al lienzo los servidores que todavía no están en el mapa.
-- **Minimapa** (esquina inferior derecha, también en 3D): muestra el encuadre actual; un clic o arrastre sobre él centra la vista y se pliega con su **×**.
-
-### Crear y editar relaciones (administradores)
-
-- **Con el formulario:** botón **Nueva relación**. Elige el **origen** (el que depende) y el **destino** (proveedor) con los buscadores, el **tipo** (base de datos, red, almacenamiento, API, autenticación, hipervisor, respaldo, DNS/infraestructura o servicio), la **criticidad**, y opcionalmente puerto, protocolo, etiqueta y notas. El botón ⇅ invierte la dirección; **Relación mutua** crea también la relación inversa.
-- **Arrastrando en el Editor 2D:** pasa el ratón sobre una tarjeta, arrastra desde uno de sus puntos de conexión (aparecen en los bordes) hasta otro servidor y suelta: se abre el mismo formulario con origen y destino ya elegidos.
-- **Desde el inspector:** *Relación desde aquí* en un servidor; *Editar* o *Eliminar* (con confirmación) en una relación.
-
-### Vistas guardadas
-
-Una **vista** es un diagrama con sus propias posiciones (por ejemplo, *Mapa General* y *ERP Producción*). El selector de la barra superior cambia de vista; cada una recuerda dónde dejaste cada servidor y su encuadre.
-
-- **＋ Nueva vista** (administradores): nombre y descripción opcional.
-- **✎ Editar vista** (administradores): renombra la vista actual o la elimina con **Eliminar vista** (pide confirmación). Eliminar una vista borra solo sus posiciones: los servidores y sus relaciones no cambian. La vista predeterminada no se puede eliminar.
-
-### Exportar el mapa
-
-Botón **Exportar** de la barra superior:
-
-| Formato | Contenido |
-|---------|-----------|
-| **SVG** (Editor 2D) | Diagrama vectorial con sus estilos, para abrir o imprimir en cualquier visor |
-| **PNG** (Editor 2D) | Imagen del diagrama a doble resolución, para informes y presentaciones |
-| **PNG de la vista 3D** | Captura de la escena 3D tal como se ve |
-| **JSON** | Servidores, posiciones y relaciones de la vista actual |
-
-Los archivos se descargan con el nombre `topologia-<vista>-<fecha>.<extensión>`.
-
-### Simular una caída e impacto en cascada
-
-- Si Monitoreo detecta servidores caídos o degradados, aparece arriba a la derecha un indicador compacto (por ejemplo, *2 caídas · 4 afectados*). Haz clic para ver el detalle (qué servidores se ven afectados y a qué nivel) y en **×** para plegarlo; el mapa recuerda si lo dejaste abierto.
-- **Simular caída:** activa el modo simulación y haz clic en uno o varios servidores para ver qué pasaría si cayeran (o pulsa `S` con un servidor seleccionado). El mapa resalta la cadena de impacto por niveles, atenúa los servidores no relacionados y el indicador muestra el resumen con las **caídas reales (monitoreo)** y las **caídas simuladas** por separado, cada una con su conteo, y el total de servidores afectados (por ejemplo, *«1 caída real · 1 simulada · 12 afectados»*). Un segundo clic en un servidor quita su caída simulada. No modifica datos ni envía alertas. Sales con el mismo botón, con la **×** de la banda superior o con `Esc`.
-- **Ver solo impacto** (en el detalle del indicador) atenúa todo lo que no está afectado.
-- **VMs y su host:** una máquina virtual cae automáticamente con el host donde corre, sin necesidad de registrar esa relación. El host se reconoce porque su nombre coincide con el host de la VM en el inventario (sin distinguir mayúsculas, guiones ni espacios). En el inspector del host se indica cuántas **VMs alojadas** tiene, y en el resumen esas VMs aparecen como *«VM en el host»*.
-- **Aplicaciones afectadas:** el detalle del indicador lista las aplicaciones que caen (tomadas del campo **Software** de cada servidor), cada una con los servidores donde corre y si está caído, simulado, afectado directo o en cascada. Primero aparecen las que caen por la simulación. Los servidores con el campo vacío o «N/A» no cuentan como aplicación.
-- **Descargar CSV** (en el detalle del indicador) guarda la lista de servidores y aplicaciones afectados para abrirla en Excel.
-- El buscador del mapa también encuentra servidores por el nombre de su aplicación (por ejemplo, *pentaho*).
-- **Solo con relaciones** también cuenta la relación de cada VM con su host, y el filtro **Dependencia** incluye la opción **Alojamiento (VM en su host)**. El contador indica cuántas VMs están junto a su host.
-- **Auto-ordenar → Por capas** (y la vista inicial del editor 2D sin posiciones guardadas) reparte los servidores en un bloque casi cuadrado: los equipos físicos arriba agrupados por rack y, debajo, las VMs agrupadas por su host.
-
-### Leyenda de colores
-
-| Color | Estado del servidor (Monitoreo) |
-|-------|---------------------------------|
-| 🟢 Verde | UP — operativo |
-| 🔴 Rojo | DOWN — caído |
-| 🟡 Ámbar | DEGRADED — degradado |
-| 🟣 Violeta | MAINT — en mantenimiento |
-| ⚪ Gris | Sin monitoreo |
-
-| Color | Impacto |
-|-------|---------|
-| 🟠 Naranja | Impacto directo: depende de un servidor caído |
-| 🟡 Amarillo | En cascada: afectado a través de otro servidor (nivel 2 o más) |
-
-El grosor de cada relación indica su criticidad (crítica, alta, media o baja) y su color, el tipo de dependencia. La leyenda completa está en el botón **Leyenda** de la esquina superior izquierda del mapa.
-
-### Permisos
-
-| Rol | Qué puede hacer en el mapa |
-|-----|----------------------------|
-| **Viewer** | Ver el 3D y el 2D, buscar, filtrar, inspeccionar, simular caídas, exportar y usar la lista. No ve controles de edición ni puntos de conexión. |
-| **Admin / Superadmin** | Todo lo anterior y además crear, editar y eliminar relaciones (también desde el detalle del servidor), mover servidores, guardar posiciones y crear, renombrar o eliminar vistas. |
-
-### Accesibilidad
-
-El botón **Lista** muestra todos los servidores y relaciones en una tabla. Todas las ventanas y paneles se cierran con su botón **×** o con `Esc`. Los atajos de teclado completos están en **⋯ → Atajos de teclado**.
-
----
+- **+ Nuevo** crea un servicio; **Editar** y **Eliminar** lo modifican. Eliminar un servicio no toca los servidores del inventario.
+- **+ Agregar servidor** añade un servidor al servicio: se elige de la lista (nombre · IP · host) y se completan su función, qué pasa si cae, qué deja de funcionar, la alternativa y, si corresponde, el grupo de respaldo.
+- **+ Agregar requisito** registra que un servidor necesita a otro.
+- El estado de Monitoreo se actualiza solo cada 30 segundos mientras la página está abierta.
 
 ## Gestión de Usuarios (Solo Superadmin)
 
@@ -414,7 +312,7 @@ El sistema utiliza **Server-Sent Events (SSE)** para sincronizar datos automáti
 
 - 🔄 Al crear, editar, mover o eliminar un servidor, todos los usuarios verán los cambios.
 - 🔄 Al crear o eliminar un rack, la vista se actualiza.
-- 🔗 El **Mapa de Dependencias** (sala de racks 3D y Editor 2D) refleja esos cambios y el estado de monitoreo sin recargar la página.
+- ⚠️ **Impacto de servicios** refleja el estado de Monitoreo cada 30 segundos mientras está abierta.
 - 📊 Los contadores de KPIs se recalculan automáticamente.
 
 ---
@@ -472,6 +370,10 @@ PUT    /api/servers/:id/reposition - Cambiar posición en rack
 POST   /api/racks                - Crear rack/host
 GET    /api/racks                - Listar racks (?type=fisicos|virtuales)
 DELETE /api/racks/:id            - Eliminar rack
+
+GET    /api/impacto              - Servicios, sus servidores y estado actual
+GET    /api/impacto/simular?ids= - Qué pasaría si cayeran esos servidores
+GET    /api/impacto/servidores   - Estado de monitoreo de cada servidor
 
 GET    /api/users                - Listar usuarios
 POST   /api/users                - Crear usuario (con invitación)

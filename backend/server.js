@@ -25,8 +25,7 @@ import metaController from './src/controllers/metaController.js';
 import authController from './src/controllers/authController.js';
 import userController from './src/controllers/userController.js';
 import clusterRoutes from './src/routes/clusterRoutes.js';
-import { topologyRouter, dependenciesRouter } from './src/routes/topologyRoutes.js';
-import vendorThreeRoutes from './src/routes/vendorThreeRoutes.js';
+import impactoRouter from './src/routes/impactoRoutes.js';
 
 // Middleware
 import { requireAuth, requireAdmin, requireSuperAdmin, injectUser } from './src/middleware/authMiddleware.js';
@@ -189,13 +188,10 @@ class Application {
       res.sendFile(path.join(__dirname, '..', 'frontend', 'public', 'virtual.html'));
     });
 
-    // Mapa de Dependencias y Topología (vista 3D + editor 2D)
-    this.app.get('/dependencias', (req, res) => {
-      res.sendFile(path.join(__dirname, '..', 'frontend', 'public', 'dependencies.html'));
+    // Impacto de servicios: qué le pasa a cada servicio si cae uno de sus servidores
+    this.app.get('/impacto', (req, res) => {
+      res.sendFile(path.join(__dirname, '..', 'frontend', 'public', 'impacto.html'));
     });
-
-    // three.js auto-alojado (lista cerrada de módulos; ver vendorThreeRoutes.js)
-    this.app.use('/vendor/three', vendorThreeRoutes);
 
     this.app.get('/users', requireSuperAdmin, (req, res) => {
       res.sendFile(path.join(__dirname, '..', 'frontend', 'public', 'users.html'));
@@ -235,9 +231,8 @@ class Application {
     const { default: exportRoutes } = await import('./src/routes/exportRoutes.js');
     this.app.use('/api/export', exportRoutes);
 
-    // API del Mapa de Dependencias y Topología (lectura: autenticado; escritura: admin dentro del router)
-    this.app.use('/api/topology', topologyRouter);
-    this.app.use('/api/dependencies', dependenciesRouter);
+    // API de Impacto de servicios (lectura y simulación: autenticado; escritura: admin dentro del router)
+    this.app.use('/api/impacto', impactoRouter);
 
     // ========================================
     // RUTAS DE ADMINISTRADOR (Solo admin)

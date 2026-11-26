@@ -422,27 +422,27 @@ body {
     opacity: 1;
   }
 }
-/* Tarjeta del Mapa de Dependencias (ocupa el ancho completo, acento violeta) */
-.server-type-card.dependencias-card {
+/* Tarjeta de Impacto de servicios (ocupa el ancho completo, acento violeta) */
+.server-type-card.impacto-card {
   grid-column: 1 / -1;
   border-color: rgba(139, 92, 246, 0.4);
 }
 
-.dependencias-card .card-icon {
+.impacto-card .card-icon {
   color: #8b5cf6;
 }
 
-.dependencias-card:hover {
+.impacto-card:hover {
   border-color: rgba(139, 92, 246, 0.6);
 }
 
-.server-type-card.dependencias-card .card-button {
+.server-type-card.impacto-card .card-button {
   background: linear-gradient(128deg, #a78bfa, #8b5cf6);
   box-shadow: 0 10px 20px rgba(139, 92, 246, 0.3);
 }
 
 @media (max-width: 900px) {
-  .server-type-card.dependencias-card {
+  .server-type-card.impacto-card {
     grid-column: auto;
   }
 }

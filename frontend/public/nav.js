@@ -33,10 +33,10 @@
             icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><rect x="5" y="6" width="6" height="3" rx="1"/><rect x="13" y="6" width="6" height="3" rx="1"/><rect x="5" y="11" width="6" height="3" rx="1"/><rect x="13" y="11" width="6" height="3" rx="1"/><path d="M8 18l4 2 4-2"/></svg>'
         },
         {
-            id: 'dependencias',
-            label: 'Mapa de Dependencias',
-            href: '/dependencias',
-            icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="2.5"/><circle cx="19" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M7.5 6h9M6.3 8.2l4.4 7.6M17.7 8.2l-4.4 7.6"/></svg>'
+            id: 'impacto',
+            label: 'Impacto de servicios',
+            href: '/impacto',
+            icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg>'
         },
         {
             id: 'monitoring',
@@ -71,7 +71,7 @@
         if (path === '/' || path === '/home' || path === '/home.html') return 'home';
         if (path.includes('fisicos') || path === '/index.html') return 'fisicos';
         if (path.includes('virtuales') || path === '/virtual.html') return 'virtuales';
-        if (path.includes('dependencias') || path === '/dependencies.html') return 'dependencias';
+        if (path.includes('impacto')) return 'impacto';
         if (path.includes('monitoring')) return 'monitoring';
         if (path.includes('users')) return 'users';
         return null;

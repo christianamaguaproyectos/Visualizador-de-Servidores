@@ -1,7 +1,6 @@
 /**
- * Colocación de servidores en un rack de 42U. Función PURA (sin DOM), compartida por la
- * vista de rack de /fisicos (app.js) y la sala de racks 3D de /dependencias: las dos
- * muestran cada servidor exactamente en las mismas unidades.
+ * Colocación de servidores en un rack de 42U. Función PURA (sin DOM) que usa la vista de
+ * rack de /fisicos (app.js) para mostrar cada servidor en sus unidades.
  *
  * Índices: 0 = unidad superior (U42) … 41 = unidad inferior (U1). La posición U de un
  * índice es `total - indice`.

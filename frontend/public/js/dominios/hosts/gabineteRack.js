@@ -21,7 +21,7 @@ export const CRITICIDADES = Object.freeze({
   inactivo: { texto: 'Inactivo', corto: 'INACTIVO' },
 });
 
-/** Estado de monitoreo (mismos nombres y colores que el Mapa de Dependencias) */
+/** Estado de monitoreo (mismos nombres y colores en toda la plataforma) */
 export const ESTADOS_MONITOREO = Object.freeze({
   UP: { clase: 'up', texto: 'UP', descripcion: 'En línea' },
   DOWN: { clase: 'down', texto: 'DOWN', descripcion: 'Caído' },

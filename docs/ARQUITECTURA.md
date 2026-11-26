@@ -114,19 +114,19 @@ Funciones auxiliares puras:
 - Sin efectos secundarios
 - Reutilizables en toda la aplicación
 
-### **Módulo de Dependencias y Topología**
-Relaciones "servidor A depende de servidor B", vistas (diagramas) guardadas e impacto en cascada cruzado con el estado de Monitoreo. Sigue la misma separación por capas:
+### **Módulo de Impacto de servicios**
+Qué le pasa a cada servicio (por ejemplo, JD Edwards) si cae uno de sus servidores: papel de cada servidor en el servicio, requisitos entre servidores, estado actual según Monitoreo y simulación de caídas. Sigue la misma separación por capas:
 
 | Pieza | Archivo | Responsabilidad |
 |-------|---------|-----------------|
-| Rutas | `backend/src/routes/topologyRoutes.js` | `/api/topology` y `/api/dependencies`; lectura para usuarios autenticados, escritura con `requireAdmin` (+ CSRF global) |
-| Controlador | `backend/src/controllers/topologyController.js` | Valida la entrada, llama al servicio y delega los errores a `errorHandler` |
-| Validación | `backend/src/dtos/topologyDto.js` | Funciones puras de validación y normalización (IDs, enums, textos, límites) |
-| Servicio | `backend/src/services/topologyService.js` | Acceso a PostgreSQL con el pool compartido y transacciones (`withTransaction` de `config/db.js`); cruce servidor ↔ host de monitoreo; CRUD de dependencias y vistas |
-| Grafo | `backend/src/services/topologyGraph.js` | Lógica de grafo **pura** (sin BD): impacto en cascada, pares bidireccionales, ciclos y análisis de un servidor; probada con pruebas unitarias |
-| Esquema | `scripts/sql/08-schema.dependencies.sql` + `backend/prisma/schema.prisma` | Tablas `inventory.server_dependencies`, `inventory.topology_views` e `inventory.topology_node_positions` |
+| Rutas | `backend/src/routes/impactoRoutes.js` | `/api/impacto`; lectura y simulación para usuarios autenticados, escritura con `requireAdmin` (+ CSRF global) |
+| Controlador | `backend/src/controllers/impactoController.js` | Valida la entrada, llama al servicio y delega los errores a `errorHandler` |
+| Validación | `backend/src/dtos/impactoDto.js` | Funciones puras de validación y normalización (IDs, nivel de impacto, textos, límites) |
+| Servicio | `backend/src/services/impactoService.js` | Acceso a PostgreSQL con el pool compartido y transacciones; cruce servidor ↔ host de monitoreo; CRUD de servicios, componentes y requisitos |
+| Cálculo | `backend/src/services/impactoCalculo.js` | Lógica **pura** (sin BD): propagación de la caída (requisitos y VM → host), grupos de respaldo y estado de cada servicio; probada con pruebas unitarias |
+| Esquema | `scripts/sql/08-schema.impacto.sql` + `backend/prisma/schema.prisma` | Tablas `inventory.services`, `inventory.service_components` e `inventory.server_requirements` |
 
-Plan y estado: [PLAN-DEPENDENCIAS-Y-TOPOLOGIA-SERVIDORES.md](./PLAN-DEPENDENCIAS-Y-TOPOLOGIA-SERVIDORES.md). Endpoints: [API-REST.md](./API-REST.md#-dependencias-y-topología).
+Endpoints: [API-REST.md](./API-REST.md#️-impacto-de-servicios).
 
 ## 🔄 Flujo de Datos
 

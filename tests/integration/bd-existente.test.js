@@ -18,7 +18,7 @@ const omitir = motivoParaOmitir();
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const BOM = String.fromCharCode(0xFEFF);
 
-/** Esquema "anterior": sin dependencias/vistas, sin posición en rack ni campos añadidos después */
+/** Esquema "anterior": sin tablas de impacto de servicios, sin posición en rack ni campos añadidos después */
 async function crearEsquemaAnterior(bd) {
   await bd.query('DROP SCHEMA IF EXISTS inventory, monitoring, users CASCADE');
   for (const f of ['00-init.sql', '01-schema.inventory.sql', '02-schema.monitoring.sql', '03-schema.users.sql', '04-schema.clusters.sql', '07-schema.sessions.sql']) {
@@ -77,7 +77,7 @@ describe('Base de datos existente (integración)', { skip: omitir || false }, ()
 
   test('revisión sin --aplicar: informa lo que falta y no cambia nada', async () => {
     const faltan = await revisar(bd);
-    for (const esperado of ['tabla inventory.server_dependencies', 'tabla inventory.topology_views', 'columna inventory.servers.rack_position',
+    for (const esperado of ['tabla inventory.services', 'tabla inventory.service_components', 'tabla inventory.server_requirements', 'columna inventory.servers.rack_position',
       'columna inventory.racks.type', 'columna inventory.servers.zabbix', 'índice monitoring.check_runs_check_time_idx']) {
       assert.ok(faltan.includes(esperado), `debería faltar ${esperado}: ${faltan.join(', ')}`);
     }
@@ -114,20 +114,17 @@ describe('Base de datos existente (integración)', { skip: omitir || false }, ()
     assert.equal((await admin.login(CREDENCIALES.admin)).status, 200);
     assert.equal((await lector.login(CREDENCIALES.lector)).status, 200);
 
-    for (const ruta of ['/', '/fisicos', '/virtuales', '/dependencias', '/monitoring.html', '/users']) {
+    for (const ruta of ['/', '/fisicos', '/virtuales', '/impacto', '/monitoring.html', '/users']) {
       const r = await admin.api('GET', ruta);
       assert.equal(r.status, 200, ruta);
     }
-    const grafo = await lector.api('GET', '/api/topology/graph?includeIsolated=true');
-    assert.equal(grafo.status, 200);
-    assert.equal(grafo.data.nodes.length, 1000);
-    assert.ok(grafo.data.nodes.every((n) => typeof n.name === 'string' && n.name.trim()), 'todo servidor tiene un nombre visible (aunque no tenga "nombre")');
-    const sinNombre = grafo.data.nodes.find((n) => n.name === 'host-7');
-    assert.ok(sinNombre, 'sin nombre se usa el hostname');
-    assert.equal(grafo.data.edges.length, 0);
-    const vistas = await lector.api('GET', '/api/topology/views');
-    assert.equal(vistas.status, 200);
-    for (const ruta of ['/api/data', '/api/racks', '/api/clusters', '/api/dependencies', '/api/monitoring/dashboard', '/api/monitoring/hosts', '/api/monitoring/incidents', '/api/monitoring/checks']) {
+    const panorama = await lector.api('GET', '/api/impacto');
+    assert.equal(panorama.status, 200);
+    assert.equal(panorama.data.servers.length, 1000);
+    assert.ok(panorama.data.servers.every((n) => typeof n.name === 'string' && n.name.trim()), 'todo servidor tiene un nombre visible (aunque no tenga "nombre")');
+    assert.ok(panorama.data.servers.find((n) => n.name === 'host-7'), 'sin nombre se usa el hostname');
+    assert.deepEqual(panorama.data.services, []);
+    for (const ruta of ['/api/data', '/api/racks', '/api/clusters', '/api/impacto/servidores', '/api/monitoring/dashboard', '/api/monitoring/hosts', '/api/monitoring/incidents', '/api/monitoring/checks']) {
       const r = await lector.api('GET', ruta);
       assert.equal(r.status, 200, `${ruta}: ${JSON.stringify(r.data).slice(0, 200)}`);
     }
@@ -140,21 +137,21 @@ describe('Base de datos existente (integración)', { skip: omitir || false }, ()
     assert.equal(serie.status, 200);
     assert.equal(serie.data.checks[0].points.length, 120);
     const unServidor = (await bd.query("SELECT id FROM inventory.servers WHERE nombre IS NULL LIMIT 1")).rows[0].id;
-    assert.equal((await lector.api('GET', `/api/dependencies/server/${unServidor}/impact`)).status, 200);
+    assert.equal((await lector.api('GET', `/api/impacto/simular?ids=${unServidor}`)).status, 200);
   });
 
   test('con la base vacía (sin servidores ni monitoreo) todo responde con listas vacías', async () => {
-    await bd.query('TRUNCATE inventory.servers, inventory.racks, monitoring.hosts, inventory.topology_views CASCADE');
-    const grafo = await lector.api('GET', '/api/topology/graph?includeIsolated=true');
-    assert.equal(grafo.status, 200);
-    assert.deepEqual([grafo.data.nodes.length, grafo.data.edges.length], [0, 0]);
+    await bd.query('TRUNCATE inventory.servers, inventory.racks, monitoring.hosts, inventory.services CASCADE');
+    const panorama = await lector.api('GET', '/api/impacto');
+    assert.equal(panorama.status, 200);
+    assert.deepEqual([panorama.data.servers.length, panorama.data.services.length], [0, 0]);
     const ov = await lector.api('GET', '/api/monitoring/telemetry/overview');
     assert.equal(ov.status, 200);
     assert.deepEqual(ov.data.hosts, []);
-    for (const ruta of ['/api/data', '/api/racks', '/api/topology/views', '/api/dependencies', '/api/monitoring/dashboard', '/api/monitoring/hosts']) {
+    for (const ruta of ['/api/data', '/api/racks', '/api/impacto/servidores', '/api/monitoring/dashboard', '/api/monitoring/hosts']) {
       assert.equal((await lector.api('GET', ruta)).status, 200, ruta);
     }
-    for (const ruta of ['/', '/fisicos', '/virtuales', '/dependencias', '/monitoring.html']) {
+    for (const ruta of ['/', '/fisicos', '/virtuales', '/impacto', '/monitoring.html']) {
       assert.equal((await admin.api('GET', ruta)).status, 200, ruta);
     }
   });
