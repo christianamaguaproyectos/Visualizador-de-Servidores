@@ -2,9 +2,8 @@
  * impactoService.js — Impacto de servicios.
  *
  * - Estado de monitoreo de cada servidor del inventario (también lo usan Físicos y Virtuales).
- * - Servicios (inventory.services), papel de cada servidor en ellos
- *   (inventory.service_components) y requisitos entre servidores
- *   (inventory.server_requirements).
+ * - Servicios (inventory.services) y papel de cada servidor en ellos
+ *   (inventory.service_components).
  * - Estado actual de cada servicio (con las caídas reales de Monitoreo) y simulación de caídas.
  *   El cálculo es puro y vive en impactoCalculo.js.
  *
@@ -91,13 +90,8 @@ const SQL_SERVICIOS = `
 
 const SQL_COMPONENTES = `
   SELECT id::text AS id, service_id::text AS service_id, server_id::text AS server_id, role, impact,
-         impact_detail, workaround, redundancy_group, created_by, created_at, updated_at
+         impact_detail, created_by, created_at, updated_at
   FROM inventory.service_components`;
-
-const SQL_REQUISITOS = `
-  SELECT id::text AS id, server_id::text AS server_id, required_server_id::text AS required_server_id,
-         note, created_by, created_at
-  FROM inventory.server_requirements`;
 
 /** Lecturas de varias tablas en una misma instantánea consistente */
 const LECTURA_CONSISTENTE = Object.freeze({ isolationLevel: 'REPEATABLE READ', readOnly: true });
@@ -109,12 +103,10 @@ function traducirErrorPg(err, contexto) {
     case '23505':
       if (restriccion.startsWith('services_name')) return new ConflictError('Ya existe un servicio con ese nombre');
       if (restriccion === 'uq_service_component') return new ConflictError('Ese servidor ya forma parte del servicio');
-      if (restriccion === 'uq_server_requirement') return new ConflictError('Ese requisito ya está registrado');
       return new ConflictError('Ya existe un registro con esos datos');
     case '23503':
       return new NotFoundError(restriccion.includes('service_id') ? 'Servicio' : 'Servidor');
     case '23514':
-      if (restriccion === 'chk_server_requirement_no_self') return new ValidationError('Un servidor no puede necesitarse a sí mismo');
       return new ValidationError(`Datos de ${contexto} fuera de rango`);
     case '22P02':
     case '22003':
@@ -168,27 +160,19 @@ const mapServicio = (row) => ({
 
 const mapComponente = (row) => ({
   id: row.id, serviceId: row.service_id, serverId: row.server_id, role: row.role, impact: row.impact,
-  impactDetail: row.impact_detail, workaround: row.workaround, redundancyGroup: row.redundancy_group,
-  createdBy: row.created_by, createdAt: row.created_at, updatedAt: row.updated_at,
-});
-
-const mapRequisito = (row) => ({
-  id: row.id, serverId: row.server_id, requiredServerId: row.required_server_id, note: row.note,
-  createdBy: row.created_by, createdAt: row.created_at,
+  impactDetail: row.impact_detail, createdBy: row.created_by, createdAt: row.created_at, updatedAt: row.updated_at,
 });
 
 async function leerTodo(client) {
-  const [servidores, servicios, componentes, requisitos] = await Promise.all([
+  const [servidores, servicios, componentes] = await Promise.all([
     client.query(SQL_SERVIDORES, [RE_PRIMER_TOKEN_IP]),
     client.query(`${SQL_SERVICIOS} ORDER BY name`),
     client.query(`${SQL_COMPONENTES} ORDER BY id`),
-    client.query(`${SQL_REQUISITOS} ORDER BY id`),
   ]);
   const comps = componentes.rows.map(mapComponente);
   return {
     servidores: servidores.rows.map(mapServidor),
     servicios: servicios.rows.map(mapServicio).map((s) => ({ ...s, components: comps.filter((c) => c.serviceId === s.id) })),
-    requisitos: requisitos.rows.map(mapRequisito),
   };
 }
 
@@ -199,7 +183,7 @@ export function caidasReales(servidores) {
 
 /** Resultado de una caída (real o simulada) listo para la API */
 function resultado(caidosIniciales, datos) {
-  const caidos = propagarCaida(caidosIniciales, datos.servidores, datos.requisitos);
+  const caidos = propagarCaida(caidosIniciales, datos.servidores);
   return {
     servicios: evaluarServicios(datos.servicios, caidos),
     servidoresCaidos: [...caidos].map(([id, c]) => ({ id, motivo: c.motivo, por: c.por, nivel: c.nivel })),
@@ -216,7 +200,7 @@ class ImpactoService {
   }
 
   /**
-   * Todo lo que necesita la página: servidores, servicios con sus componentes, requisitos,
+   * Todo lo que necesita la página: servidores, servicios con sus componentes,
    * VM → host y el estado actual de cada servicio con las caídas reales de Monitoreo.
    */
   async panorama() {
@@ -225,7 +209,6 @@ class ImpactoService {
       return {
         servers: datos.servidores,
         services: datos.servicios,
-        requirements: datos.requisitos,
         hosts: Object.fromEntries(hostsDeVms(datos.servidores)),
         actual: resultado(caidasReales(datos.servidores), datos),
         generatedAt: new Date().toISOString(),
@@ -299,11 +282,11 @@ class ImpactoService {
       return await withTransaction(async (client) => {
         const { rows } = await client.query(
           `INSERT INTO inventory.service_components
-             (service_id, server_id, role, impact, impact_detail, workaround, redundancy_group, created_by)
-           VALUES ($1::bigint, $2::bigint, $3, $4, $5, $6, $7, $8)
+             (service_id, server_id, role, impact, impact_detail, created_by)
+           VALUES ($1::bigint, $2::bigint, $3, $4, $5, $6)
            RETURNING id::text AS id, service_id::text AS service_id, server_id::text AS server_id, role, impact,
-                     impact_detail, workaround, redundancy_group, created_by, created_at, updated_at`,
-          [serviceId, datos.serverId, datos.role, datos.impact, datos.impactDetail, datos.workaround, datos.redundancyGroup, autor],
+                     impact_detail, created_by, created_at, updated_at`,
+          [serviceId, datos.serverId, datos.role, datos.impact, datos.impactDetail, autor],
         );
         return mapComponente(rows[0]);
       });
@@ -313,9 +296,7 @@ class ImpactoService {
   }
 
   async editarComponente(id, cambios) {
-    const columnas = {
-      role: 'role', impact: 'impact', impactDetail: 'impact_detail', workaround: 'workaround', redundancyGroup: 'redundancy_group',
-    };
+    const columnas = { role: 'role', impact: 'impact', impactDetail: 'impact_detail' };
     const sets = []; const valores = [];
     for (const [k, col] of Object.entries(columnas)) {
       if (k in cambios) { valores.push(cambios[k]); sets.push(`${col} = $${valores.length}`); }
@@ -326,7 +307,7 @@ class ImpactoService {
         const { rows } = await client.query(
           `UPDATE inventory.service_components SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${valores.length}::bigint
            RETURNING id::text AS id, service_id::text AS service_id, server_id::text AS server_id, role, impact,
-                     impact_detail, workaround, redundancy_group, created_by, created_at, updated_at`,
+                     impact_detail, created_by, created_at, updated_at`,
           valores,
         );
         if (!rows.length) throw new NotFoundError('Componente', id);
@@ -341,32 +322,6 @@ class ImpactoService {
     return withTransaction(async (client) => {
       const { rowCount } = await client.query('DELETE FROM inventory.service_components WHERE id = $1::bigint', [id]);
       if (!rowCount) throw new NotFoundError('Componente', id);
-    });
-  }
-
-  // ── Requisitos entre servidores ──────────────────────────
-
-  async crearRequisito(datos, autor) {
-    try {
-      return await withTransaction(async (client) => {
-        const { rows } = await client.query(
-          `INSERT INTO inventory.server_requirements (server_id, required_server_id, note, created_by)
-           VALUES ($1::bigint, $2::bigint, $3, $4)
-           RETURNING id::text AS id, server_id::text AS server_id, required_server_id::text AS required_server_id,
-                     note, created_by, created_at`,
-          [datos.serverId, datos.requiredServerId, datos.note, autor],
-        );
-        return mapRequisito(rows[0]);
-      });
-    } catch (err) {
-      throw traducirErrorPg(err, 'requisito');
-    }
-  }
-
-  async eliminarRequisito(id) {
-    return withTransaction(async (client) => {
-      const { rowCount } = await client.query('DELETE FROM inventory.server_requirements WHERE id = $1::bigint', [id]);
-      if (!rowCount) throw new NotFoundError('Requisito', id);
     });
   }
 }

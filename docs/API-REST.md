@@ -371,8 +371,8 @@ Qué le pasa a cada servicio (por ejemplo, JD Edwards) si cae uno de sus servido
 
 **Cómo se calcula una caída:**
 1. Caen los servidores indicados (simulación) o los que Monitoreo tiene en `DOWN`/`DEGRADED` con el host habilitado (estado actual).
-2. Cae también cada servidor que **necesita** a uno caído (requisitos, en cadena) y cada **VM** cuyo host físico cae. El host de una VM es el servidor físico cuyo nombre o hostname coincide con el campo Host de la VM, comparando solo letras y números.
-3. Cada servicio toma el efecto más grave entre sus servidores caídos: `TOTAL` → `NO_FUNCIONA`, `PARCIAL` → `PARCIAL`, `SIN_DEFINIR` → `REVISAR`, `NINGUNO` (o nada caído) → `FUNCIONA`. En un **grupo de respaldo** (`redundancyGroup`) la caída solo cuenta si caen todos los servidores del grupo.
+2. Cae también cada **VM** cuyo host físico cae. El host de una VM es el servidor físico cuyo nombre o hostname coincide con el campo Host de la VM, comparando solo letras y números.
+3. Cada servicio toma el efecto más grave entre sus servidores caídos: `TOTAL` → `NO_FUNCIONA`, `PARCIAL` → `PARCIAL`, `SIN_DEFINIR` → `REVISAR`, `NINGUNO` (o nada caído) → `FUNCIONA`.
 
 ### 📖 Panorama
 
@@ -384,8 +384,7 @@ GET /api/impacto
 ```json
 {
   "servers": [ { "id": "12", "type": "virtuales", "name": "APP-01", "ip": "10.0.0.12", "rack": "HOST-A", "application": "ERP", "status": "UP", "monitoring": { "hostId": "4", "status": "UP", "enabled": true, "changedAt": "..." } } ],
-  "services": [ { "id": "1", "name": "ERP", "description": "...", "components": [ { "id": "3", "serverId": "12", "role": "Base de datos", "impact": "TOTAL", "impactDetail": "...", "workaround": null, "redundancyGroup": null } ] } ],
-  "requirements": [ { "id": "2", "serverId": "15", "requiredServerId": "12", "note": "..." } ],
+  "services": [ { "id": "1", "name": "ERP", "description": "...", "components": [ { "id": "3", "serverId": "12", "role": "Base de datos", "impact": "TOTAL", "impactDetail": "..." } ] } ],
   "hosts": { "12": "7" },
   "actual": { "servicios": [], "servidoresCaidos": [] },
   "generatedAt": "2026-11-26T15:00:00.000Z"
@@ -407,15 +406,15 @@ No modifica nada. Hasta 200 ids. **Respuesta (200):**
     {
       "serviceId": "1", "name": "ERP", "estado": "NO_FUNCIONA", "nivel": "TOTAL",
       "componentesCaidos": [
-        { "id": "3", "serverId": "12", "role": "Base de datos", "impact": "TOTAL", "impactoEfectivo": "TOTAL", "respaldoPor": [],
+        { "id": "3", "serverId": "12", "role": "Base de datos", "impact": "TOTAL",
           "caida": { "motivo": "CAIDO", "por": null, "nivel": 0 } }
       ]
     }
   ],
-  "servidoresCaidos": [ { "id": "12", "motivo": "CAIDO", "por": null, "nivel": 0 }, { "id": "20", "motivo": "REQUIERE", "por": "12", "nivel": 1 } ]
+  "servidoresCaidos": [ { "id": "12", "motivo": "CAIDO", "por": null, "nivel": 0 }, { "id": "20", "motivo": "HOST", "por": "12", "nivel": 1 } ]
 }
 ```
-`motivo`: `CAIDO` (indicado o caído en Monitoreo), `REQUIERE` (necesita al servidor `por`) o `HOST` (VM cuyo host `por` cayó). `respaldoPor` lista los servidores del mismo grupo de respaldo que siguen en pie (entonces `impactoEfectivo` es `NINGUNO`). Sin `ids` o con un id no numérico: 400.
+`motivo`: `CAIDO` (indicado o caído en Monitoreo) o `HOST` (VM cuyo host `por` cayó). Sin `ids` o con un id no numérico: 400.
 
 ### 📖 Estado de monitoreo de cada servidor
 
@@ -441,24 +440,14 @@ POST /api/impacto/servicios/:id/componentes
   "serverId": "12",
   "role": "Base de datos",
   "impact": "TOTAL",
-  "impactDetail": "Sin la base de datos ningún módulo funciona",
-  "workaround": null,
-  "redundancyGroup": null
+  "impactDetail": "Sin la base de datos ningún módulo funciona"
 }
 → 201 { "component": {...} }
 
 PUT    /api/impacto/componentes/:id   (solo los campos enviados; serverId no se puede cambiar) → 200 { "component": {...} }
 DELETE /api/impacto/componentes/:id                                                         → 204
 ```
-`impact`: `TOTAL`, `PARCIAL`, `NINGUNO` o `SIN_DEFINIR` (por defecto). `role` hasta 200 caracteres, `impactDetail` y `workaround` hasta 2000, `redundancyGroup` hasta 60. El mismo servidor dos veces en un servicio: 409. Servidor o servicio inexistente: 404.
-
-### ➕ Requisitos entre servidores (Solo Admin)
-
-```http
-POST   /api/impacto/requisitos      { "serverId": "15", "requiredServerId": "12", "note": "..." } → 201 { "requirement": {...} }
-DELETE /api/impacto/requisitos/:id                                                              → 204
-```
-«`serverId` necesita `requiredServerId`»: si el segundo cae, el primero también. Un servidor no puede necesitarse a sí mismo (400); el mismo requisito dos veces: 409.
+`impact`: `TOTAL`, `PARCIAL`, `NINGUNO` o `SIN_DEFINIR` (por defecto). `role` hasta 200 caracteres e `impactDetail` hasta 2000. El mismo servidor dos veces en un servicio: 409. Servidor o servicio inexistente: 404.
 
 ### Página
 
@@ -809,7 +798,6 @@ updateServersBySubnet('192.168.1.');
 - `DELETE /api/racks/:id` (Eliminar rack)
 - `POST /api/impacto/servicios`, `PUT|DELETE /api/impacto/servicios/:id` (Servicios)
 - `POST /api/impacto/servicios/:id/componentes`, `PUT|DELETE /api/impacto/componentes/:id` (Servidores de un servicio)
-- `POST /api/impacto/requisitos`, `DELETE /api/impacto/requisitos/:id` (Requisitos entre servidores)
 
 ---
 
@@ -877,8 +865,6 @@ updateServersBySubnet('192.168.1.');
   role: string | null,             // Función en el servicio (máx. 200)
   impact: string,                  // TOTAL | PARCIAL | NINGUNO | SIN_DEFINIR
   impactDetail: string | null,     // Qué deja de funcionar (máx. 2000)
-  workaround: string | null,       // Alternativa o contingencia (máx. 2000)
-  redundancyGroup: string | null,  // Grupo de respaldo (máx. 60)
   createdBy: string | null,
   createdAt: string,
   updatedAt: string

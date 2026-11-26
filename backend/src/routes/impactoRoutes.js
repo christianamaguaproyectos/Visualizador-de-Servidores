@@ -23,7 +23,4 @@ impactoRouter.post('/servicios/:id/componentes', requireAdmin, c.agregarComponen
 impactoRouter.put('/componentes/:id', requireAdmin, c.editarComponente);
 impactoRouter.delete('/componentes/:id', requireAdmin, c.eliminarComponente);
 
-impactoRouter.post('/requisitos', requireAdmin, c.crearRequisito);
-impactoRouter.delete('/requisitos/:id', requireAdmin, c.eliminarRequisito);
-
 export default impactoRouter;

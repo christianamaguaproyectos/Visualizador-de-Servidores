@@ -5,7 +5,7 @@ import {
   claveEquipo, evaluarServicios, hostsDeVms, MOTIVOS, propagarCaida,
 } from '../../backend/src/services/impactoCalculo.js';
 import { SEPARADORES_IP, nombreAplicacion, nombreVisible } from '../../backend/src/services/impactoService.js';
-import { parseComponenteNuevo, parseListaIds, parseRequisitoNuevo } from '../../backend/src/dtos/impactoDto.js';
+import { parseComponenteNuevo, parseListaIds } from '../../backend/src/dtos/impactoDto.js';
 
 // Inventario de ejemplo: un host físico con dos VMs y un servidor físico suelto
 const SERVIDORES = [
@@ -26,8 +26,7 @@ const SERVICIO = {
     { id: 'c1', serverId: '2', impact: 'TOTAL', role: 'Seguridad' },
     { id: 'c2', serverId: '3', impact: 'TOTAL', role: 'Base de datos' },
     { id: 'c3', serverId: '8', impact: 'PARCIAL', role: 'Balanceador' },
-    { id: 'c4', serverId: '6', impact: 'TOTAL', redundancyGroup: 'BSSV' },
-    { id: 'c5', serverId: '7', impact: 'TOTAL', redundancyGroup: 'BSSV' },
+    { id: 'c4', serverId: '6', impact: 'NINGUNO' },
     { id: 'c6', serverId: '5', impact: 'SIN_DEFINIR' },
   ],
 };
@@ -45,44 +44,33 @@ describe('Impacto de servicios — cálculo', () => {
     assert.equal(m.has('4'), false, 'host que no existe en Físicos: sin unión');
   });
 
-  test('propagarCaida: VM cae con su host y por requisitos en cadena', () => {
-    const requisitos = [{ serverId: '5', requiredServerId: '4' }, { serverId: '4', requiredServerId: '2' }];
-    const caidos = propagarCaida(['1'], SERVIDORES, requisitos);
-    assert.deepEqual([...caidos.keys()].sort(), ['1', '2', '3', '4', '5']);
+  test('propagarCaida: las VMs caen con su host', () => {
+    const caidos = propagarCaida(['1'], SERVIDORES);
+    assert.deepEqual([...caidos.keys()].sort(), ['1', '2', '3']);
     assert.deepEqual(caidos.get('1'), { motivo: MOTIVOS.CAIDO, por: null, nivel: 0 });
-    assert.equal(caidos.get('2').motivo, MOTIVOS.HOST);
-    assert.deepEqual(caidos.get('4'), { motivo: MOTIVOS.REQUIERE, por: '2', nivel: 2 });
-    assert.deepEqual(caidos.get('5'), { motivo: MOTIVOS.REQUIERE, por: '4', nivel: 3 });
+    assert.deepEqual(caidos.get('2'), { motivo: MOTIVOS.HOST, por: '1', nivel: 1 });
   });
 
-  test('propagarCaida ignora ids inexistentes y ciclos', () => {
-    const caidos = propagarCaida(['4', '999'], SERVIDORES, [{ serverId: '5', requiredServerId: '4' }, { serverId: '4', requiredServerId: '5' }]);
-    assert.deepEqual([...caidos.keys()].sort(), ['4', '5']);
+  test('propagarCaida ignora ids inexistentes', () => {
+    const caidos = propagarCaida(['4', '999'], SERVIDORES);
+    assert.deepEqual([...caidos.keys()], ['4']);
   });
 
   test('evaluarServicios: un servidor TOTAL deja el servicio sin funcionar', () => {
-    const [r] = evaluarServicios([SERVICIO], propagarCaida(['3'], SERVIDORES, []));
+    const [r] = evaluarServicios([SERVICIO], propagarCaida(['3'], SERVIDORES));
     assert.equal(r.estado, 'NO_FUNCIONA');
     assert.equal(r.componentesCaidos[0].serverId, '3');
   });
 
   test('evaluarServicios: PARCIAL y SIN_DEFINIR', () => {
-    assert.equal(evaluarServicios([SERVICIO], propagarCaida(['8'], SERVIDORES, []))[0].estado, 'PARCIAL');
-    assert.equal(evaluarServicios([SERVICIO], propagarCaida(['5'], SERVIDORES, []))[0].estado, 'REVISAR');
-    assert.equal(evaluarServicios([SERVICIO], propagarCaida(['4'], SERVIDORES, []))[0].estado, 'FUNCIONA');
-  });
-
-  test('grupo de respaldo: con uno en pie el servicio sigue; caen los dos, no funciona', () => {
-    const [uno] = evaluarServicios([SERVICIO], propagarCaida(['6'], SERVIDORES, []));
-    assert.equal(uno.estado, 'FUNCIONA');
-    assert.equal(uno.componentesCaidos[0].impactoEfectivo, 'NINGUNO');
-    assert.deepEqual(uno.componentesCaidos[0].respaldoPor, ['7']);
-    const [dos] = evaluarServicios([SERVICIO], propagarCaida(['6', '7'], SERVIDORES, []));
-    assert.equal(dos.estado, 'NO_FUNCIONA');
+    assert.equal(evaluarServicios([SERVICIO], propagarCaida(['8'], SERVIDORES))[0].estado, 'PARCIAL');
+    assert.equal(evaluarServicios([SERVICIO], propagarCaida(['5'], SERVIDORES))[0].estado, 'REVISAR');
+    assert.equal(evaluarServicios([SERVICIO], propagarCaida(['4'], SERVIDORES))[0].estado, 'FUNCIONA');
+    assert.equal(evaluarServicios([SERVICIO], propagarCaida(['6'], SERVIDORES))[0].estado, 'FUNCIONA', 'NINGUNO: sigue');
   });
 
   test('el efecto más grave manda y los caídos van ordenados por gravedad', () => {
-    const [r] = evaluarServicios([SERVICIO], propagarCaida(['8', '2'], SERVIDORES, []));
+    const [r] = evaluarServicios([SERVICIO], propagarCaida(['8', '2'], SERVIDORES));
     assert.equal(r.estado, 'NO_FUNCIONA');
     assert.deepEqual(r.componentesCaidos.map((c) => c.serverId), ['2', '8']);
   });
@@ -105,12 +93,11 @@ describe('Impacto de servicios — utilidades', () => {
     assert.equal(nombreAplicacion('  JDE   FAT '), 'JDE FAT');
   });
 
-  test('DTO: componente, requisito y lista de ids', () => {
+  test('DTO: componente y lista de ids', () => {
     assert.deepEqual(parseComponenteNuevo({ serverId: 5, impact: 'total', role: ' Base ' }),
-      { serverId: '5', role: 'Base', impact: 'TOTAL', impactDetail: null, workaround: null, redundancyGroup: null });
+      { serverId: '5', role: 'Base', impact: 'TOTAL', impactDetail: null });
     assert.equal(parseComponenteNuevo({ serverId: '5' }).impact, 'SIN_DEFINIR');
     assert.throws(() => parseComponenteNuevo({ serverId: '5', impact: 'MUCHO' }), /impacto inválido/);
-    assert.throws(() => parseRequisitoNuevo({ serverId: '3', requiredServerId: '3' }), /sí mismo/);
     assert.deepEqual(parseListaIds('3, 1,3'), ['3', '1']);
     assert.throws(() => parseListaIds('1,x'), /entero positivo/);
   });

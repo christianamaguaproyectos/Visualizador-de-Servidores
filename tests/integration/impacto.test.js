@@ -70,7 +70,7 @@ describe('Impacto de servicios (integración)', { skip: omitir || false }, () =>
     assert.equal((await lector.api('POST', '/api/impacto/servicios', { body: { name: 'X' } })).status, 403);
   });
 
-  test('registra el servicio, sus servidores y un grupo de respaldo', async () => {
+  test('registra el servicio y sus servidores', async () => {
     const r = await admin.api('POST', '/api/impacto/servicios', { body: { name: 'ERP Prueba', description: 'Servicio de prueba' } });
     assert.equal(r.status, 201, JSON.stringify(r.data));
     servicio = r.data.service.id;
@@ -79,14 +79,11 @@ describe('Impacto de servicios (integración)', { skip: omitir || false }, () =>
 
     const comp = (body) => admin.api('POST', `/api/impacto/servicios/${servicio}/componentes`, { body });
     assert.equal((await comp({ serverId: S.seg, role: 'Seguridad', impact: 'TOTAL' })).status, 201);
-    assert.equal((await comp({ serverId: S.bdd, role: 'Base de datos', impact: 'TOTAL', workaround: 'Restaurar respaldo' })).status, 201);
-    assert.equal((await comp({ serverId: S.nodo1, impact: 'TOTAL', redundancyGroup: 'Nodos' })).status, 201);
-    assert.equal((await comp({ serverId: S.nodo2, impact: 'TOTAL', redundancyGroup: 'Nodos' })).status, 201);
+    assert.equal((await comp({ serverId: S.bdd, role: 'Base de datos', impact: 'TOTAL' })).status, 201);
+    assert.equal((await comp({ serverId: S.nodo1, impact: 'NINGUNO' })).status, 201);
+    assert.equal((await comp({ serverId: S.nodo2, impact: 'PARCIAL', impactDetail: 'Sin reportes' })).status, 201);
     assert.equal((await comp({ serverId: S.seg })).status, 409, 'el mismo servidor dos veces');
     assert.equal((await comp({ serverId: '999999999' })).status, 404);
-
-    const req = await admin.api('POST', '/api/impacto/requisitos', { body: { serverId: S.nodo2, requiredServerId: S.seg } });
-    assert.equal(req.status, 201, JSON.stringify(req.data));
   });
 
   test('panorama: estado actual con Monitoreo y VMs unidas a su host', async () => {
@@ -106,20 +103,24 @@ describe('Impacto de servicios (integración)', { skip: omitir || false }, () =>
     await sql("UPDATE monitoring.hosts SET estado_actual = 'UP' WHERE host(ip) = '198.51.100.23'");
   });
 
-  test('simulación: host, requisito y grupo de respaldo', async () => {
+  test('simulación: efecto de cada servidor y caída del host', async () => {
     const uno = await lector.api('GET', `/api/impacto/simular?ids=${S.nodo1}`);
     assert.equal(uno.status, 200);
-    assert.equal(uno.data.servicios.find((x) => x.serviceId === servicio).estado, 'FUNCIONA', 'el otro nodo sigue');
+    assert.equal(uno.data.servicios.find((x) => x.serviceId === servicio).estado, 'FUNCIONA', 'NINGUNO: sigue');
+    const dos = await lector.api('GET', `/api/impacto/simular?ids=${S.nodo2}`);
+    assert.equal(dos.data.servicios.find((x) => x.serviceId === servicio).estado, 'PARCIAL');
 
-    // Cae el host: caen SEG y BDD (VMs) y NODO2 (necesita a SEG)
+    // Cae el host: caen SEG y BDD (VMs alojadas en él)
     const host = await lector.api('GET', `/api/impacto/simular?ids=${S.host}`);
     const caidos = new Map(host.data.servidoresCaidos.map((c) => [c.id, c]));
     assert.equal(caidos.get(S.seg).motivo, 'HOST');
-    assert.equal(caidos.get(S.nodo2).motivo, 'REQUIERE');
+    assert.equal(caidos.get(S.bdd).motivo, 'HOST');
+    assert.equal(caidos.has(S.nodo2), false);
     assert.equal(host.data.servicios.find((x) => x.serviceId === servicio).estado, 'NO_FUNCIONA');
 
     assert.equal((await lector.api('GET', '/api/impacto/simular')).status, 400);
     assert.equal((await lector.api('GET', '/api/impacto/simular?ids=abc')).status, 400);
+    assert.equal((await admin.api('POST', '/api/impacto/requisitos', { body: {} })).status, 404, 'ya no existen requisitos');
   });
 
   test('editar y quitar', async () => {

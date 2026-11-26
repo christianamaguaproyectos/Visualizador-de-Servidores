@@ -39,15 +39,6 @@
       <p class="imp-vacio">Cargando…</p>
     </section>
 
-    <!-- Simulación -->
-    <aside class="imp-simulacion" aria-labelledby="imp-sim-titulo">
-      <h2 id="imp-sim-titulo">Simular caída</h2>
-      <p class="imp-ayuda">Elige uno o varios servidores (también hosts ESXi o Power) y mira qué le pasa a cada servicio. No modifica nada.</p>
-      <label class="imp-etiqueta" for="imp-sim-buscar">Agregar servidor</label>
-      <input type="search" id="imp-sim-buscar" class="imp-input" list="imp-lista-servidores" placeholder="Nombre o IP…" autocomplete="off">
-      <div class="imp-sim-elegidos" id="imp-sim-elegidos" aria-label="Servidores simulados"></div>
-      <div class="imp-sim-resultado" id="imp-sim-resultado"></div>
-    </aside>
   </main>
 
   <datalist id="imp-lista-servidores"></datalist>
@@ -84,28 +75,6 @@
       </select>
       <label class="imp-etiqueta" for="imp-comp-detalle">Qué deja de funcionar</label>
       <textarea class="imp-input" id="imp-comp-detalle" maxlength="2000" rows="2"></textarea>
-      <label class="imp-etiqueta" for="imp-comp-alternativa">Alternativa o contingencia</label>
-      <textarea class="imp-input" id="imp-comp-alternativa" maxlength="2000" rows="2"></textarea>
-      <label class="imp-etiqueta" for="imp-comp-grupo">Grupo de respaldo (opcional)</label>
-      <input class="imp-input" id="imp-comp-grupo" maxlength="60" placeholder="Ej.: BSSV producción">
-      <p class="imp-ayuda">Servidores redundantes llevan el mismo grupo: el servicio solo se afecta si caen todos los del grupo.</p>
-      <div class="imp-form__acciones">
-        <button type="button" class="btn btn-secondary" data-cerrar>Cancelar</button>
-        <button type="submit" class="btn btn-primary">Guardar</button>
-      </div>
-    </form>
-  </dialog>
-
-  <!-- Formulario de requisito -->
-  <dialog class="imp-dialogo" id="imp-dialogo-requisito" aria-labelledby="imp-dialogo-requisito-titulo">
-    <form method="dialog" class="imp-form" id="imp-form-requisito">
-      <h2 id="imp-dialogo-requisito-titulo">Nuevo requisito</h2>
-      <label class="imp-etiqueta" for="imp-req-servidor">Servidor</label>
-      <input class="imp-input" id="imp-req-servidor" list="imp-lista-servidores" placeholder="Nombre o IP…" autocomplete="off" required>
-      <label class="imp-etiqueta" for="imp-req-necesita">necesita para funcionar a</label>
-      <input class="imp-input" id="imp-req-necesita" list="imp-lista-servidores" placeholder="Nombre o IP…" autocomplete="off" required>
-      <label class="imp-etiqueta" for="imp-req-nota">Nota (opcional)</label>
-      <textarea class="imp-input" id="imp-req-nota" maxlength="2000" rows="2"></textarea>
       <div class="imp-form__acciones">
         <button type="button" class="btn btn-secondary" data-cerrar>Cancelar</button>
         <button type="submit" class="btn btn-primary">Guardar</button>

@@ -3,7 +3,7 @@
  *
  * Muestra cada servicio con sus servidores, la función de cada uno y qué le pasa al servicio
  * si cae; el estado actual según Monitoreo; y una simulación de caídas (no modifica nada).
- * Los administradores registran servicios, servidores del servicio y requisitos entre servidores.
+ * Los administradores registran servicios y los servidores de cada servicio.
  * El DOM se construye con nodos de texto (nunca innerHTML con datos).
  */
 import { apiJson } from '../dominios/ui-system/apiFetch.js';
@@ -112,7 +112,6 @@ function pildoraEstado(estado) {
 
 const MOTIVO = {
   CAIDO: () => 'caído',
-  REQUIERE: (por) => `cae porque necesita ${nombre(por)}`,
   HOST: (por) => `cae con su host ${nombre(por)}`,
 };
 const textoCaida = (c) => (MOTIVO[c.motivo] || MOTIVO.CAIDO)(c.por);
@@ -156,7 +155,6 @@ function estadoActual(serviceId) {
 function render() {
   renderLista();
   renderDetalle();
-  renderSimulacion();
 }
 
 function renderLista() {
@@ -189,8 +187,6 @@ function renderDetalle() {
   }
   const actual = estadoActual(s.id);
   const comps = [...s.components].sort((a, b) => nombre(a.serverId).localeCompare(nombre(b.serverId), 'es', { numeric: true }));
-  const idsServicio = new Set(comps.map((c) => String(c.serverId)));
-  const requisitos = st.datos.requirements.filter((r) => idsServicio.has(String(r.serverId)) || idsServicio.has(String(r.requiredServerId)));
 
   cont.replaceChildren(...[
     h('div', { class: 'imp-detalle__cabecera' },
@@ -206,16 +202,6 @@ function renderDetalle() {
       st.esAdmin ? h('button', { type: 'button', class: 'btn btn-primary imp-btn-sm', onClick: () => abrirComponente(s, null) }, '+ Agregar servidor') : null),
     bloqueSimulacionServicio(s),
     comps.length ? tablaComponentes(s, comps) : h('p', { class: 'imp-vacio' }, 'Este servicio todavía no tiene servidores.'),
-    h('div', { class: 'imp-seccion__cabecera' },
-      h('h3', {}, `Requisitos entre servidores (${requisitos.length})`),
-      st.esAdmin ? h('button', { type: 'button', class: 'btn btn-secondary imp-btn-sm', onClick: () => abrirRequisito() }, '+ Agregar requisito') : null),
-    h('p', { class: 'imp-ayuda' }, 'Si un servidor necesita a otro, cae cuando el otro cae. Las máquinas virtuales caen además con su host.'),
-    requisitos.length
-      ? h('ul', { class: 'imp-requisitos' }, requisitos.map((r) => h('li', {},
-        h('strong', {}, nombre(r.serverId)), ' necesita ', h('strong', {}, nombre(r.requiredServerId)),
-        r.note ? h('span', { class: 'imp-requisitos__nota' }, ` — ${r.note}`) : null,
-        st.esAdmin ? h('button', { type: 'button', class: 'imp-enlace imp-enlace--peligro', onClick: () => eliminarRequisito(r) }, 'Quitar') : null)))
-      : h('p', { class: 'imp-vacio' }, 'Sin requisitos registrados.'),
   ].filter(Boolean));
 }
 
@@ -233,11 +219,8 @@ function bloqueEstadoActual(actual) {
 function itemCaida(c) {
   return h('li', {},
     h('strong', {}, nombre(c.serverId)), c.role ? ` (${c.role})` : '', ' — ', textoCaida(c.caida), '. ',
-    c.respaldoPor?.length
-      ? h('span', { class: 'imp-nivel imp-nivel--ninguno' }, `Sigue por ${c.respaldoPor.map(nombre).join(', ')}`)
-      : pildoraNivel(c.impact),
-    !c.respaldoPor?.length && c.impactDetail ? h('span', { class: 'imp-lista-caidas__detalle' }, ` ${c.impactDetail}`) : null,
-    !c.respaldoPor?.length && c.workaround ? h('span', { class: 'imp-lista-caidas__alt' }, ` Alternativa: ${c.workaround}`) : null);
+    pildoraNivel(c.impact),
+    c.impactDetail ? h('span', { class: 'imp-lista-caidas__detalle' }, ` ${c.impactDetail}`) : null);
 }
 
 /** Resultado de la simulación para un servicio (null si no se simula nada) */
@@ -248,9 +231,6 @@ function bloqueSimulacionServicio(s) {
   const sim = simulacionDe(s.id);
   if (!sim) return null;
   const e = ESTADO_SERVICIO[sim.estado] || ESTADO_SERVICIO.FUNCIONA;
-  const causa = sim.componentesCaidos.filter((c) => !c.respaldoPor?.length && c.impactoEfectivo !== 'NINGUNO');
-  const conAlternativa = sim.componentesCaidos.filter((c) => c.workaround && !c.respaldoPor?.length);
-  const conRespaldo = sim.componentesCaidos.filter((c) => c.respaldoPor?.length);
   // Qué sigue en pie del servicio (si el servicio no cae del todo)
   const idsCaidos = new Set(sim.componentesCaidos.map((c) => String(c.serverId)));
   const enPie = sim.estado === 'NO_FUNCIONA' ? [] : (s.components || []).filter((c) => !idsCaidos.has(String(c.serverId)));
@@ -263,46 +243,33 @@ function bloqueSimulacionServicio(s) {
   return h('div', { class: `imp-sim-aviso imp-sim-aviso--${e.clase}`, role: 'status' },
     h('p', { class: 'imp-sim-aviso__titulo' }, h('span', { class: 'imp-sim-aviso__etq' }, 'Simulación'), titulo),
     sim.componentesCaidos.length
-      ? h('p', { class: 'imp-sim-aviso__texto' }, causa.length
-        ? `Por la caída de ${causa.map((c) => nombre(c.serverId)).join(', ')}.`
-        : `Cae ${sim.componentesCaidos.map((c) => nombre(c.serverId)).join(', ')}, pero el servicio sigue por su respaldo.`)
+      ? h('p', { class: 'imp-sim-aviso__texto' }, `Por la caída de ${sim.componentesCaidos.map((c) => nombre(c.serverId)).join(', ')}.`)
       : h('p', { class: 'imp-sim-aviso__texto' }, 'Ningún servidor de este servicio cae con la simulación.'),
-    // Lo que se puede hacer: respaldo que entra en servicio y alternativas registradas
-    ...conRespaldo.map((c) => h('p', { class: 'imp-sim-aviso__ok' },
-      h('strong', {}, 'Se puede seguir operando: '), `${c.respaldoPor.map(nombre).join(', ')} atiende en lugar de ${nombre(c.serverId)} (respaldo).`)),
-    ...conAlternativa.map((c) => h('p', { class: 'imp-sim-aviso__alt' }, h('strong', {}, `Se puede realizar (${nombre(c.serverId)}): `), c.workaround)),
     enPie.length ? h('p', { class: 'imp-sim-aviso__texto' }, h('strong', {}, 'Siguen funcionando: '), enPie.map((c) => nombre(c.serverId)).join(', '), '.') : null,
     h('button', { type: 'button', class: 'imp-enlace', onClick: () => { st.simulados = []; simular(); } }, 'Quitar simulación'));
 }
 
-/** Una tarjeta por servidor: qué hace, qué pasa si cae, qué necesita y cómo está ahora */
+/** Una tarjeta por servidor: qué hace, qué pasa si cae y cómo está ahora */
 function tablaComponentes(s, comps) {
-  const necesita = (id) => st.datos.requirements.filter((r) => String(r.serverId) === String(id)).map((r) => nombre(r.requiredServerId));
   const sim = simulacionDe(s.id);
   const caidos = new Map((sim?.componentesCaidos || []).map((c) => [String(c.serverId), c]));
   return h('ul', { class: 'imp-comps' }, comps.map((c) => {
     const sv = servidor(c.serverId);
     const simulado = st.simulados.includes(String(c.serverId));
-    const req = necesita(c.serverId);
     // Con la simulación: rojo lo que cae (o todo, si el servicio no funciona) y verde lo que sigue
     const caida = caidos.get(String(c.serverId));
     const sinServicio = !caida && sim?.estado === 'NO_FUNCIONA';
-    const reemplazaA = sim ? sim.componentesCaidos.filter((x) => x.respaldoPor?.includes(String(c.serverId))) : [];
     let claseSim = '';
     let etiquetaSim = null;
     if (caida) {
       claseSim = ' es-caido';
-      etiquetaSim = caida.respaldoPor?.length
-        ? `Caído (simulación) · lo reemplaza ${caida.respaldoPor.map(nombre).join(', ')}`
-        : `Caído (simulación)${caida.caida.motivo === 'CAIDO' ? '' : ` · ${textoCaida(caida.caida)}`}`;
+      etiquetaSim = `Caído (simulación)${caida.caida.motivo === 'CAIDO' ? '' : ` · ${textoCaida(caida.caida)}`}`;
     } else if (sinServicio) {
       claseSim = ' es-sin-servicio';
       etiquetaSim = `Sin servicio: ${s.name} no funciona`;
     } else if (sim) {
       claseSim = ' es-funciona';
-      etiquetaSim = reemplazaA.length
-        ? `Funciona · atiende en lugar de ${reemplazaA.map((x) => nombre(x.serverId)).join(', ')}`
-        : 'Funciona';
+      etiquetaSim = 'Funciona';
     }
     return h('li', { class: `imp-comp imp-comp--${(NIVEL[c.impact] || NIVEL.SIN_DEFINIR).clase}${claseSim}` },
       etiquetaSim ? h('p', { class: 'imp-comp__sim' }, etiquetaSim) : null,
@@ -313,11 +280,8 @@ function tablaComponentes(s, comps) {
         pildoraMonitoreo(sv)),
       h('p', { class: 'imp-comp__rol' }, c.role || 'Función sin describir'),
       h('div', { class: 'imp-comp__si-cae' },
-        h('span', { class: 'imp-comp__etq' }, 'Si cae:'), pildoraNivel(c.impact),
-        c.redundancyGroup ? h('span', { class: 'imp-grupo', title: 'Servidores redundantes: el servicio solo se afecta si caen todos los del grupo' }, `Respaldo: ${c.redundancyGroup}`) : null),
+        h('span', { class: 'imp-comp__etq' }, 'Si cae:'), pildoraNivel(c.impact)),
       c.impactDetail ? h('p', { class: 'imp-comp__texto' }, c.impactDetail) : null,
-      c.workaround ? h('p', { class: `imp-comp__alt${caida && !caida.respaldoPor?.length ? ' es-destacada' : ''}` }, h('strong', {}, 'Alternativa: '), c.workaround) : null,
-      req.length ? h('p', { class: 'imp-comp__texto' }, h('strong', {}, 'Necesita: '), req.join(', ')) : null,
       h('div', { class: 'imp-comp__acciones' },
         h('button', {
           type: 'button', class: `btn ${simulado ? 'btn-danger' : 'btn-secondary'} imp-btn-sm`, 'aria-pressed': simulado ? 'true' : 'false',
@@ -352,46 +316,6 @@ async function simular() {
     if (mia === peticionSim) toast(err?.message || 'No se pudo simular', 'error');
   }
 }
-
-function renderSimulacion() {
-  // Node.replaceChildren escribiría «null» como texto: solo se pasan nodos
-  $('#imp-sim-elegidos').replaceChildren(...st.simulados.map((id) => h('span', { class: 'imp-chip' },
-    nombre(id),
-    h('button', { type: 'button', class: 'imp-chip__quitar', 'aria-label': `Quitar ${nombre(id)}`, title: 'Quitar', onClick: () => alternarSimulado(id) }, '×'))),
-  ...(st.simulados.length > 1 ? [h('button', { type: 'button', class: 'imp-enlace', onClick: () => { st.simulados = []; simular(); } }, 'Limpiar todo')] : []));
-
-  const cont = $('#imp-sim-resultado');
-  const r = st.simulacion;
-  if (!r) {
-    cont.replaceChildren(h('p', { class: 'imp-vacio' }, 'Sin servidores simulados. Usa el buscador o el botón «Simular caída» de cada servidor.'));
-    return;
-  }
-  // Primero el servicio elegido, luego los demás afectados
-  const orden = [...r.servicios].sort((a, b) => (b.serviceId === st.servicioSel) - (a.serviceId === st.servicioSel)
-    || (a.estado === 'FUNCIONA') - (b.estado === 'FUNCIONA'));
-  const afectados = orden.filter((x) => x.componentesCaidos.length);
-  const sinEfecto = orden.filter((x) => !x.componentesCaidos.length);
-  const enServicios = new Set(st.datos.services.flatMap((s) => s.components.map((c) => String(c.serverId))));
-  const otros = r.servidoresCaidos.filter((c) => !enServicios.has(String(c.id)));
-
-  cont.replaceChildren(...[
-    afectados.length ? null : h('p', { class: 'imp-vacio' }, 'Ningún servicio registrado se afecta.'),
-    ...afectados.map((x) => h('div', { class: `imp-sim-servicio imp-sim-servicio--${(ESTADO_SERVICIO[x.estado] || ESTADO_SERVICIO.FUNCIONA).clase}` },
-      h('p', { class: 'imp-sim-servicio__titulo' }, h('strong', {}, x.name), pildoraEstado(x.estado)),
-      h('ul', { class: 'imp-lista-caidas' }, x.componentesCaidos.map(itemCaida)))),
-    sinEfecto.length ? h('p', { class: 'imp-ayuda' }, `Sin efecto: ${sinEfecto.map((x) => x.name).join(', ')}.`) : null,
-    otros.length ? h('details', { class: 'imp-otros' },
-      h('summary', {}, `Otros servidores que caen (${otros.length})`),
-      h('ul', {}, otros.map((c) => h('li', {}, h('strong', {}, nombre(c.id)), ` — ${textoCaida(c)}`)))) : null,
-  ].filter(Boolean));
-}
-
-$('#imp-sim-buscar').addEventListener('change', (ev) => {
-  const id = idDesdeTexto(ev.target.value);
-  if (!id) { toast('Elige un servidor de la lista', 'warning'); return; }
-  ev.target.value = '';
-  if (!st.simulados.includes(String(id))) alternarSimulado(id);
-});
 
 // ── Formularios (administradores) ──────────────────────────────────────────
 function abrirDialogo(dialogo) {
@@ -443,8 +367,6 @@ function abrirComponente(s, c) {
   $('#imp-comp-rol').value = c?.role || '';
   $('#imp-comp-impacto').value = c?.impact || 'SIN_DEFINIR';
   $('#imp-comp-detalle').value = c?.impactDetail || '';
-  $('#imp-comp-alternativa').value = c?.workaround || '';
-  $('#imp-comp-grupo').value = c?.redundancyGroup || '';
   abrirDialogo($('#imp-dialogo-componente'));
 }
 
@@ -454,8 +376,6 @@ $('#imp-form-componente').addEventListener('submit', async (ev) => {
     role: $('#imp-comp-rol').value,
     impact: $('#imp-comp-impacto').value,
     impactDetail: $('#imp-comp-detalle').value,
-    workaround: $('#imp-comp-alternativa').value,
-    redundancyGroup: $('#imp-comp-grupo').value,
   };
   try {
     const { id, serviceId } = st.editando;
@@ -477,35 +397,6 @@ async function eliminarComponente(c) {
   if (!ok) return;
   try {
     await apiJson(`/api/impacto/componentes/${enc(c.id)}`, { method: 'DELETE' });
-    await cargar();
-  } catch (err) { toast(err?.message || 'No se pudo quitar', 'error'); }
-}
-
-function abrirRequisito() {
-  $('#imp-req-servidor').value = '';
-  $('#imp-req-necesita').value = '';
-  $('#imp-req-nota').value = '';
-  abrirDialogo($('#imp-dialogo-requisito'));
-}
-
-$('#imp-form-requisito').addEventListener('submit', async (ev) => {
-  ev.preventDefault();
-  const serverId = idDesdeTexto($('#imp-req-servidor').value);
-  const requiredServerId = idDesdeTexto($('#imp-req-necesita').value);
-  if (!serverId || !requiredServerId) { toast('Elige los dos servidores de la lista', 'warning'); return; }
-  try {
-    await apiJson('/api/impacto/requisitos', json('POST', { serverId, requiredServerId, note: $('#imp-req-nota').value }));
-    $('#imp-dialogo-requisito').close();
-    toast('Requisito guardado', 'success', 2500);
-    await cargar();
-  } catch (err) { toast(err?.message || 'No se pudo guardar', 'error'); }
-});
-
-async function eliminarRequisito(r) {
-  const ok = await confirmAction({ title: 'Quitar requisito', message: `¿Quitar «${nombre(r.serverId)} necesita ${nombre(r.requiredServerId)}»?`, confirmText: 'Quitar' });
-  if (!ok) return;
-  try {
-    await apiJson(`/api/impacto/requisitos/${enc(r.id)}`, { method: 'DELETE' });
     await cargar();
   } catch (err) { toast(err?.message || 'No se pudo quitar', 'error'); }
 }

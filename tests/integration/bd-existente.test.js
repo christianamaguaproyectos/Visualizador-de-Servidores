@@ -77,7 +77,7 @@ describe('Base de datos existente (integración)', { skip: omitir || false }, ()
 
   test('revisión sin --aplicar: informa lo que falta y no cambia nada', async () => {
     const faltan = await revisar(bd);
-    for (const esperado of ['tabla inventory.services', 'tabla inventory.service_components', 'tabla inventory.server_requirements', 'columna inventory.servers.rack_position',
+    for (const esperado of ['tabla inventory.services', 'tabla inventory.service_components', 'columna inventory.servers.rack_position',
       'columna inventory.racks.type', 'columna inventory.servers.zabbix', 'índice monitoring.check_runs_check_time_idx']) {
       assert.ok(faltan.includes(esperado), `debería faltar ${esperado}: ${faltan.join(', ')}`);
     }

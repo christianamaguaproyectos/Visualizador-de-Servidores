@@ -34,8 +34,7 @@ export const TABLAS_REQUERIDAS = [
   ['inventory', 'servers', ['id', 'type', 'identity_key', 'rack_id', 'nombre', 'ip', 'estado', 'rack_position', 'rack_units', 'storage', 'zabbix']],
   ['inventory', 'virtual_clusters', ['id', 'key', 'name']],
   ['inventory', 'services', ['id', 'name']],
-  ['inventory', 'service_components', ['id', 'service_id', 'server_id', 'role', 'impact', 'impact_detail', 'workaround', 'redundancy_group']],
-  ['inventory', 'server_requirements', ['id', 'server_id', 'required_server_id']],
+  ['inventory', 'service_components', ['id', 'service_id', 'server_id', 'role', 'impact', 'impact_detail']],
   ['monitoring', 'hosts', ['id', 'name', 'ip', 'rack', 'estado_actual']],
   ['monitoring', 'checks', ['id', 'host_id', 'kind', 'enabled']],
   ['monitoring', 'check_runs', ['time', 'check_id', 'host_id', 'status', 'latency_ms']],
@@ -52,7 +51,6 @@ export const INDICES_REQUERIDOS = [
   ['monitoring', 'check_runs_host_time_idx'],
   ['monitoring', 'check_runs_check_time_idx'],
   ['inventory', 'idx_service_components_server'],
-  ['inventory', 'idx_server_requirements_required'],
 ];
 
 export function scriptsEnOrden() {

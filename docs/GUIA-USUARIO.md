@@ -197,25 +197,20 @@ Menú lateral → **Impacto de servicios** (o la tarjeta del mismo nombre en Ini
 - Al elegir un servicio se ve una tarjeta por cada uno de sus servidores, con:
   - **Función** en el servicio (por ejemplo, *Base de datos de JD Edwards*);
   - **Si cae**: *No funciona* (cae todo el servicio), *Funciona parcial*, *Sigue funcionando* o *Sin definir* (falta confirmarlo con el equipo responsable);
-  - **Qué deja de funcionar** y la **alternativa** o contingencia, si existe;
-  - **Necesita**: otros servidores sin los que este no funciona;
+  - **Qué deja de funcionar**;
   - **Ahora**: estado de Monitoreo (*En línea*, *Caído*, *Sin monitoreo*…).
-- **Grupo de respaldo:** servidores redundantes llevan el mismo grupo (por ejemplo, dos nodos BSSV). Si cae uno, el servicio sigue por el otro; solo se afecta si caen todos los del grupo.
-- **Requisitos entre servidores:** «A necesita B» significa que si B cae, A también cae (por ejemplo, *SRVNFSSYN necesita SRVNFS*).
 - **Máquinas virtuales y su host:** una VM cae con el servidor físico donde corre. El host se reconoce porque el campo **Host** de la VM coincide con el nombre de un servidor de **Servidores Físicos** (sin distinguir mayúsculas, guiones ni espacios). Si no coincide, la tarjeta lo indica (*ese host no está en Físicos*).
 
 ### Simular una caída
 
-- Pulsa **Simular caída** en la tarjeta de un servidor, o escribe cualquier servidor (también un host ESXi o Power) en **Agregar servidor** del panel derecho. Se pueden simular varios a la vez.
-- El panel muestra, por servicio, el resultado (*No funciona*, *Funciona parcial*…) y cada servidor que cae con el motivo: *caído*, *cae porque necesita X* o *cae con su host X*. Si un servidor tiene respaldo, se indica *Sigue por …*.
-- **Otros servidores que caen** lista los que caen pero no forman parte de ningún servicio registrado.
-- La simulación no modifica datos ni envía alertas. **Quitar simulación**, la **×** de cada servidor o **Limpiar todo** la deshacen.
+- Pulsa **Simular caída** en la tarjeta de un servidor. Se pueden simular varios a la vez.
+- Sobre las tarjetas aparece el resultado del servicio (*No funciona*, *Funciona parcial*…). Las tarjetas se pintan de rojo si el servidor cae (o todas, si el servicio no funciona) y de verde si siguen funcionando.
+- La simulación no modifica datos ni envía alertas. **Quitar simulación** la deshace.
 
 ### Registrar la información (administradores)
 
 - **+ Nuevo** crea un servicio; **Editar** y **Eliminar** lo modifican. Eliminar un servicio no toca los servidores del inventario.
-- **+ Agregar servidor** añade un servidor al servicio: se elige de la lista (nombre · IP · host) y se completan su función, qué pasa si cae, qué deja de funcionar, la alternativa y, si corresponde, el grupo de respaldo.
-- **+ Agregar requisito** registra que un servidor necesita a otro.
+- **+ Agregar servidor** añade un servidor al servicio: se elige de la lista (nombre · IP · host) y se completan su función, qué pasa si cae y qué deja de funcionar.
 - El estado de Monitoreo se actualiza solo cada 30 segundos mientras la página está abierta.
 
 ## Gestión de Usuarios (Solo Superadmin)

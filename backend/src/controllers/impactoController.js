@@ -6,7 +6,7 @@
 
 import impactoService from '../services/impactoService.js';
 import {
-  parseComponenteCambios, parseComponenteNuevo, parseId, parseListaIds, parseRequisitoNuevo,
+  parseComponenteCambios, parseComponenteNuevo, parseId, parseListaIds,
   parseServicioCambios, parseServicioNuevo, usuarioSesion,
 } from '../dtos/impactoDto.js';
 import { ValidationError } from '../middleware/errorHandler.js';
@@ -26,7 +26,7 @@ class ImpactoController {
     res.json({ servers: await impactoService.listarServidores() });
   });
 
-  /** GET /api/impacto — servicios, componentes, requisitos y estado actual */
+  /** GET /api/impacto — servicios, componentes y estado actual */
   panorama = manejar(async (req, res) => {
     res.json(await impactoService.panorama());
   });
@@ -62,15 +62,6 @@ class ImpactoController {
 
   eliminarComponente = manejar(async (req, res) => {
     await impactoService.eliminarComponente(parseId(req.params.id));
-    res.status(204).end();
-  });
-
-  crearRequisito = manejar(async (req, res) => {
-    res.status(201).json({ requirement: await impactoService.crearRequisito(parseRequisitoNuevo(req.body), usuarioSesion(req)) });
-  });
-
-  eliminarRequisito = manejar(async (req, res) => {
-    await impactoService.eliminarRequisito(parseId(req.params.id));
     res.status(204).end();
   });
 }

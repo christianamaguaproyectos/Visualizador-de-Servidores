@@ -115,16 +115,16 @@ Funciones auxiliares puras:
 - Reutilizables en toda la aplicación
 
 ### **Módulo de Impacto de servicios**
-Qué le pasa a cada servicio (por ejemplo, JD Edwards) si cae uno de sus servidores: papel de cada servidor en el servicio, requisitos entre servidores, estado actual según Monitoreo y simulación de caídas. Sigue la misma separación por capas:
+Qué le pasa a cada servicio (por ejemplo, JD Edwards) si cae uno de sus servidores: papel de cada servidor en el servicio, estado actual según Monitoreo y simulación de caídas. Sigue la misma separación por capas:
 
 | Pieza | Archivo | Responsabilidad |
 |-------|---------|-----------------|
 | Rutas | `backend/src/routes/impactoRoutes.js` | `/api/impacto`; lectura y simulación para usuarios autenticados, escritura con `requireAdmin` (+ CSRF global) |
 | Controlador | `backend/src/controllers/impactoController.js` | Valida la entrada, llama al servicio y delega los errores a `errorHandler` |
 | Validación | `backend/src/dtos/impactoDto.js` | Funciones puras de validación y normalización (IDs, nivel de impacto, textos, límites) |
-| Servicio | `backend/src/services/impactoService.js` | Acceso a PostgreSQL con el pool compartido y transacciones; cruce servidor ↔ host de monitoreo; CRUD de servicios, componentes y requisitos |
-| Cálculo | `backend/src/services/impactoCalculo.js` | Lógica **pura** (sin BD): propagación de la caída (requisitos y VM → host), grupos de respaldo y estado de cada servicio; probada con pruebas unitarias |
-| Esquema | `scripts/sql/08-schema.impacto.sql` + `backend/prisma/schema.prisma` | Tablas `inventory.services`, `inventory.service_components` e `inventory.server_requirements` |
+| Servicio | `backend/src/services/impactoService.js` | Acceso a PostgreSQL con el pool compartido y transacciones; cruce servidor ↔ host de monitoreo; CRUD de servicios y componentes |
+| Cálculo | `backend/src/services/impactoCalculo.js` | Lógica **pura** (sin BD): propagación de la caída (VM → host) y estado de cada servicio; probada con pruebas unitarias |
+| Esquema | `scripts/sql/08-schema.impacto.sql` + `backend/prisma/schema.prisma` | Tablas `inventory.services` e `inventory.service_components` |
 
 Endpoints: [API-REST.md](./API-REST.md#️-impacto-de-servicios).
 

@@ -14,7 +14,6 @@ export const LIMITES = Object.freeze({
   nombre: 120,
   descripcion: 1000,
   papel: 200,
-  grupo: 60,
   texto: 2000,
   usuario: 120,
   maxSimulados: 200,
@@ -107,8 +106,6 @@ function camposComponente(body, { parcial }) {
   if (!parcial || tiene(body, 'role')) c.role = limpiarTexto(body.role, { campo: 'role', max: LIMITES.papel });
   if (!parcial || tiene(body, 'impact')) c.impact = body.impact === undefined && !parcial ? 'SIN_DEFINIR' : parseImpacto(body.impact);
   if (!parcial || tiene(body, 'impactDetail')) c.impactDetail = limpiarTexto(body.impactDetail, { campo: 'impactDetail', max: LIMITES.texto, multilinea: true });
-  if (!parcial || tiene(body, 'workaround')) c.workaround = limpiarTexto(body.workaround, { campo: 'workaround', max: LIMITES.texto, multilinea: true });
-  if (!parcial || tiene(body, 'redundancyGroup')) c.redundancyGroup = limpiarTexto(body.redundancyGroup, { campo: 'redundancyGroup', max: LIMITES.grupo });
   return c;
 }
 
@@ -125,15 +122,6 @@ export function parseComponenteCambios(body) {
   const c = camposComponente(body, { parcial: true });
   if (!Object.keys(c).length) throw new ValidationError('No hay cambios que aplicar');
   return c;
-}
-
-/** POST /api/impacto/requisitos */
-export function parseRequisitoNuevo(body) {
-  exigirObjeto(body);
-  const serverId = parseId(body.serverId, 'serverId');
-  const requiredServerId = parseId(body.requiredServerId, 'requiredServerId');
-  if (serverId === requiredServerId) throw new ValidationError('Un servidor no puede necesitarse a sí mismo');
-  return { serverId, requiredServerId, note: limpiarTexto(body.note, { campo: 'note', max: LIMITES.texto, multilinea: true }) };
 }
 
 /** ?ids=1,2,3 → lista de IDs sin repetir */

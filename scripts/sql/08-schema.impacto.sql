@@ -23,9 +23,6 @@ CREATE TABLE IF NOT EXISTS inventory.service_components (
   role VARCHAR(200),
   impact VARCHAR(20) NOT NULL DEFAULT 'SIN_DEFINIR',
   impact_detail TEXT,
-  workaround TEXT,
-  -- Servidores redundantes entre sí (mismo texto): el servicio solo se afecta si caen TODOS los del grupo
-  redundancy_group VARCHAR(60),
   created_by VARCHAR(120),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -34,15 +31,3 @@ CREATE TABLE IF NOT EXISTS inventory.service_components (
 );
 CREATE INDEX IF NOT EXISTS idx_service_components_server ON inventory.service_components (server_id);
 
--- "server_id necesita required_server_id para funcionar": si el segundo cae, el primero también
-CREATE TABLE IF NOT EXISTS inventory.server_requirements (
-  id BIGSERIAL PRIMARY KEY,
-  server_id BIGINT NOT NULL REFERENCES inventory.servers(id) ON DELETE CASCADE,
-  required_server_id BIGINT NOT NULL REFERENCES inventory.servers(id) ON DELETE CASCADE,
-  note TEXT,
-  created_by VARCHAR(120),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT uq_server_requirement UNIQUE (server_id, required_server_id),
-  CONSTRAINT chk_server_requirement_no_self CHECK (server_id <> required_server_id)
-);
-CREATE INDEX IF NOT EXISTS idx_server_requirements_required ON inventory.server_requirements (required_server_id);

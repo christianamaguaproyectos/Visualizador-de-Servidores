@@ -1,15 +1,11 @@
 /**
  * impactoCalculo.js — Cálculo PURO del impacto de una caída (sin base de datos).
  *
- * Una caída se propaga por dos caminos:
- *   1) Requisitos registrados: "A necesita B" → si B cae, A también cae.
- *   2) Alojamiento: una máquina virtual cae con el servidor físico donde corre. El host se
- *      reconoce porque el campo Host de la VM (rack_norm) coincide con el nombre o el hostname
- *      de un servidor físico, comparando solo letras y números (sin mayúsculas, guiones ni espacios).
+ * Una máquina virtual cae con el servidor físico donde corre. El host se reconoce porque el
+ * campo Host de la VM (rack_norm) coincide con el nombre o el hostname de un servidor físico,
+ * comparando solo letras y números (sin mayúsculas, guiones ni espacios).
  *
- * Después, cada servicio toma el efecto más grave entre sus servidores caídos. En un grupo de
- * respaldo (servidores redundantes, p. ej. dos nodos en activo-pasivo) la caída solo cuenta
- * cuando caen todos los del grupo; mientras quede uno en pie, el servicio sigue por él:
+ * Después, cada servicio toma el efecto más grave entre sus servidores caídos:
  *   TOTAL → NO_FUNCIONA · PARCIAL → PARCIAL · SIN_DEFINIR → REVISAR · NINGUNO (o nada caído) → FUNCIONA
  */
 
@@ -19,7 +15,7 @@ const GRAVEDAD = Object.freeze({ TOTAL: 3, PARCIAL: 2, SIN_DEFINIR: 1, NINGUNO: 
 const ESTADO_POR_NIVEL = Object.freeze({ TOTAL: 'NO_FUNCIONA', PARCIAL: 'PARCIAL', SIN_DEFINIR: 'REVISAR', NINGUNO: 'FUNCIONA' });
 
 /** Motivo por el que un servidor queda caído en el cálculo */
-export const MOTIVOS = Object.freeze({ CAIDO: 'CAIDO', REQUIERE: 'REQUIERE', HOST: 'HOST' });
+export const MOTIVOS = Object.freeze({ CAIDO: 'CAIDO', HOST: 'HOST' });
 
 /** Clave de comparación de nombres de equipo: solo letras y números, en mayúsculas */
 export function claveEquipo(texto) {
@@ -55,18 +51,16 @@ export function hostsDeVms(servidores) {
  * Propaga una caída. Devuelve cada servidor que cae con el motivo y el servidor que la causó.
  * @param {Iterable<string>} caidosIniciales ids que caen primero
  * @param {Array<{id, type, name?, hostname?, rack?}>} servidores
- * @param {Array<{serverId, requiredServerId}>} requisitos
  * @returns {Map<string, {motivo: string, por: string|null, nivel: number}>}
  */
-export function propagarCaida(caidosIniciales, servidores, requisitos) {
+export function propagarCaida(caidosIniciales, servidores) {
   const existentes = new Set(servidores.map((s) => String(s.id)));
-  // Quién cae si cae X: los que lo requieren y las VMs que aloja
+  // Quién cae si cae X: las VMs que aloja
   const siguientes = new Map();
   const agregar = (de, a, motivo) => {
     if (!siguientes.has(de)) siguientes.set(de, []);
     siguientes.get(de).push({ id: a, motivo });
   };
-  for (const r of requisitos) agregar(String(r.requiredServerId), String(r.serverId), MOTIVOS.REQUIERE);
   for (const [vm, host] of hostsDeVms(servidores)) agregar(host, vm, MOTIVOS.HOST);
   for (const l of siguientes.values()) l.sort((a, b) => compararIds(a.id, b.id));
 
@@ -90,30 +84,18 @@ export function propagarCaida(caidosIniciales, servidores, requisitos) {
 
 /**
  * Estado de cada servicio con los servidores caídos.
- * @param {Array<{id, name, components: Array<{id, serverId, impact, redundancyGroup?}>}>} servicios
+ * @param {Array<{id, name, components: Array<{id, serverId, impact}>}>} servicios
  * @param {Map<string, {motivo, por, nivel}>} caidos resultado de propagarCaida
  * @returns {Array<{serviceId, name, estado, nivel, componentesCaidos: object[]}>}
  */
 export function evaluarServicios(servicios, caidos) {
   return servicios.map((s) => {
     const componentes = s.components || [];
-    // Grupo de respaldo: mientras quede algún servidor del grupo en pie, el servicio sigue por él
-    const enPie = (c) => componentes.filter((o) => o.redundancyGroup && o.redundancyGroup === c.redundancyGroup
-      && String(o.serverId) !== String(c.serverId) && !caidos.has(String(o.serverId)));
     const componentesCaidos = componentes
       .filter((c) => caidos.has(String(c.serverId)))
-      .map((c) => {
-        const respaldo = c.redundancyGroup ? enPie(c) : [];
-        return {
-          ...c,
-          caida: caidos.get(String(c.serverId)),
-          // Efecto real: sin efecto si un servidor del mismo grupo sigue en pie
-          impactoEfectivo: respaldo.length ? 'NINGUNO' : c.impact,
-          respaldoPor: respaldo.map((o) => String(o.serverId)),
-        };
-      })
-      .sort((a, b) => (GRAVEDAD[b.impactoEfectivo] ?? 0) - (GRAVEDAD[a.impactoEfectivo] ?? 0) || a.caida.nivel - b.caida.nivel);
-    const peor = componentesCaidos.reduce((m, c) => ((GRAVEDAD[c.impactoEfectivo] ?? 0) > (GRAVEDAD[m] ?? 0) ? c.impactoEfectivo : m), 'NINGUNO');
+      .map((c) => ({ ...c, caida: caidos.get(String(c.serverId)) }))
+      .sort((a, b) => (GRAVEDAD[b.impact] ?? 0) - (GRAVEDAD[a.impact] ?? 0) || a.caida.nivel - b.caida.nivel);
+    const peor = componentesCaidos.reduce((m, c) => ((GRAVEDAD[c.impact] ?? 0) > (GRAVEDAD[m] ?? 0) ? c.impact : m), 'NINGUNO');
     return {
       serviceId: String(s.id),
       name: s.name,
