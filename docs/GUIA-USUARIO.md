@@ -205,7 +205,7 @@ Menú lateral → **Impacto de servicios** (o la tarjeta del mismo nombre en Ini
 ### Simular una caída
 
 - Pulsa **Simular caída** en la tarjeta de un servidor. Se pueden simular varios a la vez.
-- Sobre las tarjetas aparece el resultado del servicio (*Deja de funcionar*, *Sigue funcionando*…). El servidor simulado se pinta de **azul**; los que dejan de funcionar por esa caída, de **rojo** (todos, si el servicio deja de funcionar), y los que siguen funcionando, de **verde**. Las tarjetas rojas dicen *Deja de funcionar* y las verdes, *Sigue funcionando*.
+- Sobre las tarjetas aparece el resultado del servicio (*Deja de funcionar*, *Sigue funcionando*…). El servidor simulado se pinta de **azul**; los que dejan de funcionar por esa caída, de **rojo** (todos, si el servicio deja de funcionar), y los que siguen funcionando, de **verde**. Si un servicio cae por completo aparece unos segundos el aviso *Interrupción total del servicio*. Las tarjetas rojas dicen *Deja de funcionar* y las verdes, *Sigue funcionando*.
 - La simulación no modifica datos ni envía alertas. **Quitar simulación** la deshace.
 
 ### Registrar la información (administradores)

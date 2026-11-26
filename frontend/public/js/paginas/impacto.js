@@ -292,7 +292,14 @@ async function simular() {
   try {
     const r = await apiJson(`/api/impacto/simular?ids=${enc(st.simulados.join(','))}`);
     if (mia !== peticionSim) return;
+    // Aviso breve por cada servicio que queda totalmente caído (solo la primera vez, no en cada recarga)
+    const yaCaidos = new Set((st.simulacion?.servicios || []).filter((x) => x.estado === 'NO_FUNCIONA').map((x) => x.serviceId));
     st.simulacion = r;
+    for (const x of r.servicios) {
+      if (x.estado === 'NO_FUNCIONA' && !yaCaidos.has(x.serviceId)) {
+        toast(`Interrupción total del servicio · ${x.name} fuera de línea`, 'error', 3500);
+      }
+    }
     render();
   } catch (err) {
     if (mia === peticionSim) toast(err?.message || 'No se pudo simular', 'error');
