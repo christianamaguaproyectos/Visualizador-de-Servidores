@@ -106,6 +106,7 @@ function pildoraEstado(estado) {
 const MOTIVO = {
   CAIDO: () => 'caído',
   HOST: (por) => `cae con su host ${nombre(por)}`,
+  ARRASTRE: (por) => `cae con ${nombre(por)}`,
 };
 const textoCaida = (c) => (MOTIVO[c.motivo] || MOTIVO.CAIDO)(c.por);
 
@@ -202,6 +203,7 @@ function bloqueSimulacionServicio(s) {
   const e = ESTADO_SERVICIO[sim.estado] || ESTADO_SERVICIO.FUNCIONA;
   // Qué sigue en pie del servicio (si el servicio no cae del todo)
   const idsCaidos = new Set(sim.componentesCaidos.map((c) => String(c.serverId)));
+  const arrastrados = sim.estado === 'NO_FUNCIONA' ? [] : sim.componentesCaidos.filter((c) => c.caida.motivo === 'ARRASTRE');
   const enPie = sim.estado === 'NO_FUNCIONA' ? [] : (s.components || []).filter((c) => !idsCaidos.has(String(c.serverId)));
   const titulo = {
     NO_FUNCIONA: `${s.name} deja de funcionar`,
@@ -212,10 +214,16 @@ function bloqueSimulacionServicio(s) {
   return h('div', { class: `imp-sim-aviso imp-sim-aviso--${e.clase}`, role: 'status' },
     h('p', { class: 'imp-sim-aviso__titulo' }, h('span', { class: 'imp-sim-aviso__etq' }, 'Simulación'), titulo),
     sim.componentesCaidos.length
-      ? h('p', { class: 'imp-sim-aviso__texto' }, `Por la caída de ${sim.componentesCaidos.map((c) => nombre(c.serverId)).join(', ')}.`)
+      ? h('p', { class: 'imp-sim-aviso__texto' }, `Por la caída de ${sim.componentesCaidos.filter((c) => c.caida.motivo !== 'ARRASTRE').map((c) => nombre(c.serverId)).join(', ')}.`)
       : h('p', { class: 'imp-sim-aviso__texto' }, 'Ningún servidor de este servicio cae con la simulación.'),
+    arrastrados.length ? h('p', { class: 'imp-sim-aviso__texto' }, h('strong', {}, 'Dejan de funcionar: '), arrastrados.map((c) => nombre(c.serverId)).join(', '), '.') : null,
     enPie.length ? h('p', { class: 'imp-sim-aviso__texto' }, h('strong', {}, 'Siguen funcionando: '), enPie.map((c) => nombre(c.serverId)).join(', '), '.') : null,
     h('button', { type: 'button', class: 'imp-enlace', onClick: () => { st.simulados = []; simular(); } }, 'Quitar simulación'));
+}
+
+/** Nombres de servidores a partir de ids de componentes del servicio */
+function nombresComponentes(s, ids) {
+  return ids.map((id) => s.components.find((x) => String(x.id) === String(id))).filter(Boolean).map((x) => nombre(x.serverId)).join(', ');
 }
 
 /** Una tarjeta por servidor: qué hace, qué pasa si cae y cómo está ahora */
@@ -235,7 +243,7 @@ function tablaComponentes(s, comps) {
       etiquetaSim = 'Caída simulada';
     } else if (caida || sim?.estado === 'NO_FUNCIONA') {
       claseSim = ' es-caido';
-      etiquetaSim = caida && caida.caida.motivo !== 'CAIDO' ? `Deja de funcionar · ${textoCaida(caida.caida)}` : 'Deja de funcionar';
+      etiquetaSim = caida && caida.caida.motivo === 'HOST' ? `Deja de funcionar · ${textoCaida(caida.caida)}` : 'Deja de funcionar';
     } else if (sim) {
       claseSim = ' es-funciona';
       etiquetaSim = 'Sigue funcionando';
@@ -253,6 +261,9 @@ function tablaComponentes(s, comps) {
       soloEstado ? null : h('div', { class: 'imp-comp__si-cae' },
         h('span', { class: 'imp-comp__etq' }, 'Si cae:'), pildoraNivel(c.impact)),
       !soloEstado && c.impactDetail ? h('p', { class: 'imp-comp__texto' }, c.impactDetail) : null,
+      !soloEstado && c.impact !== 'TOTAL' && c.alsoFails?.length
+        ? h('p', { class: 'imp-comp__texto' }, h('strong', {}, 'Si cae, también se caen: '), nombresComponentes(s, c.alsoFails))
+        : null,
       h('div', { class: 'imp-comp__acciones' },
         h('button', {
           type: 'button', class: `btn ${simulado ? 'btn-danger' : 'btn-secondary'} imp-btn-sm`, 'aria-pressed': simulado ? 'true' : 'false',
@@ -341,8 +352,27 @@ function abrirComponente(s, c) {
   $('#imp-comp-impacto-parcial').disabled = c?.impact !== 'PARCIAL';
   $('#imp-comp-impacto').value = c?.impact || 'SIN_DEFINIR';
   $('#imp-comp-detalle').value = c?.impactDetail || '';
+  // Casillas: los demás servidores del servicio que también caen si cae este
+  const otros = s.components.filter((x) => !c || String(x.id) !== String(c.id))
+    .sort((a, b) => nombre(a.serverId).localeCompare(nombre(b.serverId), 'es', { numeric: true }));
+  const marcados = new Set((c?.alsoFails || []).map(String));
+  $('#imp-comp-caen').replaceChildren(...otros.map((x) => h('label', { class: 'imp-caen__opcion' },
+    h('input', { type: 'checkbox', value: x.id, ...(marcados.has(String(x.id)) ? { checked: '' } : {}) }),
+    nombre(x.serverId))));
+  actualizarCaen();
   abrirDialogo($('#imp-dialogo-componente'));
 }
+
+/** Con «Deja de funcionar» cae todo el servicio: las casillas no hacen falta */
+function actualizarCaen() {
+  const total = $('#imp-comp-impacto').value === 'TOTAL';
+  const casillas = [...$('#imp-comp-caen').querySelectorAll('input')];
+  for (const x of casillas) x.disabled = total;
+  $('#imp-comp-caen-ayuda').textContent = total
+    ? 'Con «Deja de funcionar» se cae todo el servicio.'
+    : casillas.length ? 'Marca los que se caen junto con este. Los demás seguirán funcionando.' : 'Aún no hay otros servidores en este servicio.';
+}
+$('#imp-comp-impacto').addEventListener('change', actualizarCaen);
 
 $('#imp-form-componente').addEventListener('submit', async (ev) => {
   ev.preventDefault();
@@ -350,6 +380,8 @@ $('#imp-form-componente').addEventListener('submit', async (ev) => {
     role: $('#imp-comp-rol').value,
     impact: $('#imp-comp-impacto').value,
     impactDetail: $('#imp-comp-detalle').value,
+    alsoFails: $('#imp-comp-impacto').value === 'TOTAL' ? []
+      : [...$('#imp-comp-caen').querySelectorAll('input:checked')].map((x) => x.value),
   };
   try {
     const { id, serviceId } = st.editando;

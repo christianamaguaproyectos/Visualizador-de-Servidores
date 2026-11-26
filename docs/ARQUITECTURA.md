@@ -124,7 +124,7 @@ Qué le pasa a cada servicio (por ejemplo, JD Edwards) si cae uno de sus servido
 | Validación | `backend/src/dtos/impactoDto.js` | Funciones puras de validación y normalización (IDs, nivel de impacto, textos, límites) |
 | Servicio | `backend/src/services/impactoService.js` | Acceso a PostgreSQL con el pool compartido y transacciones; cruce servidor ↔ host de monitoreo; CRUD de servicios y componentes |
 | Cálculo | `backend/src/services/impactoCalculo.js` | Lógica **pura** (sin BD): propagación de la caída (VM → host) y estado de cada servicio; probada con pruebas unitarias |
-| Esquema | `scripts/sql/08-schema.impacto.sql` + `backend/prisma/schema.prisma` | Tablas `inventory.services` e `inventory.service_components` |
+| Esquema | `scripts/sql/08-schema.impacto.sql` + `backend/prisma/schema.prisma` | Tablas `inventory.services`, `inventory.service_components` e `inventory.service_component_falls` |
 
 Endpoints: [API-REST.md](./API-REST.md#️-impacto-de-servicios).
 

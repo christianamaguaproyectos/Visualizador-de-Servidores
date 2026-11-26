@@ -35,6 +35,7 @@ export const TABLAS_REQUERIDAS = [
   ['inventory', 'virtual_clusters', ['id', 'key', 'name']],
   ['inventory', 'services', ['id', 'name']],
   ['inventory', 'service_components', ['id', 'service_id', 'server_id', 'role', 'impact', 'impact_detail']],
+  ['inventory', 'service_component_falls', ['component_id', 'falls_component_id']],
   ['monitoring', 'hosts', ['id', 'name', 'ip', 'rack', 'estado_actual']],
   ['monitoring', 'checks', ['id', 'host_id', 'kind', 'enabled']],
   ['monitoring', 'check_runs', ['time', 'check_id', 'host_id', 'status', 'latency_ms']],
@@ -51,6 +52,7 @@ export const INDICES_REQUERIDOS = [
   ['monitoring', 'check_runs_host_time_idx'],
   ['monitoring', 'check_runs_check_time_idx'],
   ['inventory', 'idx_service_components_server'],
+  ['inventory', 'idx_component_falls_target'],
 ];
 
 export function scriptsEnOrden() {

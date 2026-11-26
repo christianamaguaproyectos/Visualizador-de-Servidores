@@ -100,12 +100,22 @@ export function parseServicioCambios(body) {
   return cambios;
 }
 
+/** Lista JSON de IDs (sin repetir); null → [] */
+function parseIdsLista(valor, campo) {
+  if (valor === null) return [];
+  if (!Array.isArray(valor)) throw new ValidationError(`${campo} debe ser una lista`);
+  if (valor.length > LIMITES.maxSimulados) throw new ValidationError(`${campo} admite como máximo ${LIMITES.maxSimulados} elementos`);
+  return [...new Set(valor.map((v) => parseId(v, campo)))];
+}
+
 /** Campos de un componente (papel de un servidor en un servicio) */
 function camposComponente(body, { parcial }) {
   const c = {};
   if (!parcial || tiene(body, 'role')) c.role = limpiarTexto(body.role, { campo: 'role', max: LIMITES.papel });
   if (!parcial || tiene(body, 'impact')) c.impact = body.impact === undefined && !parcial ? 'SIN_DEFINIR' : parseImpacto(body.impact);
   if (!parcial || tiene(body, 'impactDetail')) c.impactDetail = limpiarTexto(body.impactDetail, { campo: 'impactDetail', max: LIMITES.texto, multilinea: true });
+  // Componentes del mismo servicio que también caen si cae este
+  if (!parcial || tiene(body, 'alsoFails')) c.alsoFails = body.alsoFails === undefined ? [] : parseIdsLista(body.alsoFails, 'alsoFails');
   return c;
 }
 

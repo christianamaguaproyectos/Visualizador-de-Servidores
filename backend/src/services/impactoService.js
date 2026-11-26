@@ -89,9 +89,11 @@ const SQL_SERVICIOS = `
   FROM inventory.services`;
 
 const SQL_COMPONENTES = `
-  SELECT id::text AS id, service_id::text AS service_id, server_id::text AS server_id, role, impact,
-         impact_detail, created_by, created_at, updated_at
-  FROM inventory.service_components`;
+  SELECT c.id::text AS id, c.service_id::text AS service_id, c.server_id::text AS server_id, c.role, c.impact,
+         c.impact_detail, c.created_by, c.created_at, c.updated_at,
+         COALESCE((SELECT array_agg(f.falls_component_id::text ORDER BY f.falls_component_id)
+                   FROM inventory.service_component_falls f WHERE f.component_id = c.id), '{}') AS also_fails
+  FROM inventory.service_components c`;
 
 /** Lecturas de varias tablas en una misma instantánea consistente */
 const LECTURA_CONSISTENTE = Object.freeze({ isolationLevel: 'REPEATABLE READ', readOnly: true });
@@ -160,14 +162,39 @@ const mapServicio = (row) => ({
 
 const mapComponente = (row) => ({
   id: row.id, serviceId: row.service_id, serverId: row.server_id, role: row.role, impact: row.impact,
-  impactDetail: row.impact_detail, createdBy: row.created_by, createdAt: row.created_at, updatedAt: row.updated_at,
+  impactDetail: row.impact_detail, alsoFails: row.also_fails || [],
+  createdBy: row.created_by, createdAt: row.created_at, updatedAt: row.updated_at,
 });
+
+/** Un componente recién escrito, con su lista «si cae, también caen» */
+async function leerComponente(client, id) {
+  const { rows } = await client.query(`${SQL_COMPONENTES} WHERE c.id = $1::bigint`, [id]);
+  if (!rows.length) throw new NotFoundError('Componente', id);
+  return mapComponente(rows[0]);
+}
+
+/** Reemplaza «si este cae, también caen»: solo servidores del mismo servicio y nunca él mismo */
+async function guardarArrastre(client, componentId, serviceId, ids) {
+  if (ids.includes(String(componentId))) throw new ValidationError('Un servidor no puede arrastrarse a sí mismo');
+  const { rows } = await client.query(
+    'SELECT count(*)::int AS n FROM inventory.service_components WHERE service_id = $1::bigint AND id = ANY($2::bigint[])',
+    [serviceId, ids],
+  );
+  if (rows[0].n !== ids.length) throw new ValidationError('Solo se pueden elegir servidores del mismo servicio');
+  await client.query('DELETE FROM inventory.service_component_falls WHERE component_id = $1::bigint', [componentId]);
+  if (ids.length) {
+    await client.query(
+      'INSERT INTO inventory.service_component_falls (component_id, falls_component_id) SELECT $1::bigint, unnest($2::bigint[])',
+      [componentId, ids],
+    );
+  }
+}
 
 async function leerTodo(client) {
   const [servidores, servicios, componentes] = await Promise.all([
     client.query(SQL_SERVIDORES, [RE_PRIMER_TOKEN_IP]),
     client.query(`${SQL_SERVICIOS} ORDER BY name`),
-    client.query(`${SQL_COMPONENTES} ORDER BY id`),
+    client.query(`${SQL_COMPONENTES} ORDER BY c.id`),
   ]);
   const comps = componentes.rows.map(mapComponente);
   return {
@@ -284,11 +311,11 @@ class ImpactoService {
           `INSERT INTO inventory.service_components
              (service_id, server_id, role, impact, impact_detail, created_by)
            VALUES ($1::bigint, $2::bigint, $3, $4, $5, $6)
-           RETURNING id::text AS id, service_id::text AS service_id, server_id::text AS server_id, role, impact,
-                     impact_detail, created_by, created_at, updated_at`,
+           RETURNING id::text AS id`,
           [serviceId, datos.serverId, datos.role, datos.impact, datos.impactDetail, autor],
         );
-        return mapComponente(rows[0]);
+        await guardarArrastre(client, rows[0].id, serviceId, datos.alsoFails || []);
+        return leerComponente(client, rows[0].id);
       });
     } catch (err) {
       throw traducirErrorPg(err, 'componente');
@@ -301,17 +328,18 @@ class ImpactoService {
     for (const [k, col] of Object.entries(columnas)) {
       if (k in cambios) { valores.push(cambios[k]); sets.push(`${col} = $${valores.length}`); }
     }
+    sets.push('updated_at = NOW()');
     valores.push(id);
     try {
       return await withTransaction(async (client) => {
         const { rows } = await client.query(
-          `UPDATE inventory.service_components SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${valores.length}::bigint
-           RETURNING id::text AS id, service_id::text AS service_id, server_id::text AS server_id, role, impact,
-                     impact_detail, created_by, created_at, updated_at`,
+          `UPDATE inventory.service_components SET ${sets.join(', ')} WHERE id = $${valores.length}::bigint
+           RETURNING service_id::text AS service_id`,
           valores,
         );
         if (!rows.length) throw new NotFoundError('Componente', id);
-        return mapComponente(rows[0]);
+        if ('alsoFails' in cambios) await guardarArrastre(client, id, rows[0].service_id, cambios.alsoFails);
+        return leerComponente(client, id);
       });
     } catch (err) {
       throw traducirErrorPg(err, 'componente');

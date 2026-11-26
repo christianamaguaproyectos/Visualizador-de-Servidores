@@ -123,6 +123,28 @@ describe('Impacto de servicios (integración)', { skip: omitir || false }, () =>
     assert.equal((await admin.api('POST', '/api/impacto/requisitos', { body: {} })).status, 404, 'ya no existen requisitos');
   });
 
+  test('«si cae, también caen»: guardar, simular y validar', async () => {
+    const r = await admin.api('GET', '/api/impacto');
+    const comps = r.data.services.find((x) => x.id === servicio).components;
+    const idDe = (srv) => comps.find((x) => x.serverId === srv).id;
+    const nodo1 = idDe(S.nodo1);
+    const ed = await admin.api('PUT', `/api/impacto/componentes/${nodo1}`, { body: { alsoFails: [idDe(S.nodo2)] } });
+    assert.equal(ed.status, 200, JSON.stringify(ed.data));
+    assert.deepEqual(ed.data.component.alsoFails, [idDe(S.nodo2)]);
+
+    const sim = await lector.api('GET', `/api/impacto/simular?ids=${S.nodo1}`);
+    const x = sim.data.servicios.find((y) => y.serviceId === servicio);
+    assert.deepEqual(x.componentesCaidos.map((c) => c.serverId).sort(), [S.nodo1, S.nodo2].sort());
+    assert.equal(x.estado, 'PARCIAL', 'arrastra a NODO2 (PARCIAL)');
+
+    assert.equal((await admin.api('PUT', `/api/impacto/componentes/${nodo1}`, { body: { alsoFails: [nodo1] } })).status, 400, 'a sí mismo');
+    const otro = await admin.api('POST', '/api/impacto/servicios', { body: { name: 'Otro servicio' } });
+    const ajeno = await admin.api('POST', `/api/impacto/servicios/${otro.data.service.id}/componentes`, { body: { serverId: S.host } });
+    assert.equal((await admin.api('PUT', `/api/impacto/componentes/${nodo1}`, { body: { alsoFails: [ajeno.data.component.id] } })).status, 400, 'de otro servicio');
+    assert.equal((await admin.api('DELETE', `/api/impacto/servicios/${otro.data.service.id}`)).status, 204);
+    assert.equal((await admin.api('PUT', `/api/impacto/componentes/${nodo1}`, { body: { alsoFails: [] } })).data.component.alsoFails.length, 0);
+  });
+
   test('editar y quitar', async () => {
     const r = await admin.api('GET', '/api/impacto');
     const c = r.data.services.find((x) => x.id === servicio).components.find((x) => x.serverId === S.bdd);

@@ -139,3 +139,8 @@ html, body { height: 100%; }
 .imp-sim-aviso__texto { margin: 6px 0 0; font-size: 14px; }
 .imp-comp.es-funciona { background: var(--color-success-100, #dcfae6); border-color: #75e0a7; border-left-color: var(--color-success-500, #12b76a); }
 .imp-comp.es-funciona .imp-comp__sim { background: var(--color-success-700, #067647); }
+
+.imp-caen { margin: 0; padding: 0; border: 0; min-width: 0; }
+.imp-caen__lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px 12px; max-height: 220px; overflow-y: auto; }
+.imp-caen__opcion { display: flex; align-items: center; gap: 8px; min-height: 32px; font-size: 14px; cursor: pointer; }
+.imp-caen__opcion input { width: 18px; height: 18px; }

@@ -173,10 +173,26 @@ model ServiceComponent {
 
   service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   server  Server  @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  alsoFails ServiceComponentFall[] @relation("FallSource")
+  fallsWith ServiceComponentFall[] @relation("FallTarget")
 
   @@unique([serviceId, serverId], map: "uq_service_component")
   @@index([serverId], map: "idx_service_components_server")
   @@map("service_components")
+  @@schema("inventory")
+}
+
+/// "Si componentId cae, también cae fallsComponentId" (mismo servicio)
+model ServiceComponentFall {
+  componentId      BigInt @map("component_id")
+  fallsComponentId BigInt @map("falls_component_id")
+
+  component      ServiceComponent @relation("FallSource", fields: [componentId], references: [id], onDelete: Cascade)
+  fallsComponent ServiceComponent @relation("FallTarget", fields: [fallsComponentId], references: [id], onDelete: Cascade)
+
+  @@id([componentId, fallsComponentId])
+  @@index([fallsComponentId], map: "idx_component_falls_target")
+  @@map("service_component_falls")
   @@schema("inventory")
 }
 

@@ -69,6 +69,25 @@ describe('Impacto de servicios — cálculo', () => {
     assert.equal(evaluarServicios([SERVICIO], propagarCaida(['6'], SERVIDORES))[0].estado, 'FUNCIONA', 'NINGUNO: sigue');
   });
 
+  test('«si cae, también caen»: arrastra en cadena dentro del servicio', () => {
+    const servicio = {
+      id: '20', name: 'Web',
+      components: [
+        { id: 'a', serverId: '4', impact: 'NINGUNO', alsoFails: ['b'] },
+        { id: 'b', serverId: '5', impact: 'NINGUNO', alsoFails: ['c'] },
+        { id: 'c', serverId: '6', impact: 'NINGUNO' },
+        { id: 'd', serverId: '7', impact: 'NINGUNO' },
+      ],
+    };
+    const [r] = evaluarServicios([servicio], propagarCaida(['4'], SERVIDORES));
+    assert.equal(r.estado, 'FUNCIONA');
+    assert.deepEqual(r.componentesCaidos.map((c) => c.serverId), ['4', '5', '6']);
+    assert.deepEqual(r.componentesCaidos[2].caida, { motivo: MOTIVOS.ARRASTRE, por: '5', nivel: 2 });
+    // Si arrastra a uno que es «Deja de funcionar», cae todo el servicio
+    servicio.components[2].impact = 'TOTAL';
+    assert.equal(evaluarServicios([servicio], propagarCaida(['4'], SERVIDORES))[0].estado, 'NO_FUNCIONA');
+  });
+
   test('el efecto más grave manda y los caídos van ordenados por gravedad', () => {
     const [r] = evaluarServicios([SERVICIO], propagarCaida(['8', '2'], SERVIDORES));
     assert.equal(r.estado, 'NO_FUNCIONA');
@@ -95,7 +114,9 @@ describe('Impacto de servicios — utilidades', () => {
 
   test('DTO: componente y lista de ids', () => {
     assert.deepEqual(parseComponenteNuevo({ serverId: 5, impact: 'total', role: ' Base ' }),
-      { serverId: '5', role: 'Base', impact: 'TOTAL', impactDetail: null });
+      { serverId: '5', role: 'Base', impact: 'TOTAL', impactDetail: null, alsoFails: [] });
+    assert.deepEqual(parseComponenteNuevo({ serverId: '5', alsoFails: ['3', 3, '7'] }).alsoFails, ['3', '7']);
+    assert.throws(() => parseComponenteNuevo({ serverId: '5', alsoFails: '3' }), /lista/);
     assert.equal(parseComponenteNuevo({ serverId: '5' }).impact, 'SIN_DEFINIR');
     assert.throws(() => parseComponenteNuevo({ serverId: '5', impact: 'MUCHO' }), /impacto inválido/);
     assert.deepEqual(parseListaIds('3, 1,3'), ['3', '1']);

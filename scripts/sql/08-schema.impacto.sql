@@ -31,3 +31,12 @@ CREATE TABLE IF NOT EXISTS inventory.service_components (
 );
 CREATE INDEX IF NOT EXISTS idx_service_components_server ON inventory.service_components (server_id);
 
+-- "Si component_id cae, también cae falls_component_id" (ambos del mismo servicio; lo valida la aplicación)
+CREATE TABLE IF NOT EXISTS inventory.service_component_falls (
+  component_id BIGINT NOT NULL REFERENCES inventory.service_components(id) ON DELETE CASCADE,
+  falls_component_id BIGINT NOT NULL REFERENCES inventory.service_components(id) ON DELETE CASCADE,
+  PRIMARY KEY (component_id, falls_component_id),
+  CONSTRAINT chk_component_fall_no_self CHECK (component_id <> falls_component_id)
+);
+CREATE INDEX IF NOT EXISTS idx_component_falls_target ON inventory.service_component_falls (falls_component_id);
+

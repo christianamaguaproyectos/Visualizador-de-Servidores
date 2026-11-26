@@ -372,7 +372,8 @@ Qué le pasa a cada servicio (por ejemplo, JD Edwards) si cae uno de sus servido
 **Cómo se calcula una caída:**
 1. Caen los servidores indicados (simulación) o los que Monitoreo tiene en `DOWN`/`DEGRADED` con el host habilitado (estado actual).
 2. Cae también cada **VM** cuyo host físico cae. El host de una VM es el servidor físico cuyo nombre o hostname coincide con el campo Host de la VM, comparando solo letras y números.
-3. Cada servicio toma el efecto más grave entre sus servidores caídos: `TOTAL` → `NO_FUNCIONA`, `PARCIAL` → `PARCIAL`, `SIN_DEFINIR` → `REVISAR`, `NINGUNO` (o nada caído) → `FUNCIONA`.
+3. Dentro de cada servicio, un servidor caído arrastra a los que tiene en `alsoFails` («si cae, también se caen»), en cadena.
+4. Cada servicio toma el efecto más grave entre sus servidores caídos: `TOTAL` → `NO_FUNCIONA`, `PARCIAL` → `PARCIAL`, `SIN_DEFINIR` → `REVISAR`, `NINGUNO` (o nada caído) → `FUNCIONA`.
 
 ### 📖 Panorama
 
@@ -384,7 +385,7 @@ GET /api/impacto
 ```json
 {
   "servers": [ { "id": "12", "type": "virtuales", "name": "APP-01", "ip": "10.0.0.12", "rack": "HOST-A", "application": "ERP", "status": "UP", "monitoring": { "hostId": "4", "status": "UP", "enabled": true, "changedAt": "..." } } ],
-  "services": [ { "id": "1", "name": "ERP", "description": "...", "components": [ { "id": "3", "serverId": "12", "role": "Base de datos", "impact": "TOTAL", "impactDetail": "..." } ] } ],
+  "services": [ { "id": "1", "name": "ERP", "description": "...", "components": [ { "id": "3", "serverId": "12", "role": "Base de datos", "impact": "TOTAL", "impactDetail": "...", "alsoFails": [] } ] } ],
   "hosts": { "12": "7" },
   "actual": { "servicios": [], "servidoresCaidos": [] },
   "generatedAt": "2026-11-26T15:00:00.000Z"
@@ -414,7 +415,7 @@ No modifica nada. Hasta 200 ids. **Respuesta (200):**
   "servidoresCaidos": [ { "id": "12", "motivo": "CAIDO", "por": null, "nivel": 0 }, { "id": "20", "motivo": "HOST", "por": "12", "nivel": 1 } ]
 }
 ```
-`motivo`: `CAIDO` (indicado o caído en Monitoreo) o `HOST` (VM cuyo host `por` cayó). Sin `ids` o con un id no numérico: 400.
+`motivo`: `CAIDO` (indicado o caído en Monitoreo), `HOST` (VM cuyo host `por` cayó) o `ARRASTRE` (dentro de `componentesCaidos`: cae porque el servidor `por` lo tiene en `alsoFails`). Sin `ids` o con un id no numérico: 400.
 
 ### 📖 Estado de monitoreo de cada servidor
 
@@ -440,14 +441,15 @@ POST /api/impacto/servicios/:id/componentes
   "serverId": "12",
   "role": "Base de datos",
   "impact": "TOTAL",
-  "impactDetail": "Sin la base de datos ningún módulo funciona"
+  "impactDetail": "Sin la base de datos ningún módulo funciona",
+  "alsoFails": ["5", "6"]
 }
 → 201 { "component": {...} }
 
 PUT    /api/impacto/componentes/:id   (solo los campos enviados; serverId no se puede cambiar) → 200 { "component": {...} }
 DELETE /api/impacto/componentes/:id                                                         → 204
 ```
-`impact`: `TOTAL`, `PARCIAL`, `NINGUNO` o `SIN_DEFINIR` (por defecto). `role` hasta 200 caracteres e `impactDetail` hasta 2000. El mismo servidor dos veces en un servicio: 409. Servidor o servicio inexistente: 404.
+`impact`: `TOTAL`, `PARCIAL`, `NINGUNO` o `SIN_DEFINIR` (por defecto). `role` hasta 200 caracteres e `impactDetail` hasta 2000. `alsoFails`: ids de otros componentes **del mismo servicio** que también caen si cae este (lista; enviarla reemplaza la anterior). Un id de otro servicio o el propio componente: 400. El mismo servidor dos veces en un servicio: 409. Servidor o servicio inexistente: 404.
 
 ### Página
 
@@ -865,6 +867,7 @@ updateServersBySubnet('192.168.1.');
   role: string | null,             // Función en el servicio (máx. 200)
   impact: string,                  // TOTAL | PARCIAL | NINGUNO | SIN_DEFINIR
   impactDetail: string | null,     // Qué deja de funcionar (máx. 2000)
+  alsoFails: string[],             // Componentes del mismo servicio que también caen si cae este
   createdBy: string | null,
   createdAt: string,
   updatedAt: string

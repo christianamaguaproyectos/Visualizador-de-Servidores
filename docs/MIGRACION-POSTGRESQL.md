@@ -193,6 +193,7 @@ CREATE TABLE inventory.servers (
 |-------|-----------|
 | `inventory.services` | Servicios de negocio (por ejemplo, JD Edwards): nombre único y descripción |
 | `inventory.service_components` | Papel de cada servidor en un servicio: función, efecto de su caída (`TOTAL`, `PARCIAL`, `NINGUNO`, `SIN_DEFINIR`), qué deja de funcionar. Un servidor aparece una sola vez por servicio |
+| `inventory.service_component_falls` | «Si este servidor cae, también se cae este otro», entre servidores del mismo servicio |
 
 Al eliminar un servidor o un servicio se eliminan en cascada sus filas en estas tablas. En bases existentes, ver [Aplicar esquemas nuevos en una base existente](#aplicar-esquemas-nuevos-en-una-base-existente).
 
@@ -413,7 +414,7 @@ node scripts/import/ingestInventoryFromExcel.js
 
 Los scripts de `scripts/sql/` se montan en `/docker-entrypoint-initdb.d` del contenedor `postgres` (ver `docker-compose.yml`). PostgreSQL **solo los ejecuta al inicializar un volumen de datos vacío**: en una instalación que ya tiene datos, un script nuevo no se aplica solo y hay que lanzarlo a mano.
 
-Es el caso de `scripts/sql/08-schema.impacto.sql` (Impacto de servicios: tablas `inventory.services` e `inventory.service_components`). El script es **idempotente**: se puede ejecutar varias veces sin error y no modifica datos existentes. `scripts/actualizar-bd.js --aplicar` lo aplica junto con el resto de scripts (ver [GUIA-BASE-DATOS-REAL.md](./GUIA-BASE-DATOS-REAL.md)).
+Es el caso de `scripts/sql/08-schema.impacto.sql` (Impacto de servicios: tablas `inventory.services`, `inventory.service_components` e `inventory.service_component_falls`). El script es **idempotente**: se puede ejecutar varias veces sin error y no modifica datos existentes. `scripts/actualizar-bd.js --aplicar` lo aplica junto con el resto de scripts (ver [GUIA-BASE-DATOS-REAL.md](./GUIA-BASE-DATOS-REAL.md)).
 
 Aplícalo **antes** de desplegar la versión de la aplicación que incluye el módulo (sin estas tablas, los endpoints `/api/impacto` responden error 500).
 
@@ -439,7 +440,7 @@ psql -v ON_ERROR_STOP=1 -h <HOST> -p 5432 -U <USUARIO> -d <BASE_DE_DATOS> -f scr
 -- Deben aparecer las tres tablas nuevas
 SELECT table_name FROM information_schema.tables
 WHERE table_schema = 'inventory'
-  AND table_name IN ('services', 'service_components');
+  AND table_name IN ('services', 'service_components', 'service_component_falls');
 ```
 
 No hace falta reiniciar la aplicación después de aplicar el script.

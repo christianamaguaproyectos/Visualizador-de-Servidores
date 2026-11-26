@@ -198,6 +198,7 @@ Menú lateral → **Impacto de servicios** (o la tarjeta del mismo nombre en Ini
   - **Función** en el servicio (por ejemplo, *Base de datos de JD Edwards*);
   - **Si cae**: *Deja de funcionar* (cae todo el servicio), *Sigue funcionando* o *Por definir* (falta confirmarlo con el equipo responsable);
   - **Qué deja de funcionar**;
+  - **Si cae, también se caen**: otros servidores del servicio que caen junto con este;
   - **En línea**: todos los servidores se muestran en línea; la página sirve para simular caídas.
 - **Máquinas virtuales y su host:** una VM cae con el servidor físico donde corre. El host se reconoce porque el campo **Host** de la VM coincide con el nombre de un servidor de **Servidores Físicos** (sin distinguir mayúsculas, guiones ni espacios). Si no coincide, la tarjeta lo indica (*ese host no está en Físicos*).
 
@@ -210,7 +211,7 @@ Menú lateral → **Impacto de servicios** (o la tarjeta del mismo nombre en Ini
 ### Registrar la información (administradores)
 
 - **+ Nuevo** crea un servicio; **Editar** y **Eliminar** lo modifican. Eliminar un servicio no toca los servidores del inventario.
-- **+ Agregar servidor** añade un servidor al servicio: se elige de la lista (nombre · IP · host) y se completan su función, qué pasa si cae y qué deja de funcionar.
+- **+ Agregar servidor** añade un servidor al servicio: se elige de la lista (nombre · IP · host) y se completan su función, qué pasa si cae y qué deja de funcionar. En **Si este servidor cae, también se caen** se marcan los servidores del servicio que caen con él: en la simulación se pintan de rojo y los demás quedan en verde. Con *Deja de funcionar* no hace falta marcar nada: cae todo el servicio.
 - El estado de Monitoreo se actualiza solo cada 30 segundos mientras la página está abierta.
 
 ## Gestión de Usuarios (Solo Superadmin)

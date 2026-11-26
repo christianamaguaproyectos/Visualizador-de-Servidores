@@ -5,7 +5,9 @@
  * campo Host de la VM (rack_norm) coincide con el nombre o el hostname de un servidor físico,
  * comparando solo letras y números (sin mayúsculas, guiones ni espacios).
  *
- * Después, cada servicio toma el efecto más grave entre sus servidores caídos:
+ * Dentro de cada servicio, un servidor caído arrastra a los que se marcaron como «si cae, también
+ * caen» (alsoFails, en cadena). Después, cada servicio toma el efecto más grave entre sus
+ * servidores caídos:
  *   TOTAL → NO_FUNCIONA · PARCIAL → PARCIAL · SIN_DEFINIR → REVISAR · NINGUNO (o nada caído) → FUNCIONA
  */
 
@@ -15,7 +17,7 @@ const GRAVEDAD = Object.freeze({ TOTAL: 3, PARCIAL: 2, SIN_DEFINIR: 1, NINGUNO: 
 const ESTADO_POR_NIVEL = Object.freeze({ TOTAL: 'NO_FUNCIONA', PARCIAL: 'PARCIAL', SIN_DEFINIR: 'REVISAR', NINGUNO: 'FUNCIONA' });
 
 /** Motivo por el que un servidor queda caído en el cálculo */
-export const MOTIVOS = Object.freeze({ CAIDO: 'CAIDO', HOST: 'HOST' });
+export const MOTIVOS = Object.freeze({ CAIDO: 'CAIDO', HOST: 'HOST', ARRASTRE: 'ARRASTRE' });
 
 /** Clave de comparación de nombres de equipo: solo letras y números, en mayúsculas */
 export function claveEquipo(texto) {
@@ -84,16 +86,33 @@ export function propagarCaida(caidosIniciales, servidores) {
 
 /**
  * Estado de cada servicio con los servidores caídos.
- * @param {Array<{id, name, components: Array<{id, serverId, impact}>}>} servicios
+ * @param {Array<{id, name, components: Array<{id, serverId, impact, alsoFails?: string[]}>}>} servicios
  * @param {Map<string, {motivo, por, nivel}>} caidos resultado de propagarCaida
  * @returns {Array<{serviceId, name, estado, nivel, componentesCaidos: object[]}>}
  */
 export function evaluarServicios(servicios, caidos) {
   return servicios.map((s) => {
     const componentes = s.components || [];
+    const porId = new Map(componentes.map((c) => [String(c.id), c]));
+    // Caen los servidores caídos y, en cadena, los que cada uno arrastra (alsoFails)
+    const caidaDe = new Map();
+    const cola = [];
+    for (const c of componentes) {
+      const caida = caidos.get(String(c.serverId));
+      if (caida) { caidaDe.set(String(c.id), caida); cola.push(c); }
+    }
+    for (let i = 0; i < cola.length; i++) {
+      const c = cola[i];
+      for (const id of c.alsoFails || []) {
+        const o = porId.get(String(id));
+        if (!o || caidaDe.has(String(o.id))) continue;
+        caidaDe.set(String(o.id), { motivo: MOTIVOS.ARRASTRE, por: String(c.serverId), nivel: caidaDe.get(String(c.id)).nivel + 1 });
+        cola.push(o);
+      }
+    }
     const componentesCaidos = componentes
-      .filter((c) => caidos.has(String(c.serverId)))
-      .map((c) => ({ ...c, caida: caidos.get(String(c.serverId)) }))
+      .filter((c) => caidaDe.has(String(c.id)))
+      .map((c) => ({ ...c, caida: caidaDe.get(String(c.id)) }))
       .sort((a, b) => (GRAVEDAD[b.impact] ?? 0) - (GRAVEDAD[a.impact] ?? 0) || a.caida.nivel - b.caida.nivel);
     const peor = componentesCaidos.reduce((m, c) => ((GRAVEDAD[c.impact] ?? 0) > (GRAVEDAD[m] ?? 0) ? c.impact : m), 'NINGUNO');
     return {
