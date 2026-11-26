@@ -134,9 +134,10 @@ html, body { height: 100%; }
 .imp-comp__texto { margin: 0; font-size: 13px; }
 .imp-comp__acciones { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: auto; padding-top: 4px; }
 
-/* Simulación: el servidor que cae en rojo; si el servicio no funciona, todos sin servicio */
+/* Simulación: azul el servidor simulado, rojo lo que deja de funcionar y verde lo que sigue */
 .imp-comp.es-caido { background: var(--color-danger-100, #fee4e2); border-color: #fda29b; border-left-color: var(--color-danger-500, #f04438); }
-.imp-comp.es-sin-servicio { background: var(--color-danger-100, #fee4e2); border-color: #fda29b; border-left-color: var(--color-danger-500, #f04438); }
+.imp-comp.es-simulado { background: var(--color-primary-50, #eef4ff); border-color: #84adff; border-left-color: var(--color-primary-500, #2f6fe6); }
+.imp-comp.es-simulado .imp-comp__sim { background: var(--color-primary-700, #114bb5); }
 .imp-comp__sim {
   margin: -2px 0 2px; align-self: flex-start; padding: 2px 10px; border-radius: var(--radius-pill, 999px);
   background: var(--color-danger-700, #b42318); color: #fff; font-size: 12px; font-weight: 700;

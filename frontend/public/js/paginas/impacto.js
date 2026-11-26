@@ -15,15 +15,15 @@ const enc = encodeURIComponent;
 const INTERVALO_MS = 30000;
 
 const NIVEL = {
-  TOTAL: { texto: 'No funciona', largo: 'Si cae, el servicio no funciona', clase: 'total' },
+  TOTAL: { texto: 'Deja de funcionar', largo: 'Si cae, el servicio deja de funcionar', clase: 'total' },
   PARCIAL: { texto: 'Funciona parcial', largo: 'Si cae, el servicio funciona parcialmente', clase: 'parcial' },
   NINGUNO: { texto: 'Sigue funcionando', largo: 'Si cae, el servicio sigue funcionando', clase: 'ninguno' },
-  SIN_DEFINIR: { texto: 'Sin definir', largo: 'Falta confirmar qué pasa si cae', clase: 'sin-definir' },
+  SIN_DEFINIR: { texto: 'Por definir', largo: 'Falta confirmar qué pasa si cae', clase: 'sin-definir' },
 };
 const ESTADO_SERVICIO = {
   FUNCIONA: { texto: 'Funciona', clase: 'funciona' },
   PARCIAL: { texto: 'Funciona parcial', clase: 'parcial' },
-  NO_FUNCIONA: { texto: 'No funciona', clase: 'no-funciona' },
+  NO_FUNCIONA: { texto: 'Deja de funcionar', clase: 'no-funciona' },
   REVISAR: { texto: 'Revisar', clase: 'revisar' },
 };
 const MONITOREO = {
@@ -235,7 +235,7 @@ function bloqueSimulacionServicio(s) {
   const idsCaidos = new Set(sim.componentesCaidos.map((c) => String(c.serverId)));
   const enPie = sim.estado === 'NO_FUNCIONA' ? [] : (s.components || []).filter((c) => !idsCaidos.has(String(c.serverId)));
   const titulo = {
-    NO_FUNCIONA: `${s.name} no funciona`,
+    NO_FUNCIONA: `${s.name} deja de funcionar`,
     PARCIAL: `${s.name} sigue funcionando, con limitaciones`,
     REVISAR: `${s.name}: falta confirmar el efecto de esta caída`,
     FUNCIONA: `${s.name} sigue funcionando`,
@@ -256,20 +256,20 @@ function tablaComponentes(s, comps) {
   return h('ul', { class: 'imp-comps' }, comps.map((c) => {
     const sv = servidor(c.serverId);
     const simulado = st.simulados.includes(String(c.serverId));
-    // Con la simulación: rojo lo que cae (o todo, si el servicio no funciona) y verde lo que sigue
+    // Con la simulación: azul el servidor simulado, rojo lo que deja de funcionar por su caída
+    // (todo, si el servicio deja de funcionar) y verde lo que sigue funcionando
     const caida = caidos.get(String(c.serverId));
-    const sinServicio = !caida && sim?.estado === 'NO_FUNCIONA';
     let claseSim = '';
     let etiquetaSim = null;
-    if (caida) {
+    if (sim && simulado) {
+      claseSim = ' es-simulado';
+      etiquetaSim = 'Caída simulada';
+    } else if (caida || sim?.estado === 'NO_FUNCIONA') {
       claseSim = ' es-caido';
-      etiquetaSim = `Caído (simulación)${caida.caida.motivo === 'CAIDO' ? '' : ` · ${textoCaida(caida.caida)}`}`;
-    } else if (sinServicio) {
-      claseSim = ' es-sin-servicio';
-      etiquetaSim = `Sin servicio: ${s.name} no funciona`;
+      etiquetaSim = caida && caida.caida.motivo !== 'CAIDO' ? `Deja de funcionar · ${textoCaida(caida.caida)}` : 'Deja de funcionar';
     } else if (sim) {
       claseSim = ' es-funciona';
-      etiquetaSim = 'Funciona';
+      etiquetaSim = 'Sigue funcionando';
     }
     return h('li', { class: `imp-comp imp-comp--${(NIVEL[c.impact] || NIVEL.SIN_DEFINIR).clase}${claseSim}` },
       etiquetaSim ? h('p', { class: 'imp-comp__sim' }, etiquetaSim) : null,
@@ -365,6 +365,9 @@ function abrirComponente(s, c) {
   campo.value = c ? [...st.idPorEtiqueta].find(([, id]) => String(id) === String(c.serverId))?.[0] || nombre(c.serverId) : '';
   campo.disabled = Boolean(c);
   $('#imp-comp-rol').value = c?.role || '';
+  // «Funciona parcial» ya no se ofrece: solo aparece al editar un servidor que lo tenía guardado
+  $('#imp-comp-impacto-parcial').hidden = c?.impact !== 'PARCIAL';
+  $('#imp-comp-impacto-parcial').disabled = c?.impact !== 'PARCIAL';
   $('#imp-comp-impacto').value = c?.impact || 'SIN_DEFINIR';
   $('#imp-comp-detalle').value = c?.impactDetail || '';
   abrirDialogo($('#imp-dialogo-componente'));

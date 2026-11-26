@@ -68,10 +68,10 @@
       <input class="imp-input" id="imp-comp-rol" maxlength="200" placeholder="Ej.: Servidor de seguridad (autenticación)">
       <label class="imp-etiqueta" for="imp-comp-impacto">Si este servidor cae, el servicio…</label>
       <select class="imp-input" id="imp-comp-impacto">
-        <option value="TOTAL">No funciona (cae todo el servicio)</option>
-        <option value="PARCIAL">Funciona parcialmente</option>
+        <option value="TOTAL">Deja de funcionar (cae todo el servicio)</option>
         <option value="NINGUNO">Sigue funcionando</option>
-        <option value="SIN_DEFINIR" selected>Sin definir (falta confirmarlo)</option>
+        <option value="SIN_DEFINIR" selected>Por definir</option>
+        <option value="PARCIAL" id="imp-comp-impacto-parcial" hidden disabled>Funciona parcial (valor anterior)</option>
       </select>
       <label class="imp-etiqueta" for="imp-comp-detalle">Qué deja de funcionar</label>
       <textarea class="imp-input" id="imp-comp-detalle" maxlength="2000" rows="2"></textarea>

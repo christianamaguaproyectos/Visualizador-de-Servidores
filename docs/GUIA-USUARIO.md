@@ -193,10 +193,10 @@ Menú lateral → **Impacto de servicios** (o la tarjeta del mismo nombre en Ini
 
 ### Servicios y sus servidores
 
-- A la izquierda está la lista de **servicios**, cada uno con su **estado actual** según Monitoreo: *Funciona*, *Funciona parcial*, *No funciona* o *Revisar*.
+- A la izquierda está la lista de **servicios**, cada uno con su **estado actual** según Monitoreo: *Funciona*, *Deja de funcionar* o *Revisar*.
 - Al elegir un servicio se ve una tarjeta por cada uno de sus servidores, con:
   - **Función** en el servicio (por ejemplo, *Base de datos de JD Edwards*);
-  - **Si cae**: *No funciona* (cae todo el servicio), *Funciona parcial*, *Sigue funcionando* o *Sin definir* (falta confirmarlo con el equipo responsable);
+  - **Si cae**: *Deja de funcionar* (cae todo el servicio), *Sigue funcionando* o *Por definir* (falta confirmarlo con el equipo responsable);
   - **Qué deja de funcionar**;
   - **Ahora**: estado de Monitoreo (*En línea*, *Caído*, *Sin monitoreo*…).
 - **Máquinas virtuales y su host:** una VM cae con el servidor físico donde corre. El host se reconoce porque el campo **Host** de la VM coincide con el nombre de un servidor de **Servidores Físicos** (sin distinguir mayúsculas, guiones ni espacios). Si no coincide, la tarjeta lo indica (*ese host no está en Físicos*).
@@ -204,7 +204,7 @@ Menú lateral → **Impacto de servicios** (o la tarjeta del mismo nombre en Ini
 ### Simular una caída
 
 - Pulsa **Simular caída** en la tarjeta de un servidor. Se pueden simular varios a la vez.
-- Sobre las tarjetas aparece el resultado del servicio (*No funciona*, *Funciona parcial*…). Las tarjetas se pintan de rojo si el servidor cae (o todas, si el servicio no funciona) y de verde si siguen funcionando.
+- Sobre las tarjetas aparece el resultado del servicio (*Deja de funcionar*, *Sigue funcionando*…). El servidor simulado se pinta de **azul**; los que dejan de funcionar por esa caída, de **rojo** (todos, si el servicio deja de funcionar), y los que siguen funcionando, de **verde**.
 - La simulación no modifica datos ni envía alertas. **Quitar simulación** la deshace.
 
 ### Registrar la información (administradores)
