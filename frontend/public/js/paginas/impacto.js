@@ -204,6 +204,7 @@ function renderDetalle() {
     h('div', { class: 'imp-seccion__cabecera' },
       h('h3', {}, `Servidores (${comps.length})`),
       st.esAdmin ? h('button', { type: 'button', class: 'btn btn-primary imp-btn-sm', onClick: () => abrirComponente(s, null) }, '+ Agregar servidor') : null),
+    bloqueSimulacionServicio(s),
     comps.length ? tablaComponentes(s, comps) : h('p', { class: 'imp-vacio' }, 'Este servicio todavía no tiene servidores.'),
     h('div', { class: 'imp-seccion__cabecera' },
       h('h3', {}, `Requisitos entre servidores (${requisitos.length})`),
@@ -239,14 +240,56 @@ function itemCaida(c) {
     !c.respaldoPor?.length && c.workaround ? h('span', { class: 'imp-lista-caidas__alt' }, ` Alternativa: ${c.workaround}`) : null);
 }
 
+/** Resultado de la simulación para un servicio (null si no se simula nada) */
+const simulacionDe = (serviceId) => st.simulacion?.servicios.find((x) => x.serviceId === serviceId) || null;
+
+/** Aviso sobre las tarjetas: cómo queda el servicio con la caída simulada */
+function bloqueSimulacionServicio(s) {
+  const sim = simulacionDe(s.id);
+  if (!sim) return null;
+  const e = ESTADO_SERVICIO[sim.estado] || ESTADO_SERVICIO.FUNCIONA;
+  const causa = sim.componentesCaidos.filter((c) => !c.respaldoPor?.length && c.impactoEfectivo !== 'NINGUNO');
+  const conAlternativa = sim.componentesCaidos.filter((c) => c.workaround && !c.respaldoPor?.length);
+  const titulo = {
+    NO_FUNCIONA: `${s.name} no funciona`,
+    PARCIAL: `${s.name} sigue funcionando, con limitaciones`,
+    REVISAR: `${s.name}: falta confirmar el efecto de esta caída`,
+    FUNCIONA: `${s.name} sigue funcionando`,
+  }[sim.estado] || s.name;
+  return h('div', { class: `imp-sim-aviso imp-sim-aviso--${e.clase}`, role: 'status' },
+    h('p', { class: 'imp-sim-aviso__titulo' }, h('span', { class: 'imp-sim-aviso__etq' }, 'Simulación'), titulo),
+    sim.componentesCaidos.length
+      ? h('p', { class: 'imp-sim-aviso__texto' }, causa.length
+        ? `Por la caída de ${causa.map((c) => nombre(c.serverId)).join(', ')}.`
+        : `Cae ${sim.componentesCaidos.map((c) => nombre(c.serverId)).join(', ')}, pero el servicio sigue por su respaldo.`)
+      : h('p', { class: 'imp-sim-aviso__texto' }, 'Ningún servidor de este servicio cae con la simulación.'),
+    ...conAlternativa.map((c) => h('p', { class: 'imp-sim-aviso__alt' }, h('strong', {}, `Alternativa (${nombre(c.serverId)}): `), c.workaround)),
+    h('button', { type: 'button', class: 'imp-enlace', onClick: () => { st.simulados = []; simular(); } }, 'Quitar simulación'));
+}
+
 /** Una tarjeta por servidor: qué hace, qué pasa si cae, qué necesita y cómo está ahora */
 function tablaComponentes(s, comps) {
   const necesita = (id) => st.datos.requirements.filter((r) => String(r.serverId) === String(id)).map((r) => nombre(r.requiredServerId));
+  const sim = simulacionDe(s.id);
+  const caidos = new Map((sim?.componentesCaidos || []).map((c) => [String(c.serverId), c]));
   return h('ul', { class: 'imp-comps' }, comps.map((c) => {
     const sv = servidor(c.serverId);
     const simulado = st.simulados.includes(String(c.serverId));
     const req = necesita(c.serverId);
-    return h('li', { class: `imp-comp imp-comp--${(NIVEL[c.impact] || NIVEL.SIN_DEFINIR).clase}${simulado ? ' es-simulado' : ''}` },
+    // Con la simulación: rojo el que cae; si el servicio no funciona, todos quedan sin servicio
+    const caida = caidos.get(String(c.serverId));
+    const sinServicio = !caida && sim?.estado === 'NO_FUNCIONA';
+    const claseSim = caida ? ' es-caido' : (sinServicio ? ' es-sin-servicio' : '');
+    let etiquetaSim = null;
+    if (caida) {
+      etiquetaSim = caida.respaldoPor?.length
+        ? `Caído (simulación) · sigue por ${caida.respaldoPor.map(nombre).join(', ')}`
+        : `Caído (simulación)${caida.caida.motivo === 'CAIDO' ? '' : ` · ${textoCaida(caida.caida)}`}`;
+    } else if (sinServicio) {
+      etiquetaSim = `Sin servicio: ${s.name} no funciona`;
+    }
+    return h('li', { class: `imp-comp imp-comp--${(NIVEL[c.impact] || NIVEL.SIN_DEFINIR).clase}${claseSim}` },
+      etiquetaSim ? h('p', { class: 'imp-comp__sim' }, etiquetaSim) : null,
       h('div', { class: 'imp-comp__cabecera' },
         h('div', {},
           h('h4', { class: 'imp-comp__nombre' }, nombre(c.serverId)),
@@ -257,7 +300,7 @@ function tablaComponentes(s, comps) {
         h('span', { class: 'imp-comp__etq' }, 'Si cae:'), pildoraNivel(c.impact),
         c.redundancyGroup ? h('span', { class: 'imp-grupo', title: 'Servidores redundantes: el servicio solo se afecta si caen todos los del grupo' }, `Respaldo: ${c.redundancyGroup}`) : null),
       c.impactDetail ? h('p', { class: 'imp-comp__texto' }, c.impactDetail) : null,
-      c.workaround ? h('p', { class: 'imp-comp__alt' }, h('strong', {}, 'Alternativa: '), c.workaround) : null,
+      c.workaround ? h('p', { class: `imp-comp__alt${caida && !caida.respaldoPor?.length ? ' es-destacada' : ''}` }, h('strong', {}, 'Alternativa: '), c.workaround) : null,
       req.length ? h('p', { class: 'imp-comp__texto' }, h('strong', {}, 'Necesita: '), req.join(', ')) : null,
       h('div', { class: 'imp-comp__acciones' },
         h('button', {
