@@ -66,12 +66,6 @@ html, body { height: 100%; }
 .imp-enlace--peligro { color: var(--color-danger-700, #b42318); }
 .imp-enlace:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 4px; }
 
-.imp-actual { margin-top: 14px; padding: 12px 14px; border-radius: var(--radius-sm, 8px); border: 1px solid var(--color-border, #e4e7ec); }
-.imp-actual--funciona { background: var(--color-success-100, #dcfae6); border-color: #abefc6; }
-.imp-actual--parcial, .imp-actual--revisar { background: var(--color-warning-100, #fef0c7); border-color: #fedf89; }
-.imp-actual--no-funciona { background: var(--color-danger-100, #fee4e2); border-color: #fecdca; }
-.imp-actual__titulo { margin: 0; font-weight: 600; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.imp-actual__texto { margin: 6px 0 0; font-size: 14px; }
 
 .imp-estado, .imp-nivel, .imp-mon {
   display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: var(--radius-pill, 999px);
@@ -102,8 +96,6 @@ html, body { height: 100%; }
 .imp-input:focus-visible { outline: none; box-shadow: var(--focus-ring); border-color: var(--color-primary-500, #2f6fe6); }
 .imp-input:disabled { background: var(--color-bg-soft, #f8fafc); }
 
-.imp-lista-caidas { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; }
-.imp-lista-caidas__detalle { color: var(--color-text-secondary, #475467); }
 
 .imp-dialogo {
   width: min(520px, calc(100vw - 32px)); border: 1px solid var(--color-border, #e4e7ec); border-radius: var(--radius-md, 12px);

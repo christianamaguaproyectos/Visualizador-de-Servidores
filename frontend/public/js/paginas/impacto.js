@@ -148,10 +148,6 @@ function rellenarBuscador() {
 }
 
 // ── Render ─────────────────────────────────────────────────────────────────
-function estadoActual(serviceId) {
-  return st.datos.actual.servicios.find((x) => x.serviceId === serviceId);
-}
-
 function render() {
   renderLista();
   renderDetalle();
@@ -164,7 +160,6 @@ function renderLista() {
     return;
   }
   lista.replaceChildren(...st.datos.services.map((s) => {
-    const actual = estadoActual(s.id);
     const sim = st.simulacion?.servicios.find((x) => x.serviceId === s.id);
     return h('li', {},
       h('button', {
@@ -173,7 +168,8 @@ function renderLista() {
       },
       h('span', { class: 'imp-servicio__nombre' }, s.name),
       h('span', { class: 'imp-servicio__meta' }, `${s.components.length} servidor${s.components.length === 1 ? '' : 'es'}`),
-      h('span', { class: 'imp-servicio__estados' }, pildoraEstado(actual?.estado),
+      // La página es para simular: fuera de la simulación todo servicio se muestra en funcionamiento
+      h('span', { class: 'imp-servicio__estados' }, h('span', { class: 'imp-estado imp-estado--funciona' }, 'En funcionamiento'),
         sim && sim.estado !== 'FUNCIONA' ? h('span', { class: 'imp-servicio__sim' }, 'Simulación: ', pildoraEstado(sim.estado)) : null)));
   }));
 }
@@ -185,7 +181,6 @@ function renderDetalle() {
     cont.replaceChildren(h('p', { class: 'imp-vacio' }, 'Elige un servicio de la lista.'));
     return;
   }
-  const actual = estadoActual(s.id);
   const comps = [...s.components].sort((a, b) => nombre(a.serverId).localeCompare(nombre(b.serverId), 'es', { numeric: true }));
 
   cont.replaceChildren(...[
@@ -196,31 +191,12 @@ function renderDetalle() {
       st.esAdmin ? h('div', { class: 'imp-acciones' },
         h('button', { type: 'button', class: 'btn btn-secondary imp-btn-sm', onClick: () => abrirServicio(s) }, 'Editar'),
         h('button', { type: 'button', class: 'btn btn-danger imp-btn-sm', onClick: () => eliminarServicio(s) }, 'Eliminar')) : null),
-    bloqueEstadoActual(actual),
     h('div', { class: 'imp-seccion__cabecera' },
       h('h3', {}, `Servidores (${comps.length})`),
       st.esAdmin ? h('button', { type: 'button', class: 'btn btn-primary imp-btn-sm', onClick: () => abrirComponente(s, null) }, '+ Agregar servidor') : null),
     bloqueSimulacionServicio(s),
     comps.length ? tablaComponentes(s, comps) : h('p', { class: 'imp-vacio' }, 'Este servicio todavía no tiene servidores.'),
   ].filter(Boolean));
-}
-
-function bloqueEstadoActual(actual) {
-  if (!actual) return null;
-  const caidos = actual.componentesCaidos;
-  return h('div', { class: `imp-actual imp-actual--${(ESTADO_SERVICIO[actual.estado] || ESTADO_SERVICIO.FUNCIONA).clase}` },
-    h('p', { class: 'imp-actual__titulo' }, 'Estado actual según Monitoreo: ', pildoraEstado(actual.estado)),
-    caidos.length
-      ? h('ul', { class: 'imp-lista-caidas' }, caidos.map(itemCaida))
-      : h('p', { class: 'imp-actual__texto' }, 'Ningún servidor del servicio está caído.'));
-}
-
-/** Una línea del resultado: servidor, motivo y efecto en el servicio */
-function itemCaida(c) {
-  return h('li', {},
-    h('strong', {}, nombre(c.serverId)), c.role ? ` (${c.role})` : '', ' — ', textoCaida(c.caida), '. ',
-    pildoraNivel(c.impact),
-    c.impactDetail ? h('span', { class: 'imp-lista-caidas__detalle' }, ` ${c.impactDetail}`) : null);
 }
 
 /** Resultado de la simulación para un servicio (null si no se simula nada) */
@@ -271,6 +247,7 @@ function tablaComponentes(s, comps) {
       claseSim = ' es-funciona';
       etiquetaSim = 'Sigue funcionando';
     }
+    const soloEstado = Boolean(sim) && !simulado;
     return h('li', { class: `imp-comp imp-comp--${(NIVEL[c.impact] || NIVEL.SIN_DEFINIR).clase}${claseSim}` },
       etiquetaSim ? h('p', { class: 'imp-comp__sim' }, etiquetaSim) : null,
       h('div', { class: 'imp-comp__cabecera' },
@@ -279,9 +256,10 @@ function tablaComponentes(s, comps) {
           h('p', { class: 'imp-comp__sub' }, [String(sv?.ip || '').split(/[\s,;]+/)[0], ubicacion(sv)].filter(Boolean).join(' · '))),
         pildoraMonitoreo(sv)),
       h('p', { class: 'imp-comp__rol' }, c.role || 'Función sin describir'),
-      h('div', { class: 'imp-comp__si-cae' },
+      // Con la simulación, las tarjetas rojas y verdes solo muestran su estado (la etiqueta de arriba)
+      soloEstado ? null : h('div', { class: 'imp-comp__si-cae' },
         h('span', { class: 'imp-comp__etq' }, 'Si cae:'), pildoraNivel(c.impact)),
-      c.impactDetail ? h('p', { class: 'imp-comp__texto' }, c.impactDetail) : null,
+      !soloEstado && c.impactDetail ? h('p', { class: 'imp-comp__texto' }, c.impactDetail) : null,
       h('div', { class: 'imp-comp__acciones' },
         h('button', {
           type: 'button', class: `btn ${simulado ? 'btn-danger' : 'btn-secondary'} imp-btn-sm`, 'aria-pressed': simulado ? 'true' : 'false',

@@ -193,7 +193,7 @@ Menú lateral → **Impacto de servicios** (o la tarjeta del mismo nombre en Ini
 
 ### Servicios y sus servidores
 
-- A la izquierda está la lista de **servicios**, cada uno con su **estado actual** según Monitoreo: *Funciona*, *Deja de funcionar* o *Revisar*.
+- A la izquierda está la lista de **servicios**. Todos se muestran *En funcionamiento*: la página sirve para ver qué pasaría con una caída simulada.
 - Al elegir un servicio se ve una tarjeta por cada uno de sus servidores, con:
   - **Función** en el servicio (por ejemplo, *Base de datos de JD Edwards*);
   - **Si cae**: *Deja de funcionar* (cae todo el servicio), *Sigue funcionando* o *Por definir* (falta confirmarlo con el equipo responsable);
@@ -204,7 +204,7 @@ Menú lateral → **Impacto de servicios** (o la tarjeta del mismo nombre en Ini
 ### Simular una caída
 
 - Pulsa **Simular caída** en la tarjeta de un servidor. Se pueden simular varios a la vez.
-- Sobre las tarjetas aparece el resultado del servicio (*Deja de funcionar*, *Sigue funcionando*…). El servidor simulado se pinta de **azul**; los que dejan de funcionar por esa caída, de **rojo** (todos, si el servicio deja de funcionar), y los que siguen funcionando, de **verde**.
+- Sobre las tarjetas aparece el resultado del servicio (*Deja de funcionar*, *Sigue funcionando*…). El servidor simulado se pinta de **azul**; los que dejan de funcionar por esa caída, de **rojo** (todos, si el servicio deja de funcionar), y los que siguen funcionando, de **verde**. Las tarjetas rojas dicen *Deja de funcionar* y las verdes, *Sigue funcionando*.
 - La simulación no modifica datos ni envía alertas. **Quitar simulación** la deshace.
 
 ### Registrar la información (administradores)
